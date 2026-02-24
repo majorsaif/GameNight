@@ -15,7 +15,6 @@ export default function WelcomeScreen() {
     () => !localStorage.getItem('gamenight_nickname')
   );
   const [showHostDialog, setShowHostDialog] = useState(false);
-  const [roomNameInput, setRoomNameInput] = useState('');
   const [hostGameName, setHostGameName] = useState('');
   const [showJoinRenameModal, setShowJoinRenameModal] = useState(false);
   const [pendingJoinRoomId, setPendingJoinRoomId] = useState(null);
@@ -29,15 +28,15 @@ export default function WelcomeScreen() {
   }, [hasNickname]);
 
   const handleHostGame = () => {
+    setHostGameName(user?.displayName || '');
     setShowHostDialog(true);
   };
 
   const handleConfirmHostGame = () => {
     if (!user) return;
     
-    // Create a new room in localStorage with the specified name
-    const roomName = roomNameInput.trim() || 'Game Night';
-    const room = createRoom(user.id, user.displayName, roomName);
+    // Create a new room with the default name
+    const room = createRoom(user.id, user.displayName);
     
     // Set host's game-specific name if provided
     if (hostGameName.trim()) {
@@ -45,7 +44,6 @@ export default function WelcomeScreen() {
     }
     
     setShowHostDialog(false);
-    setRoomNameInput('');
     setHostGameName('');
     navigate(`/room/${room.id}`);
   };
@@ -281,23 +279,6 @@ export default function WelcomeScreen() {
             <h3 className="text-white text-lg font-bold mb-4">Host a Game Night</h3>
             
             <div className="space-y-4 mb-6">
-              {/* Room Name Input */}
-              <div>
-                <label className="block text-slate-400 text-xs font-medium mb-2">Game Night Name</label>
-                <input
-                  type="text"
-                  value={roomNameInput}
-                  onChange={(e) => setRoomNameInput(e.target.value)}
-                  placeholder="e.g., Friday Night Games"
-                  className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleConfirmHostGame();
-                    if (e.key === 'Escape') setShowHostDialog(false);
-                  }}
-                  autoFocus
-                />
-              </div>
-
               {/* Host Game Name Input */}
               <div>
                 <label className="block text-slate-400 text-xs font-medium mb-2">Your Name for This Game</label>
@@ -311,6 +292,7 @@ export default function WelcomeScreen() {
                     if (e.key === 'Enter') handleConfirmHostGame();
                     if (e.key === 'Escape') setShowHostDialog(false);
                   }}
+                  autoFocus
                 />
               </div>
             </div>
@@ -320,7 +302,6 @@ export default function WelcomeScreen() {
                 onClick={() => {
                   setShowHostDialog(false);
                   setHostGameName('');
-                  setRoomNameInput('');
                 }}
                 className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
               >
