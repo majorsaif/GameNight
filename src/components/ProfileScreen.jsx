@@ -116,7 +116,7 @@ function ProfileScreen() {
               )}
               <button
                 onClick={() => fileInputRef.current?.click()}
-                className="absolute bottom-0 right-0 bg-purple-600 hover:bg-purple-700 text-white rounded-full p-2 shadow-lg transition-colors"
+                className="absolute bottom-0 right-0 bg-slate-700 hover:bg-slate-600 text-white rounded-full p-2 shadow-lg transition-colors"
               >
                 <span className="material-symbols-outlined text-sm">photo_camera</span>
               </button>

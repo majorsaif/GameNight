@@ -1,6 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRoom, updateRoomName, updatePlayerNameForGame, leaveRoom } from '../hooks/useRoom';
+import { useRoom, updatePlayerNameForGame, leaveRoom } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function HomeScreen() {
@@ -13,8 +13,6 @@ export default function HomeScreen() {
   );
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
-  const [isEditingRoomName, setIsEditingRoomName] = useState(false);
-  const [roomNameInput, setRoomNameInput] = useState(room?.name || 'Game Night');
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
   const settingsRef = useRef(null);
@@ -41,13 +39,6 @@ export default function HomeScreen() {
     }
     setShowSettings(false);
     navigate('/');
-  };
-
-  const handleSaveRoomName = () => {
-    if (roomNameInput.trim()) {
-      updateRoomName(roomId, roomNameInput.trim());
-      setIsEditingRoomName(false);
-    }
   };
 
   const handleSaveGameName = () => {
@@ -95,11 +86,10 @@ export default function HomeScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Top Bar */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-slate-800 px-6 py-4">
+      <header className="relative z-40 bg-slate-900/50 backdrop-blur-sm border-b border-slate-800 px-6 py-4">
         <div className="max-w-6xl mx-auto flex justify-between items-center gap-4">
-          {/* Room Name and Code */}
+          {/* Room Code */}
           <div className="flex-1 flex flex-col gap-2">
-            <h2 className="text-white text-lg font-bold">{room.name}</h2>
             <div className="flex items-center gap-2">
               <span className="text-slate-500 text-xs font-medium">Code:</span>
               <div className="bg-slate-800 border-2 border-violet-500/50 rounded-lg px-3 py-1">
@@ -112,47 +102,27 @@ export default function HomeScreen() {
           <div className="relative" ref={settingsRef}>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="text-3xl hover:bg-slate-800 p-2 rounded-lg transition-colors"
+              className="text-slate-300 hover:text-white hover:bg-slate-800 p-2 rounded-lg transition-colors"
               title="Settings"
             >
-              ⚙️
+              <span className="material-symbols-outlined text-3xl">settings</span>
             </button>
             
             {showSettings && (
               <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-xl shadow-black/50 overflow-hidden z-50">
-                <div className="py-1 space-y-1 px-1">
-                  {isHost && (
-                    <button
-                      onClick={() => {
-                        setIsEditingRoomName(true);
-                        setShowSettings(false);
-                      }}
-                      className="w-full px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium rounded-lg"
-                    >
-                      Edit room name
-                    </button>
-                  )}
+                <div className="divide-y divide-slate-700/60">
                   <button
                     onClick={() => {
                       setShowRenameModal(true);
                       setShowSettings(false);
                     }}
-                    className="w-full px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium rounded-lg"
+                    className="relative z-10 flex w-full items-center px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium first:rounded-t-xl"
                   >
                     Change nickname
                   </button>
                   <button
-                    onClick={() => {
-                      setShowSettings(false);
-                      navigate('/profile');
-                    }}
-                    className="w-full px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium rounded-lg"
-                  >
-                    Profile
-                  </button>
-                  <button
                     onClick={handleLeaveRoom}
-                    className="w-full px-4 py-3 text-left text-red-400 hover:bg-slate-700 transition-colors font-medium rounded-lg"
+                    className="relative z-10 flex w-full items-center px-4 py-3 text-left text-red-400 hover:bg-slate-700 transition-colors font-medium last:rounded-b-xl"
                   >
                     Leave Room
                   </button>
@@ -164,49 +134,13 @@ export default function HomeScreen() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-4 py-8 max-w-3xl w-full mx-auto">
+      <main className="relative z-0 flex-1 px-4 py-8 max-w-3xl w-full mx-auto">
         {isHost ? (
           <HostView room={room} getCurrentPlayerName={getCurrentPlayerName} />
         ) : (
           <PlayerView room={room} getCurrentPlayerName={getCurrentPlayerName} />
         )}
       </main>
-
-      {/* Edit Room Name Modal */}
-      {isEditingRoomName && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-white text-lg font-bold mb-4">Edit room name</h3>
-            <input
-              type="text"
-              value={roomNameInput}
-              onChange={(e) => setRoomNameInput(e.target.value)}
-              placeholder="Enter room name..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent mb-4"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveRoomName();
-                if (e.key === 'Escape') setIsEditingRoomName(false);
-              }}
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => setIsEditingRoomName(false)}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveRoomName}
-                disabled={!roomNameInput.trim()}
-                className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-600 disabled:text-slate-500 text-white rounded-lg font-bold transition-colors disabled:cursor-not-allowed"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* Change Nickname Modal */}
       {showRenameModal && (
@@ -263,9 +197,6 @@ function HostView({ room, getCurrentPlayerName }) {
             >
               <div className="flex flex-col">
                 <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
-                {player.displayNameForGame && (
-                  <span className="text-slate-500 text-xs">(usually {player.displayName})</span>
-                )}
               </div>
               {player.isHost && (
                 <span className="bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">
@@ -323,9 +254,6 @@ function PlayerView({ room, getCurrentPlayerName }) {
             >
               <div className="flex flex-col">
                 <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
-                {player.displayNameForGame && (
-                  <span className="text-slate-500 text-xs">(usually {player.displayName})</span>
-                )}
               </div>
               {player.isHost && (
                 <span className="bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">
