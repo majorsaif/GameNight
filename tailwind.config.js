@@ -22,5 +22,16 @@ export default {
       },
     },
   },
-  plugins: [],
+  plugins: [
+    function({ addUtilities }) {
+      addUtilities({
+        '.fill-0': {
+          'font-variation-settings': '"FILL" 0',
+        },
+        '.fill-1': {
+          'font-variation-settings': '"FILL" 1',
+        },
+      });
+    },
+  ],
 }

@@ -263,25 +263,25 @@ export default function WelcomeScreen() {
       </div>
 
       {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 bg-[#16213e] border-t border-[#2a3f5f] px-6 py-4">
-        <div className="max-w-md mx-auto flex justify-around items-center">
-          <button className="flex flex-col items-center gap-1 text-slate-400">
-            <div className="text-2xl">🏠</div>
-            <span className="text-xs font-semibold">Home</span>
+      <nav className="fixed bottom-0 left-0 right-0 border-t border-[#2a3f5f] bg-[#16213e]/80 backdrop-blur-md px-6 py-3">
+        <div className="max-w-md mx-auto flex justify-between items-center">
+          <button className="flex flex-col items-center gap-1 text-purple-500">
+            <span className="material-symbols-outlined fill-1">home</span>
+            <span className="text-[10px] font-bold">Home</span>
           </button>
           <button 
             onClick={handleChangeNickname}
-            className="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-400 transition-colors"
+            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
           >
-            <div className="text-2xl">✉️</div>
-            <span className="text-xs font-medium">Invites</span>
+            <span className="material-symbols-outlined">mail</span>
+            <span className="text-[10px] font-bold">Invites</span>
           </button>
           <button 
-            onClick={handleChangeNickname}
-            className="flex flex-col items-center gap-1 text-slate-500 hover:text-slate-400 transition-colors"
+            onClick={() => navigate('/profile')}
+            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
           >
-            <div className="text-2xl">👤</div>
-            <span className="text-xs font-medium">Profile</span>
+            <span className="material-symbols-outlined">person</span>
+            <span className="text-[10px] font-bold">Profile</span>
           </button>
         </div>
       </nav>
