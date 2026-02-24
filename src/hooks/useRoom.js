@@ -310,7 +310,7 @@ export function useActiveRoom(userId) {
  * Mock room data hook with localStorage sync across tabs
  * Will be replaced with Firestore listener later
  */
-export function useRoom(roomId, userId = null, userDisplayName = null) {
+export function useRoom(roomId, userId = null, userDisplayName = null, userAvatar = null) {
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -347,6 +347,7 @@ export function useRoom(roomId, userId = null, userDisplayName = null) {
             activeRoom.players.push({
               id: userId,
               displayName: userDisplayName,
+              avatar: userAvatar,
               isHost: false,
               joinedAt: new Date().toISOString()
             });
@@ -354,6 +355,10 @@ export function useRoom(roomId, userId = null, userDisplayName = null) {
             saveRoomsToStorage(rooms);
           } else if (!existingPlayer.joinedAt) {
             existingPlayer.joinedAt = new Date().toISOString();
+            rooms[roomId] = activeRoom;
+            saveRoomsToStorage(rooms);
+          } else if (!existingPlayer.avatar && userAvatar) {
+            existingPlayer.avatar = userAvatar;
             rooms[roomId] = activeRoom;
             saveRoomsToStorage(rooms);
           } else if (normalized.didChange) {
@@ -393,7 +398,7 @@ export function useRoom(roomId, userId = null, userDisplayName = null) {
       window.removeEventListener('storage', handleStorageChange);
       clearInterval(interval);
     };
-  }, [roomId, userId, userDisplayName]);
+  }, [roomId, userId, userDisplayName, userAvatar]);
 
   // Helper to check if current user is host
   const isHost = room && userId && room.hostId === userId;

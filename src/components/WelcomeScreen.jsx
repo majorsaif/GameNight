@@ -24,7 +24,7 @@ export default function WelcomeScreen() {
   const handleConfirmHostGame = () => {
     if (!user) return;
     
-    const room = createRoom(user.id, user.displayName);
+    const room = createRoom(user.id, user.displayName, user.avatar || null);
     
     // Set host's game-specific name if provided
     if (hostGameName.trim()) {
@@ -98,7 +98,7 @@ export default function WelcomeScreen() {
   const handleConfirmJoin = () => {
     if (!pendingJoinRoomId || !user) return;
 
-    joinRoom(pendingJoinRoomId, user.id, user.displayName);
+    joinRoom(pendingJoinRoomId, user.id, user.displayName, user.avatar || null);
 
     if (joinGameName.trim()) {
       updatePlayerNameForGame(pendingJoinRoomId, user.id, joinGameName.trim());

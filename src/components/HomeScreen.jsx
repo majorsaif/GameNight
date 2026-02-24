@@ -3,13 +3,38 @@ import { useParams, useNavigate } from 'react-router-dom';
 import { useRoom, updatePlayerNameForGame, leaveRoom } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
 
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const getAvatarColor = (name) => {
+  if (!name) return 'bg-purple-600';
+  const colors = [
+    'bg-purple-600',
+    'bg-blue-600',
+    'bg-pink-600',
+    'bg-indigo-600',
+    'bg-violet-600',
+    'bg-fuchsia-600',
+    'bg-cyan-600',
+  ];
+  const index = name.charCodeAt(0) % colors.length;
+  return colors[index];
+};
+
 export default function HomeScreen() {
   const { roomId } = useParams();
   const { user, loading: userLoading } = useAuth();
   const { room, loading: roomLoading, error, isHost } = useRoom(
     roomId, 
     user?.id, 
-    user?.displayName
+    user?.displayName,
+    user?.avatar || null
   );
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
@@ -102,7 +127,7 @@ export default function HomeScreen() {
           <div className="relative" ref={settingsRef}>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="text-slate-300 hover:text-white hover:bg-slate-800 p-2 rounded-lg transition-colors"
+              className="text-violet-400/80 hover:text-violet-300 hover:bg-violet-500/10 p-2 rounded-lg transition-colors"
               title="Settings"
             >
               <span className="material-symbols-outlined text-3xl">settings</span>
@@ -134,7 +159,7 @@ export default function HomeScreen() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-0 flex-1 px-4 py-8 max-w-3xl w-full mx-auto">
+      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-8">
         {isHost ? (
           <HostView room={room} getCurrentPlayerName={getCurrentPlayerName} />
         ) : (
@@ -179,7 +204,7 @@ export default function HomeScreen() {
 
 function HostView({ room, getCurrentPlayerName }) {
   return (
-    <div className="space-y-8">
+    <div className="h-full flex flex-col gap-6">
       
       {/* Players Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
@@ -195,7 +220,20 @@ function HostView({ room, getCurrentPlayerName }) {
               key={player.id} 
               className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800"
             >
-              <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                {player.avatar ? (
+                  <img
+                    src={player.avatar}
+                    alt={player.displayNameForGame || player.displayName}
+                    className="w-9 h-9 rounded-full object-cover border border-slate-700"
+                  />
+                ) : (
+                  <div
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(player.displayNameForGame || player.displayName)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
+                  >
+                    {getInitials(player.displayNameForGame || player.displayName)}
+                  </div>
+                )}
                 <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
               </div>
               {player.isHost && (
@@ -209,7 +247,7 @@ function HostView({ room, getCurrentPlayerName }) {
       </div>
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="flex-1 flex flex-col gap-4 justify-center">
         <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-8 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎮</div>
           <div className="text-white font-bold text-xl">Games</div>
@@ -229,7 +267,7 @@ function HostView({ room, getCurrentPlayerName }) {
 
 function PlayerView({ room, getCurrentPlayerName }) {
   return (
-    <div className="space-y-8">
+    <div className="h-full flex flex-col gap-6">
       
       {/* Waiting Message */}
       <div className="text-center py-6">
@@ -252,7 +290,20 @@ function PlayerView({ room, getCurrentPlayerName }) {
               key={player.id} 
               className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800"
             >
-              <div className="flex flex-col">
+              <div className="flex items-center gap-3">
+                {player.avatar ? (
+                  <img
+                    src={player.avatar}
+                    alt={player.displayNameForGame || player.displayName}
+                    className="w-9 h-9 rounded-full object-cover border border-slate-700"
+                  />
+                ) : (
+                  <div
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(player.displayNameForGame || player.displayName)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
+                  >
+                    {getInitials(player.displayNameForGame || player.displayName)}
+                  </div>
+                )}
                 <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
               </div>
               {player.isHost && (
@@ -266,7 +317,7 @@ function PlayerView({ room, getCurrentPlayerName }) {
       </div>
 
       {/* Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+      <div className="flex-1 flex flex-col gap-4 justify-center">
         <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-8 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎮</div>
           <div className="text-white font-bold text-xl">Games</div>
