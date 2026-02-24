@@ -111,26 +111,22 @@ export default function HomeScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Top Bar */}
-      <header className="relative z-40 bg-slate-900/50 backdrop-blur-sm border-b border-slate-800 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex justify-between items-center gap-4">
-          {/* Room Code */}
-          <div className="flex-1 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-xs font-medium">Code:</span>
-              <div className="bg-slate-800 border-2 border-violet-500/50 rounded-lg px-3 py-1">
-                <span className="text-violet-400 font-black text-base tracking-widest">{room.code}</span>
-              </div>
-            </div>
+      <header className="relative z-40 w-full max-w-md mx-auto px-6 py-4">
+        <div className="flex justify-between items-center gap-4">
+          {/* Room Code Pill */}
+          <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-full px-4 py-2.5">
+            <span className="text-slate-400 text-xs font-medium uppercase tracking-wide">Code</span>
+            <span className="text-violet-400 font-black text-sm tracking-widest">{room.code}</span>
           </div>
 
-          {/* Settings Dropdown */}
+          {/* Settings Circle Button */}
           <div className="relative" ref={settingsRef}>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="text-violet-400/80 hover:text-violet-300 hover:bg-violet-500/10 p-2 rounded-lg transition-colors"
+              className="flex items-center justify-center w-10 h-10 bg-slate-800/50 border border-slate-700/50 rounded-full text-slate-400 hover:text-slate-300 hover:bg-slate-800 transition-colors"
               title="Settings"
             >
-              <span className="material-symbols-outlined text-3xl">settings</span>
+              <span className="material-symbols-outlined text-2xl">settings</span>
             </button>
             
             {showSettings && (
@@ -159,7 +155,7 @@ export default function HomeScreen() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-8">
+      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         {isHost ? (
           <HostView room={room} getCurrentPlayerName={getCurrentPlayerName} />
         ) : (
@@ -204,7 +200,7 @@ export default function HomeScreen() {
 
 function HostView({ room, getCurrentPlayerName }) {
   return (
-    <div className="h-full flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       
       {/* Players Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
@@ -246,18 +242,25 @@ function HostView({ room, getCurrentPlayerName }) {
         </ul>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex-1 flex flex-col gap-4 justify-center">
-        <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-8 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
-          <div className="text-5xl mb-3">🎮</div>
-          <div className="text-white font-bold text-xl">Games</div>
-          <div className="text-violet-200 text-sm mt-1">Start a new game</div>
+      {/* Games Button - Large Full Width */}
+      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-12 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <div className="text-5xl mb-3">🎮</div>
+        <div className="text-white font-bold text-xl">Games</div>
+        <div className="text-violet-200 text-sm mt-1">Start a new game</div>
+      </button>
+
+      {/* Vote and Forfeit Buttons - Side by Side */}
+      <div className="grid grid-cols-2 gap-4">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+          <div className="text-4xl mb-2">✓</div>
+          <div className="text-white font-bold text-lg">Vote</div>
+          <div className="text-slate-400 text-xs mt-1">Create a poll</div>
         </button>
 
-        <button className="group relative overflow-hidden bg-slate-800/50 border-2 border-violet-500 hover:bg-slate-800 rounded-2xl p-8 text-center shadow-lg hover:shadow-xl hover:shadow-violet-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎡</div>
-          <div className="text-white font-bold text-xl">Forfeit Wheel</div>
-          <div className="text-slate-400 text-sm mt-1">Spin for a loser</div>
+          <div className="text-white font-bold text-xl">Spin Wheel</div>
+          <div className="text-slate-400 text-sm mt-1">Spin for dares</div>
         </button>
       </div>
 
@@ -267,7 +270,7 @@ function HostView({ room, getCurrentPlayerName }) {
 
 function PlayerView({ room, getCurrentPlayerName }) {
   return (
-    <div className="h-full flex flex-col gap-6">
+    <div className="flex flex-col gap-6">
       
       {/* Waiting Message */}
       <div className="text-center py-6">
@@ -316,18 +319,25 @@ function PlayerView({ room, getCurrentPlayerName }) {
         </ul>
       </div>
 
-      {/* Action Buttons */}
-      <div className="flex-1 flex flex-col gap-4 justify-center">
-        <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-8 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
-          <div className="text-5xl mb-3">🎮</div>
-          <div className="text-white font-bold text-xl">Games</div>
-          <div className="text-violet-200 text-sm mt-1">Play games</div>
+      {/* Games Button - Large Full Width */}
+      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-12 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <div className="text-5xl mb-3">🎮</div>
+        <div className="text-white font-bold text-xl">Games</div>
+        <div className="text-violet-200 text-sm mt-1">Play games</div>
+      </button>
+
+      {/* Vote and Forfeit Buttons - Side by Side */}
+      <div className="grid grid-cols-2 gap-4">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+          <div className="text-4xl mb-2">✓</div>
+          <div className="text-white font-bold text-lg">Vote</div>
+          <div className="text-slate-400 text-xs mt-1">Create a poll</div>
         </button>
 
-        <button className="group relative overflow-hidden bg-slate-800/50 border-2 border-violet-500 hover:bg-slate-800 rounded-2xl p-8 text-center shadow-lg hover:shadow-xl hover:shadow-violet-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎡</div>
-          <div className="text-white font-bold text-xl">Forfeit Wheel</div>
-          <div className="text-slate-400 text-sm mt-1">Spin the wheel</div>
+          <div className="text-white font-bold text-xl">Spin Wheel</div>
+          <div className="text-slate-400 text-sm mt-1">Spin for dares</div>
         </button>
       </div>
 
