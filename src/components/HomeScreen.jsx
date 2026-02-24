@@ -1,12 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRoom, updateRoomName, updatePlayerNameForGame } from '../hooks/useRoom';
+import { useRoom, updateRoomName, updatePlayerNameForGame, leaveRoom } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
 
 export default function HomeScreen() {
   const { roomId } = useParams();
   const { user, loading: userLoading } = useAuth();
-  const { room, loading: roomLoading, isHost } = useRoom(
+  const { room, loading: roomLoading, error, isHost } = useRoom(
     roomId, 
     user?.id, 
     user?.displayName
@@ -36,6 +36,10 @@ export default function HomeScreen() {
   }, [showSettings]);
 
   const handleLeaveRoom = () => {
+    if (roomId && user?.id) {
+      leaveRoom(roomId, user.id);
+    }
+    setShowSettings(false);
     navigate('/');
   };
 
@@ -76,8 +80,8 @@ export default function HomeScreen() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-center items-center text-center gap-6 px-4">
         <div className="text-6xl">😕</div>
-        <h2 className="text-3xl font-bold text-slate-300">Room not found</h2>
-        <p className="text-slate-500">This room doesn't exist or has ended.</p>
+        <h2 className="text-3xl font-bold text-slate-300">Room unavailable</h2>
+        <p className="text-slate-500">{error || "This room doesn't exist or has ended."}</p>
         <button 
           onClick={handleLeaveRoom}
           className="px-8 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl transition-colors"
@@ -138,10 +142,19 @@ export default function HomeScreen() {
                     Change nickname
                   </button>
                   <button
+                    onClick={() => {
+                      setShowSettings(false);
+                      navigate('/profile');
+                    }}
+                    className="w-full px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium rounded-lg"
+                  >
+                    Profile
+                  </button>
+                  <button
                     onClick={handleLeaveRoom}
                     className="w-full px-4 py-3 text-left text-red-400 hover:bg-slate-700 transition-colors font-medium rounded-lg"
                   >
-                    {isHost ? 'End Game Night' : 'Leave Room'}
+                    Leave Room
                   </button>
                 </div>
               </div>

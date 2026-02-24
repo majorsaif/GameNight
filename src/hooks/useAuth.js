@@ -46,11 +46,7 @@ export function useAuth() {
         isAnonymous: true,
         avatar: profileData.avatar || null,
         favouriteGame: profileData.favouriteGame || '',
-        memberSince: profileData.memberSince || new Date().toISOString(),
-        stats: {
-          gamesHosted: profileData.stats?.gamesHosted || 0,
-          gamesJoined: profileData.stats?.gamesJoined || 0,
-        }
+        memberSince: profileData.memberSince || new Date().toISOString()
       });
     } else {
       setHasNickname(false);
@@ -75,8 +71,7 @@ export function useAuth() {
     const existingProfile = localStorage.getItem(PROFILE_KEY);
     if (!existingProfile) {
       const initialProfile = {
-        memberSince: new Date().toISOString(),
-        stats: { gamesHosted: 0, gamesJoined: 0 }
+        memberSince: new Date().toISOString()
       };
       localStorage.setItem(PROFILE_KEY, JSON.stringify(initialProfile));
     }
@@ -103,11 +98,7 @@ export function useAuth() {
       // Merge updates
       const updatedProfile = {
         ...profileData,
-        ...updates,
-        stats: {
-          ...profileData.stats,
-          ...(updates.stats || {})
-        }
+        ...updates
       };
       
       // Save to localStorage

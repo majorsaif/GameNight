@@ -4,7 +4,6 @@ import { useAuth } from '../hooks/useAuth';
 import { createRoom, findRoomByCode, updatePlayerNameForGame } from '../hooks/useRoom';
 
 export default function WelcomeScreen() {
-  const [roomCode, setRoomCode] = useState('');
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
   const [nicknameInput, setNicknameInput] = useState('');
   const [showChangeNickname, setShowChangeNickname] = useState(false);
@@ -15,7 +14,7 @@ export default function WelcomeScreen() {
   const [pendingJoinRoomId, setPendingJoinRoomId] = useState(null);
   const [joinGameName, setJoinGameName] = useState('');
   const navigate = useNavigate();
-  const { user, loading, hasNickname, setNickname, clearNickname } = useAuth();
+  const { user, loading, hasNickname, setNickname } = useAuth();
   const inputRefs = useRef([]);
 
   const handleHostGame = () => {
@@ -220,7 +219,7 @@ export default function WelcomeScreen() {
   return (
     <div className="min-h-screen bg-[#1a1a2e] flex flex-col">
       {/* Header */}
-      <header className="py-4">
+      <header className="py-8">
         <div className="max-w-md mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg flex items-center justify-center text-2xl">
@@ -244,15 +243,15 @@ export default function WelcomeScreen() {
         </div>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="max-w-md mx-auto px-6 py-6 space-y-6">
+      <div className="flex-1">
+        <div className="max-w-md mx-auto px-6 py-10 h-full flex flex-col justify-between gap-8">
           
           {/* Nickname Modal (moved below header) */}
 
           {/* Host Game Card */}
           <button
             onClick={handleHostGame}
-            className="relative w-full bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 rounded-2xl p-6 overflow-hidden hover:shadow-xl hover:shadow-purple-900/50 active:scale-[0.98] transition-all"
+            className="relative w-full bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 rounded-2xl p-8 overflow-hidden hover:shadow-xl hover:shadow-purple-900/50 active:scale-[0.98] transition-all"
           >
             {/* Decorative emojis */}
             <div className="absolute top-2 right-2 text-4xl opacity-20 rotate-12">🃏</div>
@@ -260,14 +259,19 @@ export default function WelcomeScreen() {
             <div className="absolute top-8 right-12 text-2xl opacity-10">🎯</div>
             
             <div className="relative text-left space-y-2">
-              <h2 className="text-2xl font-bold text-white">Host Game</h2>
+              <h2 className="text-2xl font-bold text-white">Host a Room</h2>
               <p className="text-purple-100 text-sm leading-relaxed">
-                Create a new game lobby and invite your friends to join.
+                Create a live room and invite your friends to join.
               </p>
             </div>
           </button>
 
-          {/* Enter Invite Code Section */}
+          <div className="flex items-center gap-3 text-slate-500 text-xs uppercase tracking-[0.3em]">
+            <span className="h-px flex-1 bg-[#2a3f5f]"></span>
+            <span>or</span>
+            <span className="h-px flex-1 bg-[#2a3f5f]"></span>
+          </div>
+
           <div className="space-y-3">
             <h3 className="text-white font-bold text-sm uppercase tracking-wide">Enter Invite Code</h3>
             <form onSubmit={handleJoinGame} className="space-y-3">
@@ -292,49 +296,11 @@ export default function WelcomeScreen() {
               <button
                 type="submit"
                 disabled={codeDigits.join('').length !== 6}
-                className="w-full py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold rounded-xl transition-colors disabled:cursor-not-allowed"
+                className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold rounded-xl transition-colors disabled:cursor-not-allowed"
               >
                 Join
               </button>
             </form>
-          </div>
-
-          {/* Your Game Nights Section */}
-          <div className="space-y-3">
-            <h3 className="text-white font-bold text-sm uppercase tracking-wide">Your Game Nights</h3>
-            
-            {/* Mock game night cards - replace with actual data later */}
-            <div className="space-y-2">
-              {/* Example card 1 */}
-              <div className="bg-[#16213e] border border-[#2a3f5f] rounded-xl p-4 flex items-center gap-4">
-                <div className="w-12 h-12 bg-purple-600/20 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-                  🎮
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-white font-bold text-sm truncate">Friday Night Games</h4>
-                </div>
-              </div>
-
-              {/* Example card 2 */}
-              <div className="bg-[#16213e] border border-[#2a3f5f] rounded-xl p-4 flex items-center gap-4">
-                <div className="w-12 h-12 bg-blue-600/20 rounded-lg flex items-center justify-center text-2xl flex-shrink-0">
-                  🎯
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h4 className="text-white font-bold text-sm truncate">Weekend Tournament Night</h4>
-                </div>
-              </div>
-
-              {/* Empty state when no games */}
-              {/* Uncomment this and remove above cards when implementing real data
-              <div className="bg-[#16213e] border border-[#2a3f5f] rounded-xl p-8 text-center">
-                <p className="text-slate-500 text-sm italic">
-                  No game nights yet.<br />
-                  <span className="text-xs text-slate-600">Host or join a game to get started!</span>
-                </p>
-              </div>
-              */}
-            </div>
           </div>
 
         </div>

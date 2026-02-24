@@ -172,33 +172,6 @@ function ProfileScreen() {
             </p>
           </div>
 
-          {/* Stats Section */}
-          <div className="space-y-4">
-            <h3 className="text-white font-bold text-sm uppercase tracking-wide">My Stats</h3>
-            
-            <div className="grid grid-cols-2 gap-3">
-              {/* Games Hosted */}
-              <div className="bg-[#16213e] border border-[#2a3f5f] rounded-xl p-4 text-center">
-                <div className="text-3xl font-bold text-purple-500 mb-1">
-                  {user.stats.gamesHosted}
-                </div>
-                <div className="text-slate-400 text-xs font-medium">
-                  Game Nights<br />Hosted
-                </div>
-              </div>
-
-              {/* Games Joined */}
-              <div className="bg-[#16213e] border border-[#2a3f5f] rounded-xl p-4 text-center">
-                <div className="text-3xl font-bold text-blue-500 mb-1">
-                  {user.stats.gamesJoined}
-                </div>
-                <div className="text-slate-400 text-xs font-medium">
-                  Game Nights<br />Joined
-                </div>
-              </div>
-            </div>
-          </div>
-
           {/* Link Account Section */}
           <div className="space-y-4">
             <div>
