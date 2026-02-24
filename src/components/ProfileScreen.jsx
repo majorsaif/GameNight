@@ -9,7 +9,6 @@ function ProfileScreen() {
   
   const [isEditingNickname, setIsEditingNickname] = useState(false);
   const [nicknameInput, setNicknameInput] = useState(user?.displayName || '');
-  const [favouriteGame, setFavouriteGame] = useState(user?.favouriteGame || '');
   const [showComingSoon, setShowComingSoon] = useState(false);
 
   // Generate initials from nickname
@@ -70,13 +69,6 @@ function ProfileScreen() {
     }
   };
 
-  // Handle favourite game update
-  const handleFavouriteGameChange = (e) => {
-    const value = e.target.value;
-    setFavouriteGame(value);
-    updateProfile({ favouriteGame: value });
-  };
-
   // Handle link account (show coming soon)
   const handleLinkAccount = (provider) => {
     setShowComingSoon(true);
@@ -94,17 +86,17 @@ function ProfileScreen() {
   return (
     <div className="min-h-screen bg-[#1a1a2e] flex flex-col">
       {/* Header */}
-      <header className="bg-[#16213e] border-b border-[#2a3f5f] px-6 py-4 flex items-center gap-4">
+      <header className="bg-[#16213e] border-b border-[#2a3f5f] px-6 py-4 flex items-center justify-start gap-4">
         <button
           onClick={() => navigate('/')}
-          className="text-slate-400 hover:text-white transition-colors"
+          className="text-slate-400 hover:text-white transition-colors flex items-center justify-center"
         >
           <span className="material-symbols-outlined">arrow_back</span>
         </button>
-        <h1 className="text-white font-bold text-lg">Profile</h1>
+        <h1 className="text-white font-bold text-lg leading-none">Profile</h1>
       </header>
 
-      <div className="flex-1 overflow-y-auto pb-20">
+      <div className="flex-1 overflow-y-auto">
         <div className="max-w-md mx-auto px-6 py-8 space-y-8">
           
           {/* Profile Header */}
@@ -180,25 +172,6 @@ function ProfileScreen() {
             </p>
           </div>
 
-          {/* Editable Fields */}
-          <div className="space-y-4">
-            <h3 className="text-white font-bold text-sm uppercase tracking-wide">About</h3>
-            
-            {/* Favourite Game */}
-            <div className="bg-[#16213e] border border-[#2a3f5f] rounded-xl p-4">
-              <label className="block text-slate-400 text-xs font-medium mb-2">
-                Favourite Game
-              </label>
-              <input
-                type="text"
-                value={favouriteGame}
-                onChange={handleFavouriteGameChange}
-                placeholder="What's your favourite game?"
-                className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-2 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-              />
-            </div>
-          </div>
-
           {/* Stats Section */}
           <div className="space-y-4">
             <h3 className="text-white font-bold text-sm uppercase tracking-wide">My Stats</h3>
@@ -232,9 +205,6 @@ function ProfileScreen() {
               <h3 className="text-white font-bold text-sm uppercase tracking-wide mb-1">
                 Link Account
               </h3>
-              <p className="text-slate-500 text-xs">
-                Link an account to sync across devices
-              </p>
             </div>
             
             <div className="space-y-2">
@@ -285,27 +255,6 @@ function ProfileScreen() {
 
         </div>
       </div>
-
-      {/* Bottom Navigation */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-[#2a3f5f] bg-[#16213e]/80 backdrop-blur-md px-6 py-3">
-        <div className="max-w-md mx-auto flex justify-between items-center">
-          <button 
-            onClick={() => navigate('/')}
-            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
-          >
-            <span className="material-symbols-outlined">home</span>
-            <span className="text-[10px] font-bold">Home</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors">
-            <span className="material-symbols-outlined">mail</span>
-            <span className="text-[10px] font-bold">Invites</span>
-          </button>
-          <button className="flex flex-col items-center gap-1 text-purple-500">
-            <span className="material-symbols-outlined fill-1">person</span>
-            <span className="text-[10px] font-bold">Profile</span>
-          </button>
-        </div>
-      </nav>
 
       {/* Coming Soon Toast */}
       {showComingSoon && (

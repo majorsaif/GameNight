@@ -29,13 +29,14 @@ function saveRoomsToStorage(rooms) {
 /**
  * Helper to create a new room
  */
-export function createRoom(hostId, hostDisplayName) {
+export function createRoom(hostId, hostDisplayName, roomName = 'Game Night') {
   const roomId = 'room-' + Math.random().toString(36).substring(2, 15);
   const code = roomId.substring(5, 11).toUpperCase();
   
   const room = {
     id: roomId,
     code: code,
+    name: roomName,
     hostId: hostId,
     players: [
       { id: hostId, displayName: hostDisplayName, isHost: true }
@@ -85,6 +86,39 @@ export function joinRoom(roomId, userId, userDisplayName) {
 export function findRoomByCode(code) {
   const rooms = getRoomsFromStorage();
   return Object.values(rooms).find(room => room.code.toUpperCase() === code.toUpperCase());
+}
+
+/**
+ * Helper to update room name
+ */
+export function updateRoomName(roomId, newName) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room) {
+    room.name = newName || 'Game Night';
+    saveRoomsToStorage(rooms);
+  }
+  
+  return room;
+}
+
+/**
+ * Helper to update player's display name for just this game night
+ */
+export function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room) {
+    const player = room.players.find(p => p.id === userId);
+    if (player) {
+      player.displayNameForGame = gameDisplayName;
+      saveRoomsToStorage(rooms);
+    }
+  }
+  
+  return room;
 }
 
 /**

@@ -1,22 +1,42 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { createRoom, findRoomByCode } from '../hooks/useRoom';
+import { createRoom, findRoomByCode, updatePlayerNameForGame } from '../hooks/useRoom';
 
 export default function WelcomeScreen() {
   const [roomCode, setRoomCode] = useState('');
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
   const [nicknameInput, setNicknameInput] = useState('');
   const [showChangeNickname, setShowChangeNickname] = useState(false);
+  const [showHostDialog, setShowHostDialog] = useState(false);
+  const [roomNameInput, setRoomNameInput] = useState('');
+  const [hostGameName, setHostGameName] = useState('');
+  const [showJoinRenameModal, setShowJoinRenameModal] = useState(false);
+  const [pendingJoinRoomId, setPendingJoinRoomId] = useState(null);
+  const [joinGameName, setJoinGameName] = useState('');
   const navigate = useNavigate();
   const { user, loading, hasNickname, setNickname, clearNickname } = useAuth();
   const inputRefs = useRef([]);
 
   const handleHostGame = () => {
+    setShowHostDialog(true);
+  };
+
+  const handleConfirmHostGame = () => {
     if (!user) return;
     
-    // Create a new room in localStorage
-    const room = createRoom(user.id, user.displayName);
+    // Create a new room in localStorage with the specified name
+    const roomName = roomNameInput.trim() || 'Game Night';
+    const room = createRoom(user.id, user.displayName, roomName);
+    
+    // Set host's game-specific name if provided
+    if (hostGameName.trim()) {
+      updatePlayerNameForGame(room.id, user.id, hostGameName.trim());
+    }
+    
+    setShowHostDialog(false);
+    setRoomNameInput('');
+    setHostGameName('');
     navigate(`/room/${room.id}`);
   };
 
@@ -69,11 +89,29 @@ export default function WelcomeScreen() {
       // Find room by code
       const room = findRoomByCode(code);
       if (room) {
-        navigate(`/room/${room.id}`);
+        // Show rename modal before joining
+        setPendingJoinRoomId(room.id);
+        setJoinGameName(user?.displayName || '');
+        setShowJoinRenameModal(true);
       } else {
         alert('Room not found. Please check the code and try again.');
       }
     }
+  };
+
+  const handleConfirmJoin = () => {
+    if (!pendingJoinRoomId || !user) return;
+    
+    // Set player's game-specific name if provided and different from profile name
+    if (joinGameName.trim() && joinGameName.trim() !== user.displayName) {
+      updatePlayerNameForGame(pendingJoinRoomId, user.id, joinGameName.trim());
+    }
+    
+    setShowJoinRenameModal(false);
+    setPendingJoinRoomId(null);
+    setJoinGameName('');
+    setCodeDigits(['', '', '', '', '', '']);
+    navigate(`/room/${pendingJoinRoomId}`);
   };
 
   const handleNicknameSubmit = (e) => {
@@ -85,14 +123,35 @@ export default function WelcomeScreen() {
     }
   };
 
-  const handleChangeNickname = () => {
-    setShowChangeNickname(true);
-    setNicknameInput(user?.displayName || '');
-  };
-
   const handleCancelChange = () => {
     setShowChangeNickname(false);
     setNicknameInput('');
+  };
+
+  // Generate initials from nickname
+  const getInitials = (name) => {
+    if (!name) return '?';
+    const parts = name.trim().split(' ');
+    if (parts.length === 1) {
+      return parts[0].substring(0, 2).toUpperCase();
+    }
+    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+  };
+
+  // Generate consistent color from name
+  const getAvatarColor = (name) => {
+    if (!name) return 'bg-purple-600';
+    const colors = [
+      'bg-purple-600',
+      'bg-blue-600',
+      'bg-pink-600',
+      'bg-indigo-600',
+      'bg-violet-600',
+      'bg-fuchsia-600',
+      'bg-cyan-600',
+    ];
+    const index = name.charCodeAt(0) % colors.length;
+    return colors[index];
   };
 
   if (loading) {
@@ -160,16 +219,35 @@ export default function WelcomeScreen() {
 
   return (
     <div className="min-h-screen bg-[#1a1a2e] flex flex-col">
-      <div className="flex-1 overflow-y-auto pb-20">
-        <div className="max-w-md mx-auto px-6 py-6 space-y-6">
-          
-          {/* Header */}
+      {/* Header */}
+      <header className="py-4">
+        <div className="max-w-md mx-auto px-6 flex justify-between items-center">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg flex items-center justify-center text-2xl">
               🎲
             </div>
             <h1 className="text-2xl font-bold text-white">Gamenight</h1>
           </div>
+          <button
+            onClick={() => navigate('/profile')}
+            className="flex items-center justify-center"
+            title="Profile"
+          >
+            {user?.displayName ? (
+              <div className={`w-10 h-10 rounded-full ${getAvatarColor(user.displayName)} flex items-center justify-center text-white font-bold text-sm`}>
+                {getInitials(user.displayName)}
+              </div>
+            ) : (
+              <span className="material-symbols-outlined text-slate-400">person</span>
+            )}
+          </button>
+        </div>
+      </header>
+
+      <div className="flex-1 overflow-y-auto">
+        <div className="max-w-md mx-auto px-6 py-6 space-y-6">
+          
+          {/* Nickname Modal (moved below header) */}
 
           {/* Host Game Card */}
           <button
@@ -262,29 +340,115 @@ export default function WelcomeScreen() {
         </div>
       </div>
 
-      {/* Bottom Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 border-t border-[#2a3f5f] bg-[#16213e]/80 backdrop-blur-md px-6 py-3">
-        <div className="max-w-md mx-auto flex justify-between items-center">
-          <button className="flex flex-col items-center gap-1 text-purple-500">
-            <span className="material-symbols-outlined fill-1">home</span>
-            <span className="text-[10px] font-bold">Home</span>
-          </button>
-          <button 
-            onClick={handleChangeNickname}
-            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
-          >
-            <span className="material-symbols-outlined">mail</span>
-            <span className="text-[10px] font-bold">Invites</span>
-          </button>
-          <button 
-            onClick={() => navigate('/profile')}
-            className="flex flex-col items-center gap-1 text-slate-400 hover:text-slate-300 transition-colors"
-          >
-            <span className="material-symbols-outlined">person</span>
-            <span className="text-[10px] font-bold">Profile</span>
-          </button>
+      {/* Host Game Dialog */}
+      {showHostDialog && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#16213e] border border-[#2a3f5f] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-white text-lg font-bold mb-4">Host a Game Night</h3>
+            
+            <div className="space-y-4 mb-6">
+              {/* Room Name Input */}
+              <div>
+                <label className="block text-slate-400 text-xs font-medium mb-2">Game Night Name</label>
+                <input
+                  type="text"
+                  value={roomNameInput}
+                  onChange={(e) => setRoomNameInput(e.target.value)}
+                  placeholder="e.g., Friday Night Games"
+                  className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmHostGame();
+                    if (e.key === 'Escape') setShowHostDialog(false);
+                  }}
+                  autoFocus
+                />
+              </div>
+
+              {/* Host Game Name Input */}
+              <div>
+                <label className="block text-slate-400 text-xs font-medium mb-2">Your Name for This Game</label>
+                <input
+                  type="text"
+                  value={hostGameName}
+                  onChange={(e) => setHostGameName(e.target.value)}
+                  placeholder={user?.displayName || 'Your game name'}
+                  className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') handleConfirmHostGame();
+                    if (e.key === 'Escape') setShowHostDialog(false);
+                  }}
+                />
+              </div>
+            </div>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowHostDialog(false);
+                  setHostGameName('');
+                  setRoomNameInput('');
+                }}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmHostGame}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-500 hover:via-purple-500 hover:to-fuchsia-500 text-white rounded-lg font-bold transition-colors"
+              >
+                Host Game
+              </button>
+            </div>
+          </div>
         </div>
-      </nav>
+      )}
+
+      {/* Join Game Rename Modal */}
+      {showJoinRenameModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
+          <div className="bg-[#16213e] border border-[#2a3f5f] rounded-2xl p-6 max-w-sm w-full">
+            <h3 className="text-white text-lg font-bold mb-2">Join Game Night</h3>
+            <p className="text-slate-500 text-sm mb-4">Choose your name for this game</p>
+            
+            <input
+              type="text"
+              value={joinGameName}
+              onChange={(e) => setJoinGameName(e.target.value)}
+              placeholder="Your game name"
+              className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-4"
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') handleConfirmJoin();
+                if (e.key === 'Escape') {
+                  setShowJoinRenameModal(false);
+                  setPendingJoinRoomId(null);
+                  setJoinGameName('');
+                }
+              }}
+              autoFocus
+            />
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => {
+                  setShowJoinRenameModal(false);
+                  setPendingJoinRoomId(null);
+                  setJoinGameName('');
+                }}
+                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmJoin}
+                disabled={!joinGameName.trim()}
+                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-500 hover:via-purple-500 hover:to-fuchsia-500 disabled:from-slate-700 disabled:via-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold transition-colors disabled:cursor-not-allowed"
+              >
+                Join Game
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
     </div>
   );
