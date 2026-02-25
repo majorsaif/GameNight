@@ -1,7 +1,33 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRoom, updatePlayerNameForGame, leaveRoom } from '../hooks/useRoom';
+import { useRoom, updatePlayerNameForGame, leaveRoom, startVote, castVote, endActivity } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
+import VoteModal from './VoteModal';
+import ActiveVote from './ActiveVote';
+
+const getInitials = (name) => {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length === 1) {
+    return parts[0].substring(0, 2).toUpperCase();
+  }
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+};
+
+const getAvatarColor = (name) => {
+  if (!name) return 'bg-purple-600';
+  const colors = [
+    'bg-purple-600',
+    'bg-blue-600',
+    'bg-pink-600',
+    'bg-indigo-600',
+    'bg-violet-600',
+    'bg-fuchsia-600',
+    'bg-cyan-600',
+  ];
+  const index = name.charCodeAt(0) % colors.length;
+  return colors[index];
+};
 
 export default function HomeScreen() {
   const { roomId } = useParams();
@@ -9,11 +35,13 @@ export default function HomeScreen() {
   const { room, loading: roomLoading, error, isHost } = useRoom(
     roomId, 
     user?.id, 
-    user?.displayName
+    user?.displayName,
+    user?.avatar || null
   );
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showVoteModal, setShowVoteModal] = useState(false);
   const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
   const settingsRef = useRef(null);
 
@@ -46,6 +74,18 @@ export default function HomeScreen() {
       updatePlayerNameForGame(roomId, user?.id, gameDisplayName.trim());
       setShowRenameModal(false);
     }
+  };
+
+  const handleStartVote = (voteData) => {
+    startVote(roomId, voteData);
+  };
+
+  const handleCastVote = (optionId) => {
+    castVote(roomId, user?.id, optionId);
+  };
+
+  const handleEndVote = () => {
+    endActivity(roomId);
   };
 
   // Get the display name for the current player (use game-specific name if set)
@@ -86,52 +126,39 @@ export default function HomeScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Top Bar */}
-      <header className="bg-slate-900/50 backdrop-blur-sm border-b border-slate-800 px-6 py-4">
-        <div className="max-w-6xl mx-auto flex justify-between items-center gap-4">
-          {/* Room Code */}
-          <div className="flex-1 flex flex-col gap-2">
-            <div className="flex items-center gap-2">
-              <span className="text-slate-500 text-xs font-medium">Code:</span>
-              <div className="bg-slate-800 border-2 border-violet-500/50 rounded-lg px-3 py-1">
-                <span className="text-violet-400 font-black text-base tracking-widest">{room.code}</span>
-              </div>
-            </div>
+      <header className="relative z-40 w-full max-w-md mx-auto px-6 py-4">
+        <div className="flex justify-between items-center gap-4">
+          {/* Room Code Pill */}
+          <div className="flex items-center gap-2 bg-slate-800/50 border border-slate-700/50 rounded-full px-4 py-2.5">
+            <span className="text-slate-400 text-xs font-medium uppercase tracking-wide">Code</span>
+            <span className="text-violet-400 font-black text-sm tracking-widest">{room.code}</span>
           </div>
 
-          {/* Settings Dropdown */}
+          {/* Settings Circle Button */}
           <div className="relative" ref={settingsRef}>
             <button
               onClick={() => setShowSettings(!showSettings)}
-              className="text-3xl hover:bg-slate-800 p-2 rounded-lg transition-colors"
+              className="flex items-center justify-center w-10 h-10 bg-slate-800/50 border border-slate-700/50 rounded-full text-slate-400 hover:text-slate-300 hover:bg-slate-800 transition-colors"
               title="Settings"
             >
-              ⚙️
+              <span className="material-symbols-outlined text-2xl">settings</span>
             </button>
             
             {showSettings && (
               <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-xl shadow-black/50 overflow-hidden z-50">
-                <div className="py-1 space-y-1 px-1">
+                <div className="divide-y divide-slate-700/60">
                   <button
                     onClick={() => {
                       setShowRenameModal(true);
                       setShowSettings(false);
                     }}
-                    className="w-full px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium rounded-lg"
+                    className="relative z-10 flex w-full items-center px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium first:rounded-t-xl"
                   >
                     Change nickname
                   </button>
                   <button
-                    onClick={() => {
-                      setShowSettings(false);
-                      navigate('/profile');
-                    }}
-                    className="w-full px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium rounded-lg"
-                  >
-                    Profile
-                  </button>
-                  <button
                     onClick={handleLeaveRoom}
-                    className="w-full px-4 py-3 text-left text-red-400 hover:bg-slate-700 transition-colors font-medium rounded-lg"
+                    className="relative z-10 flex w-full items-center px-4 py-3 text-left text-red-400 hover:bg-slate-700 transition-colors font-medium last:rounded-b-xl"
                   >
                     Leave Room
                   </button>
@@ -143,13 +170,34 @@ export default function HomeScreen() {
       </header>
 
       {/* Main Content */}
-      <main className="flex-1 px-4 py-8 max-w-3xl w-full mx-auto">
+      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         {isHost ? (
-          <HostView room={room} getCurrentPlayerName={getCurrentPlayerName} />
+          <HostView 
+            room={room} 
+            getCurrentPlayerName={getCurrentPlayerName}
+            onOpenVoteModal={() => setShowVoteModal(true)}
+            onCastVote={handleCastVote}
+            onEndVote={handleEndVote}
+            userId={user?.id}
+          />
         ) : (
-          <PlayerView room={room} getCurrentPlayerName={getCurrentPlayerName} />
+          <PlayerView 
+            room={room} 
+            getCurrentPlayerName={getCurrentPlayerName}
+            onCastVote={handleCastVote}
+            userId={user?.id}
+          />
         )}
       </main>
+
+      {/* Vote Modal */}
+      {showVoteModal && (
+        <VoteModal
+          room={room}
+          onClose={() => setShowVoteModal(false)}
+          onStartVote={handleStartVote}
+        />
+      )}
 
       {/* Change Nickname Modal */}
       {showRenameModal && (
@@ -186,10 +234,27 @@ export default function HomeScreen() {
   );
 }
 
-function HostView({ room, getCurrentPlayerName }) {
+function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onEndVote, userId }) {
+  const hasActiveActivity = room.activeActivity !== undefined;
+
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-6">
       
+      {/* Active Activity Section */}
+      {hasActiveActivity && (
+        <div>
+          <h2 className="text-2xl font-bold text-slate-300 text-center mb-4">Active Activities</h2>
+          <ActiveVote
+            activity={room.activeActivity}
+            room={room}
+            userId={userId}
+            isHost={true}
+            onVote={onCastVote}
+            onEndVote={onEndVote}
+          />
+        </div>
+      )}
+
       {/* Players Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
@@ -204,11 +269,21 @@ function HostView({ room, getCurrentPlayerName }) {
               key={player.id} 
               className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800"
             >
-              <div className="flex flex-col">
-                <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
-                {player.displayNameForGame && (
-                  <span className="text-slate-500 text-xs">(usually {player.displayName})</span>
+              <div className="flex items-center gap-3">
+                {player.avatar ? (
+                  <img
+                    src={player.avatar}
+                    alt={player.displayNameForGame || player.displayName}
+                    className="w-9 h-9 rounded-full object-cover border border-slate-700"
+                  />
+                ) : (
+                  <div
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(player.displayNameForGame || player.displayName)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
+                  >
+                    {getInitials(player.displayNameForGame || player.displayName)}
+                  </div>
                 )}
+                <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
               </div>
               {player.isHost && (
                 <span className="bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">
@@ -220,18 +295,28 @@ function HostView({ room, getCurrentPlayerName }) {
         </ul>
       </div>
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-8 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
-          <div className="text-5xl mb-3">🎮</div>
-          <div className="text-white font-bold text-xl">Games</div>
-          <div className="text-violet-200 text-sm mt-1">Start a new game</div>
+      {/* Games Button - Large Full Width */}
+      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-12 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <div className="text-5xl mb-3">🎮</div>
+        <div className="text-white font-bold text-xl">Games</div>
+        <div className="text-violet-200 text-sm mt-1">Start a new game</div>
+      </button>
+
+      {/* Vote and Spin Wheel Buttons - Side by Side */}
+      <div className="grid grid-cols-2 gap-4">
+        <button 
+          onClick={onOpenVoteModal}
+          className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
+        >
+          <div className="text-4xl mb-2">✓</div>
+          <div className="text-white font-bold text-lg">Vote</div>
+          <div className="text-slate-400 text-xs mt-1">Create a poll</div>
         </button>
 
-        <button className="group relative overflow-hidden bg-slate-800/50 border-2 border-violet-500 hover:bg-slate-800 rounded-2xl p-8 text-center shadow-lg hover:shadow-xl hover:shadow-violet-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎡</div>
-          <div className="text-white font-bold text-xl">Forfeit Wheel</div>
-          <div className="text-slate-400 text-sm mt-1">Spin for a loser</div>
+          <div className="text-white font-bold text-xl">Spin Wheel</div>
+          <div className="text-slate-400 text-sm mt-1">Spin for dares</div>
         </button>
       </div>
 
@@ -239,16 +324,32 @@ function HostView({ room, getCurrentPlayerName }) {
   );
 }
 
-function PlayerView({ room, getCurrentPlayerName }) {
+function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
+  const hasActiveActivity = room.activeActivity !== undefined;
+
   return (
-    <div className="space-y-8">
+    <div className="flex flex-col gap-6">
       
-      {/* Waiting Message */}
-      <div className="text-center py-6">
-        <div className="text-6xl mb-4 animate-pulse">⏳</div>
-        <h2 className="text-2xl font-bold text-slate-400 italic">Waiting for host...</h2>
-        <p className="text-slate-600 mt-2">The host will start the game soon</p>
-      </div>
+      {/* Waiting Message or Active Activities */}
+      {!hasActiveActivity ? (
+        <div className="text-center py-6">
+          <div className="text-6xl mb-4 inline-block animate-bounce">⏳</div>
+          <h2 className="text-2xl font-bold text-slate-400 italic">Waiting for host...</h2>
+          <p className="text-slate-600 mt-2">The host will start an activity soon</p>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-2xl font-bold text-slate-300 text-center mb-4">Active Activities</h2>
+          <ActiveVote
+            activity={room.activeActivity}
+            room={room}
+            userId={userId}
+            isHost={false}
+            onVote={onCastVote}
+            onEndVote={() => {}}
+          />
+        </div>
+      )}
 
       {/* Players Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
@@ -264,11 +365,21 @@ function PlayerView({ room, getCurrentPlayerName }) {
               key={player.id} 
               className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-800"
             >
-              <div className="flex flex-col">
-                <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
-                {player.displayNameForGame && (
-                  <span className="text-slate-500 text-xs">(usually {player.displayName})</span>
+              <div className="flex items-center gap-3">
+                {player.avatar ? (
+                  <img
+                    src={player.avatar}
+                    alt={player.displayNameForGame || player.displayName}
+                    className="w-9 h-9 rounded-full object-cover border border-slate-700"
+                  />
+                ) : (
+                  <div
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(player.displayNameForGame || player.displayName)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
+                  >
+                    {getInitials(player.displayNameForGame || player.displayName)}
+                  </div>
                 )}
+                <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
               </div>
               {player.isHost && (
                 <span className="bg-gradient-to-r from-violet-600 to-purple-600 text-white text-xs font-bold px-3 py-1 rounded-full">
@@ -280,18 +391,25 @@ function PlayerView({ room, getCurrentPlayerName }) {
         </ul>
       </div>
 
-      {/* Action Buttons */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-8 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
-          <div className="text-5xl mb-3">🎮</div>
-          <div className="text-white font-bold text-xl">Games</div>
-          <div className="text-violet-200 text-sm mt-1">Play games</div>
+      {/* Games Button - Large Full Width */}
+      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-12 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <div className="text-5xl mb-3">🎮</div>
+        <div className="text-white font-bold text-xl">Games</div>
+        <div className="text-violet-200 text-sm mt-1">Play games</div>
+      </button>
+
+      {/* Vote and Spin Wheel Buttons - Side by Side */}
+      <div className="grid grid-cols-2 gap-4">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+          <div className="text-4xl mb-2">✓</div>
+          <div className="text-white font-bold text-lg">Vote</div>
+          <div className="text-slate-400 text-xs mt-1">Create a poll</div>
         </button>
 
-        <button className="group relative overflow-hidden bg-slate-800/50 border-2 border-violet-500 hover:bg-slate-800 rounded-2xl p-8 text-center shadow-lg hover:shadow-xl hover:shadow-violet-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎡</div>
-          <div className="text-white font-bold text-xl">Forfeit Wheel</div>
-          <div className="text-slate-400 text-sm mt-1">Spin the wheel</div>
+          <div className="text-white font-bold text-xl">Spin Wheel</div>
+          <div className="text-slate-400 text-sm mt-1">Spin for dares</div>
         </button>
       </div>
 
