@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { createRoom, findRoomByCode, joinRoom } from '../hooks/useRoom';
@@ -12,6 +12,10 @@ export default function WelcomeScreen() {
   const navigate = useNavigate();
   const { user, loading, hasNickname, setNickname } = useAuth();
   const inputRefs = useRef([]);
+
+  useEffect(() => {
+    setShowAuthModal(!hasNickname);
+  }, [hasNickname]);
 
   const handleHostGame = () => {
     if (!user) return;
@@ -107,9 +111,16 @@ export default function WelcomeScreen() {
     }
   };
 
-  const handleCancelChange = () => {
-    setShowChangeNickname(false);
-    setNicknameInput('');
+  const handleContinueAsGuest = () => {
+    if (!savedGuestName) return;
+    localStorage.setItem('gamenight_auth_type', 'guest');
+    setNickname(savedGuestName);
+    setShowAuthModal(false);
+  };
+
+  const handleComingSoon = () => {
+    setShowComingSoon(true);
+    setTimeout(() => setShowComingSoon(false), 2000);
   };
 
   // Generate initials from nickname
