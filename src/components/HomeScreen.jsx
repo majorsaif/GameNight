@@ -215,6 +215,7 @@ export default function HomeScreen() {
             onEndWheel={handleEndWheel}
             userId={user?.id}
             roomId={roomId}
+            navigate={navigate}
           />
         ) : (
           <PlayerView 
@@ -225,6 +226,7 @@ export default function HomeScreen() {
             onEndWheel={handleEndWheel}
             userId={user?.id}
             roomId={roomId}
+            navigate={navigate}
           />
         )}
       </main>
@@ -282,7 +284,7 @@ export default function HomeScreen() {
   );
 }
 
-function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetup, onCastVote, onEndVote, onSpinWheel, onEndWheel, userId, roomId }) {
+function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetup, onCastVote, onEndVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity !== undefined;
   const isWheel = hasActiveActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel');
@@ -429,7 +431,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       )}
 
       {/* Browse Games - Large Full Width Card */}
-      <button className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+      <button type="button" onClick={() => navigate(`/room/${roomId}/games`)} className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
         <div className="relative z-10">
           <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center mb-4">
             <span className="text-3xl">🎮</span>
@@ -437,8 +439,8 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">BROWSE<br/>GAMES</h2>
           <p className="text-blue-100 text-sm">150+ titles available</p>
         </div>
-        <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-4">
-          <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+        <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-8">
+          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
             <path d="M7 6v2h10V6H7zm0 6v-2h10v2H7zm0 4v-2h10v2H7zm0 4v-2h7v2H7z"/>
           </svg>
         </div>
@@ -447,7 +449,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       {/* Vote Card */}
       <button 
         onClick={onOpenVoteModal}
-        className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
+        className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
       >
         <div className="relative z-10">
           <div className="w-12 h-12 bg-violet-500/30 rounded-xl flex items-center justify-center mb-4">
@@ -456,8 +458,8 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">VOTE</h2>
           <p className="text-violet-100 text-sm">Quick decision making</p>
         </div>
-        <div className="absolute bottom-0 right-0 text-violet-400/10 transform translate-x-8 translate-y-4">
-          <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+        <div className="absolute bottom-0 right-0 text-violet-400/10 transform translate-x-8 translate-y-8">
+          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
             <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
           </svg>
         </div>
@@ -466,7 +468,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       {/* Wheel Spin Card */}
       <button 
         onClick={onOpenWheelSetup}
-        className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
+        className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
       >
         <div className="relative z-10">
           <div className="w-12 h-12 bg-orange-400/30 rounded-xl flex items-center justify-center mb-4">
@@ -486,7 +488,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   );
 }
 
-function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId }) {
+function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity !== undefined;
   const isWheel = hasActiveActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel');
@@ -642,7 +644,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
       )}
 
       {/* Browse Games - Large Full Width Card */}
-      <button className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+      <button type="button" onClick={() => navigate(`/room/${roomId}/games`)} className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
         <div className="relative z-10">
           <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center mb-4">
             <span className="text-3xl">🎮</span>
@@ -650,15 +652,15 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">BROWSE<br/>GAMES</h2>
           <p className="text-blue-100 text-sm">150+ titles available</p>
         </div>
-        <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-4">
-          <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+        <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-8">
+          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
             <path d="M7 6v2h10V6H7zm0 6v-2h10v2H7zm0 4v-2h10v2H7zm0 4v-2h7v2H7z"/>
           </svg>
         </div>
       </button>
 
       {/* Vote Card */}
-      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
         <div className="relative z-10">
           <div className="w-12 h-12 bg-violet-500/30 rounded-xl flex items-center justify-center mb-4">
             <span className="text-3xl">📝</span>
@@ -666,15 +668,15 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">VOTE</h2>
           <p className="text-violet-100 text-sm">Quick decision making</p>
         </div>
-        <div className="absolute bottom-0 right-0 text-violet-400/10 transform translate-x-8 translate-y-4">
-          <svg className="w-32 h-32" fill="currentColor" viewBox="0 0 24 24">
+        <div className="absolute bottom-0 right-0 text-violet-400/10 transform translate-x-8 translate-y-8">
+          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
             <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
           </svg>
         </div>
       </button>
 
       {/* Wheel Spin Card */}
-      <button className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+      <button className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
         <div className="relative z-10">
           <div className="w-12 h-12 bg-orange-400/30 rounded-xl flex items-center justify-center mb-4">
             <span className="text-3xl">🎡</span>
