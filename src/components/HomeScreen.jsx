@@ -333,9 +333,9 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
       {/* Waiting Message or Active Activities */}
       {!hasActiveActivity ? (
         <div className="text-center py-6">
-          <div className="text-6xl mb-4 animate-pulse">â³</div>
+          <div className="text-6xl mb-4 inline-block animate-bounce">⏳</div>
           <h2 className="text-2xl font-bold text-slate-400 italic">Waiting for host...</h2>
-          <p className="text-slate-600 mt-2">The host will start the game soon</p>
+          <p className="text-slate-600 mt-2">The host will start an activity soon</p>
         </div>
       ) : (
         <div>

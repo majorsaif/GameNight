@@ -1,17 +1,12 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
-import { createRoom, findRoomByCode, joinRoom, updatePlayerNameForGame } from '../hooks/useRoom';
+import { createRoom, findRoomByCode, joinRoom } from '../hooks/useRoom';
 
 export default function WelcomeScreen() {
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
   const [nicknameInput, setNicknameInput] = useState('');
   const [showChangeNickname, setShowChangeNickname] = useState(false);
-  const [showHostDialog, setShowHostDialog] = useState(false);
-  const [hostGameName, setHostGameName] = useState('');
-  const [showJoinRenameModal, setShowJoinRenameModal] = useState(false);
-  const [pendingJoinRoomId, setPendingJoinRoomId] = useState(null);
-  const [joinGameName, setJoinGameName] = useState('');
   const [showLoginScreen, setShowLoginScreen] = useState(true);
   const [showGuestNicknameInput, setShowGuestNicknameInput] = useState(false);
   const navigate = useNavigate();
@@ -19,8 +14,9 @@ export default function WelcomeScreen() {
   const inputRefs = useRef([]);
 
   const handleHostGame = () => {
-    setHostGameName(user?.displayName || '');
-    setShowHostDialog(true);
+    if (!user) return;
+    const room = createRoom(user.id, user.displayName, user.avatar || null);
+    navigate(`/room/${room.id}`);
   };
 
   const handleContinueAsGuest = () => {
@@ -41,20 +37,7 @@ export default function WelcomeScreen() {
     setNicknameInput('');
   };
 
-  const handleConfirmHostGame = () => {
-    if (!user) return;
-    
-    const room = createRoom(user.id, user.displayName, user.avatar || null);
-    
-    // Set host's game-specific name if provided
-    if (hostGameName.trim()) {
-      updatePlayerNameForGame(room.id, user.id, hostGameName.trim());
-    }
-    
-    setShowHostDialog(false);
-    setHostGameName('');
-    navigate(`/room/${room.id}`);
-  };
+
 
   const handleDigitChange = (index, value) => {
     // Only allow alphanumeric characters
@@ -100,35 +83,19 @@ export default function WelcomeScreen() {
 
   const handleJoinGame = (e) => {
     e.preventDefault();
+    if (!user) return;
     const code = codeDigits.join('');
     if (code.length === 6) {
       // Find room by code
       const room = findRoomByCode(code);
       if (room) {
-        // Show rename modal before joining
-        setPendingJoinRoomId(room.id);
-        setJoinGameName(user?.displayName || '');
-        setShowJoinRenameModal(true);
+        joinRoom(room.id, user.id, user.displayName, user.avatar || null);
+        setCodeDigits(['', '', '', '', '', '']);
+        navigate(`/room/${room.id}`);
       } else {
         alert('Room not found. Please check the code and try again.');
       }
     }
-  };
-
-  const handleConfirmJoin = () => {
-    if (!pendingJoinRoomId || !user) return;
-
-    joinRoom(pendingJoinRoomId, user.id, user.displayName, user.avatar || null);
-
-    if (joinGameName.trim()) {
-      updatePlayerNameForGame(pendingJoinRoomId, user.id, joinGameName.trim());
-    }
-    
-    setShowJoinRenameModal(false);
-    setPendingJoinRoomId(null);
-    setJoinGameName('');
-    setCodeDigits(['', '', '', '', '', '']);
-    navigate(`/room/${pendingJoinRoomId}`);
   };
 
   const handleNicknameSubmit = (e) => {
@@ -439,100 +406,6 @@ export default function WelcomeScreen() {
 
         </div>
       </div>
-
-      {/* Host Game Dialog */}
-      {showHostDialog && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#16213e] border border-[#2a3f5f] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-white text-lg font-bold mb-4">Host a Game Night</h3>
-            
-            <div className="space-y-4 mb-6">
-              {/* Host Game Name Input */}
-              <div>
-                <label className="block text-slate-400 text-xs font-medium mb-2">Your Name for This Game</label>
-                <input
-                  type="text"
-                  value={hostGameName}
-                  onChange={(e) => setHostGameName(e.target.value)}
-                  placeholder={user?.displayName || 'Your game name'}
-                  className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent"
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleConfirmHostGame();
-                    if (e.key === 'Escape') setShowHostDialog(false);
-                  }}
-                  autoFocus
-                />
-              </div>
-            </div>
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowHostDialog(false);
-                  setHostGameName('');
-                }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmHostGame}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-500 hover:via-purple-500 hover:to-fuchsia-500 text-white rounded-lg font-bold transition-colors"
-              >
-                Host Game
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Join Game Rename Modal */}
-      {showJoinRenameModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-[#16213e] border border-[#2a3f5f] rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-white text-lg font-bold mb-2">Join Game Night</h3>
-            <p className="text-slate-500 text-sm mb-4">Choose your name for this game</p>
-            
-            <input
-              type="text"
-              value={joinGameName}
-              onChange={(e) => setJoinGameName(e.target.value)}
-              placeholder="Your game name"
-              className="w-full bg-[#1a1a2e] border border-[#2a3f5f] rounded-lg px-4 py-3 text-white placeholder-slate-600 focus:outline-none focus:ring-2 focus:ring-purple-500 focus:border-transparent mb-4"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleConfirmJoin();
-                if (e.key === 'Escape') {
-                  setShowJoinRenameModal(false);
-                  setPendingJoinRoomId(null);
-                  setJoinGameName('');
-                }
-              }}
-              autoFocus
-            />
-
-            <div className="flex gap-3">
-              <button
-                onClick={() => {
-                  setShowJoinRenameModal(false);
-                  setPendingJoinRoomId(null);
-                  setJoinGameName('');
-                }}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleConfirmJoin}
-                disabled={!joinGameName.trim()}
-                className="flex-1 px-4 py-2 bg-gradient-to-r from-violet-600 via-purple-600 to-fuchsia-600 hover:from-violet-500 hover:via-purple-500 hover:to-fuchsia-500 disabled:from-slate-700 disabled:via-slate-700 disabled:to-slate-700 disabled:text-slate-500 text-white rounded-lg font-bold transition-colors disabled:cursor-not-allowed"
-              >
-                Join Game
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
     </div>
   );
 }
