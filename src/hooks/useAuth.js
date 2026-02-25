@@ -86,6 +86,15 @@ export function useAuth() {
     setUser(null);
   }, []);
 
+  const logout = useCallback(() => {
+    // Clear all user data
+    localStorage.removeItem(NICKNAME_KEY);
+    localStorage.removeItem(PROFILE_KEY);
+    sessionStorage.removeItem('gamenight_uid');
+    setHasNickname(false);
+    setUser(null);
+  }, []);
+
   const updateProfile = useCallback((updates) => {
     try {
       // Get current profile data
@@ -116,5 +125,5 @@ export function useAuth() {
     }
   }, [loadUser]);
 
-  return { user, loading, hasNickname, setNickname, clearNickname, updateProfile };
+  return { user, loading, hasNickname, setNickname, clearNickname, logout, updateProfile };
 }
