@@ -1,33 +1,12 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRoom, updatePlayerNameForGame, leaveRoom, startVote, castVote, endActivity } from '../hooks/useRoom';
+import { useRoom, updatePlayerNameForGame, leaveRoom, startVote, castVote, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
 import VoteModal from './VoteModal';
 import ActiveVote from './ActiveVote';
-
-const getInitials = (name) => {
-  if (!name) return '?';
-  const parts = name.trim().split(' ');
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
-  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-};
-
-const getAvatarColor = (name) => {
-  if (!name) return 'bg-purple-600';
-  const colors = [
-    'bg-purple-600',
-    'bg-blue-600',
-    'bg-pink-600',
-    'bg-indigo-600',
-    'bg-violet-600',
-    'bg-fuchsia-600',
-    'bg-cyan-600',
-  ];
-  const index = name.charCodeAt(0) % colors.length;
-  return colors[index];
-};
+import WheelSpin from './ForfeitWheel';
+import WheelSetupModal from './WheelSetupModal';
+import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 
 export default function HomeScreen() {
   const { roomId } = useParams();
@@ -42,8 +21,16 @@ export default function HomeScreen() {
   const [showSettings, setShowSettings] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
+  const [showWheelSetup, setShowWheelSetup] = useState(false);
   const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
   const settingsRef = useRef(null);
+
+  // Backfill avatar colors for existing players
+  useEffect(() => {
+    if (roomId && room) {
+      backfillAvatarColors(roomId);
+    }
+  }, [roomId, room]);
 
   // Close settings menu when clicking outside
   useEffect(() => {
@@ -85,6 +72,19 @@ export default function HomeScreen() {
   };
 
   const handleEndVote = () => {
+    endActivity(roomId);
+  };
+
+  const handleLaunchWheel = (wheelData) => {
+    startWheel(roomId, wheelData);
+    setShowWheelSetup(false);
+  };
+
+  const handleSpinWheel = () => {
+    spinWheel(roomId);
+  };
+
+  const handleEndWheel = () => {
     endActivity(roomId);
   };
 
@@ -176,16 +176,23 @@ export default function HomeScreen() {
             room={room} 
             getCurrentPlayerName={getCurrentPlayerName}
             onOpenVoteModal={() => setShowVoteModal(true)}
+            onOpenWheelSetup={() => setShowWheelSetup(true)}
             onCastVote={handleCastVote}
             onEndVote={handleEndVote}
+            onSpinWheel={handleSpinWheel}
+            onEndWheel={handleEndWheel}
             userId={user?.id}
+            roomId={roomId}
           />
         ) : (
           <PlayerView 
             room={room} 
             getCurrentPlayerName={getCurrentPlayerName}
             onCastVote={handleCastVote}
+            onSpinWheel={handleSpinWheel}
+            onEndWheel={handleEndWheel}
             userId={user?.id}
+            roomId={roomId}
           />
         )}
       </main>
@@ -196,6 +203,15 @@ export default function HomeScreen() {
           room={room}
           onClose={() => setShowVoteModal(false)}
           onStartVote={handleStartVote}
+        />
+      )}
+
+      {/* Wheel Setup Modal */}
+      {showWheelSetup && (
+        <WheelSetupModal
+          room={room}
+          onClose={() => setShowWheelSetup(false)}
+          onLaunch={handleLaunchWheel}
         />
       )}
 
@@ -234,8 +250,10 @@ export default function HomeScreen() {
   );
 }
 
-function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onEndVote, userId }) {
+function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetup, onCastVote, onEndVote, onSpinWheel, onEndWheel, userId, roomId }) {
   const hasActiveActivity = room.activeActivity !== undefined;
+  const isWheel = hasActiveActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel');
+  const isVote = hasActiveActivity && !isWheel;
 
   return (
     <div className="flex flex-col gap-6">
@@ -244,14 +262,24 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onE
       {hasActiveActivity && (
         <div>
           <h2 className="text-2xl font-bold text-slate-300 text-center mb-4">Active Activities</h2>
-          <ActiveVote
-            activity={room.activeActivity}
-            room={room}
-            userId={userId}
-            isHost={true}
-            onVote={onCastVote}
-            onEndVote={onEndVote}
-          />
+          {isVote ? (
+            <ActiveVote
+              activity={room.activeActivity}
+              room={room}
+              userId={userId}
+              isHost={true}
+              onVote={onCastVote}
+              onEndVote={onEndVote}
+            />
+          ) : (
+            <WheelSpin
+              activity={room.activeActivity}
+              room={room}
+              isHost={true}
+              onEndActivity={onEndWheel}
+              onSpin={onSpinWheel}
+            />
+          )}
         </div>
       )}
 
@@ -278,9 +306,9 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onE
                   />
                 ) : (
                   <div
-                    className={`w-9 h-9 rounded-full ${getAvatarColor(player.displayNameForGame || player.displayName)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(player, roomId)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
                   >
-                    {getInitials(player.displayNameForGame || player.displayName)}
+                    {getInitials(player.displayNameForGame ||player.displayName)}
                   </div>
                 )}
                 <span className="text-slate-300 font-medium">{player.displayNameForGame || player.displayName}</span>
@@ -313,10 +341,13 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onE
           <div className="text-slate-400 text-xs mt-1">Create a poll</div>
         </button>
 
-        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <button 
+          onClick={onOpenWheelSetup}
+          className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
+        >
           <div className="text-5xl mb-3">🎡</div>
-          <div className="text-white font-bold text-xl">Spin Wheel</div>
-          <div className="text-slate-400 text-sm mt-1">Spin for dares</div>
+          <div className="text-white font-bold text-xl">Wheel Spin</div>
+          <div className="text-slate-400 text-sm mt-1">Random selection</div>
         </button>
       </div>
 
@@ -324,8 +355,10 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onE
   );
 }
 
-function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
+function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId }) {
   const hasActiveActivity = room.activeActivity !== undefined;
+  const isWheel = hasActiveActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel');
+  const isVote = hasActiveActivity && !isWheel;
 
   return (
     <div className="flex flex-col gap-6">
@@ -340,14 +373,24 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
       ) : (
         <div>
           <h2 className="text-2xl font-bold text-slate-300 text-center mb-4">Active Activities</h2>
-          <ActiveVote
-            activity={room.activeActivity}
-            room={room}
-            userId={userId}
-            isHost={false}
-            onVote={onCastVote}
-            onEndVote={() => {}}
-          />
+          {isVote ? (
+            <ActiveVote
+              activity={room.activeActivity}
+              room={room}
+              userId={userId}
+              isHost={false}
+              onVote={onCastVote}
+              onEndVote={() => {}}
+            />
+          ) : (
+            <WheelSpin
+              activity={room.activeActivity}
+              room={room}
+              isHost={false}
+              onEndActivity={() => {}}
+              onSpin={() => {}}
+            />
+          )}
         </div>
       )}
 
@@ -374,7 +417,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
                   />
                 ) : (
                   <div
-                    className={`w-9 h-9 rounded-full ${getAvatarColor(player.displayNameForGame || player.displayName)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
+                    className={`w-9 h-9 rounded-full ${getAvatarColor(player, roomId)} flex items-center justify-center text-white text-xs font-bold border border-slate-700`}
                   >
                     {getInitials(player.displayNameForGame || player.displayName)}
                   </div>
@@ -397,6 +440,11 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
         <div className="text-white font-bold text-xl">Games</div>
         <div className="text-violet-200 text-sm mt-1">Play games</div>
       </button>
+      <button className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 rounded-2xl p-12 text-center shadow-lg shadow-purple-900/50 hover:shadow-xl hover:shadow-purple-800/60 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <div className="text-5xl mb-3">🎮</div>
+        <div className="text-white font-bold text-xl">Games</div>
+        <div className="text-violet-200 text-sm mt-1">Play games</div>
+      </button>
 
       {/* Vote and Spin Wheel Buttons - Side by Side */}
       <div className="grid grid-cols-2 gap-4">
@@ -408,8 +456,8 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
 
         <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-5xl mb-3">🎡</div>
-          <div className="text-white font-bold text-xl">Spin Wheel</div>
-          <div className="text-slate-400 text-sm mt-1">Spin for dares</div>
+          <div className="text-white font-bold text-xl">Wheel Spin</div>
+          <div className="text-slate-400 text-sm mt-1">Random selection</div>
         </button>
       </div>
 
