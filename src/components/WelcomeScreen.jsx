@@ -14,7 +14,7 @@ export default function WelcomeScreen() {
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    setShowAuthModal(!hasNickname);
+    setShowLoginScreen(!hasNickname);
   }, [hasNickname]);
 
   const handleHostGame = () => {
@@ -109,13 +109,6 @@ export default function WelcomeScreen() {
       setNicknameInput('');
       setShowChangeNickname(false);
     }
-  };
-
-  const handleContinueAsGuest = () => {
-    if (!savedGuestName) return;
-    localStorage.setItem('gamenight_auth_type', 'guest');
-    setNickname(savedGuestName);
-    setShowAuthModal(false);
   };
 
   const handleComingSoon = () => {
