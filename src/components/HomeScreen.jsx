@@ -133,9 +133,9 @@ export default function HomeScreen() {
             <div className="w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center text-2xl shadow-lg">
               🎲
             </div>
-            <div className="flex flex-col">
-              <span className="text-orange-400 text-[10px] font-bold uppercase tracking-wider">Room Code</span>
-              <span className="text-white font-black text-lg tracking-wide">{room.code}</span>
+            <div className="flex flex-col w-fit">
+              <span className="text-violet-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Room Code</span>
+              <span className="text-white font-black text-lg tracking-wide whitespace-nowrap">{room.code}</span>
             </div>
           </div>
 
