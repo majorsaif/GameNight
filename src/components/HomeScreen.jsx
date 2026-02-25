@@ -307,30 +307,6 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
         <p className="text-slate-400 text-sm">Ready to play? Pick a challenge below!</p>
       </div>
       
-      {/* Active Activity Section */}
-      {hasActiveActivity && (
-        <div>
-          {isVote ? (
-            <ActiveVote
-              activity={room.activeActivity}
-              room={room}
-              userId={userId}
-              isHost={true}
-              onVote={onCastVote}
-              onEndVote={onEndVote}
-            />
-          ) : (
-            <WheelSpin
-              activity={room.activeActivity}
-              room={room}
-              isHost={true}
-              onEndActivity={onEndWheel}
-              onSpin={onSpinWheel}
-            />
-          )}
-        </div>
-      )}
-
       {/* Compact Players Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -427,6 +403,30 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
               ))}
             </ul>
           </div>
+        </div>
+      )}
+
+      {/* Active Activity Section */}
+      {hasActiveActivity && (
+        <div>
+          {isVote ? (
+            <ActiveVote
+              activity={room.activeActivity}
+              room={room}
+              userId={userId}
+              isHost={true}
+              onVote={onCastVote}
+              onEndVote={onEndVote}
+            />
+          ) : (
+            <WheelSpin
+              activity={room.activeActivity}
+              room={room}
+              isHost={true}
+              onEndActivity={onEndWheel}
+              onSpin={onSpinWheel}
+            />
+          )}
         </div>
       )}
 
@@ -511,30 +511,6 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
         <p className="text-slate-400 text-sm">Ready to play? Pick a challenge below!</p>
       </div>
       
-      {/* Active Activity Section or Waiting Message */}
-      {hasActiveActivity ? (
-        <div>
-          {isVote ? (
-            <ActiveVote
-              activity={room.activeActivity}
-              room={room}
-              userId={userId}
-              isHost={false}
-              onVote={onCastVote}
-              onEndVote={() => {}}
-            />
-          ) : (
-            <WheelSpin
-              activity={room.activeActivity}
-              room={room}
-              isHost={false}
-              onEndActivity={() => {}}
-              onSpin={() => {}}
-            />
-          )}
-        </div>
-      ) : null}
-
       {/* Compact Players Section */}
       <div>
         <div className="flex items-center justify-between mb-3">
@@ -634,8 +610,29 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
         </div>
       )}
 
-      {/* Waiting Message - Only shown when no active activity */}
-      {!hasActiveActivity && (
+      {/* Active Activity Section or Waiting Message */}
+      {hasActiveActivity ? (
+        <div>
+          {isVote ? (
+            <ActiveVote
+              activity={room.activeActivity}
+              room={room}
+              userId={userId}
+              isHost={false}
+              onVote={onCastVote}
+              onEndVote={() => {}}
+            />
+          ) : (
+            <WheelSpin
+              activity={room.activeActivity}
+              room={room}
+              isHost={false}
+              onEndActivity={() => {}}
+              onSpin={() => {}}
+            />
+          )}
+        </div>
+      ) : (
         <div className="text-center py-6">
           <div className="text-5xl mb-3 inline-block animate-bounce">⏳</div>
           <h2 className="text-xl font-bold text-slate-400 italic">Waiting for host...</h2>
