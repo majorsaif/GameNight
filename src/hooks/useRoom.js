@@ -232,6 +232,57 @@ export function leaveRoom(roomId, userId) {
   return room;
 }
 
+/**
+ * Helper to start a vote activity
+ */
+export function startVote(roomId, voteData) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room) {
+    room.activeActivity = {
+      ...voteData,
+      createdAt: new Date().toISOString()
+    };
+    saveRoomsToStorage(rooms);
+  }
+  
+  return room;
+}
+
+/**
+ * Helper to cast a vote
+ */
+export function castVote(roomId, userId, optionId) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room && room.activeActivity) {
+    if (!room.activeActivity.votes) {
+      room.activeActivity.votes = {};
+    }
+    room.activeActivity.votes[userId] = optionId;
+    saveRoomsToStorage(rooms);
+  }
+  
+  return room;
+}
+
+/**
+ * Helper to end current activity
+ */
+export function endActivity(roomId) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room) {
+    delete room.activeActivity;
+    saveRoomsToStorage(rooms);
+  }
+  
+  return room;
+}
+
 export function useActiveRoom(userId) {
   const [activeRoom, setActiveRoom] = useState(null);
   const [loading, setLoading] = useState(true);

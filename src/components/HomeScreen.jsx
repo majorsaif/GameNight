@@ -1,7 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useRoom, updatePlayerNameForGame, leaveRoom } from '../hooks/useRoom';
+import { useRoom, updatePlayerNameForGame, leaveRoom, startVote, castVote, endActivity } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
+import VoteModal from './VoteModal';
+import ActiveVote from './ActiveVote';
 
 const getInitials = (name) => {
   if (!name) return '?';
@@ -39,6 +41,7 @@ export default function HomeScreen() {
   const navigate = useNavigate();
   const [showSettings, setShowSettings] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
+  const [showVoteModal, setShowVoteModal] = useState(false);
   const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
   const settingsRef = useRef(null);
 
@@ -71,6 +74,18 @@ export default function HomeScreen() {
       updatePlayerNameForGame(roomId, user?.id, gameDisplayName.trim());
       setShowRenameModal(false);
     }
+  };
+
+  const handleStartVote = (voteData) => {
+    startVote(roomId, voteData);
+  };
+
+  const handleCastVote = (optionId) => {
+    castVote(roomId, user?.id, optionId);
+  };
+
+  const handleEndVote = () => {
+    endActivity(roomId);
   };
 
   // Get the display name for the current player (use game-specific name if set)
@@ -157,11 +172,32 @@ export default function HomeScreen() {
       {/* Main Content */}
       <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         {isHost ? (
-          <HostView room={room} getCurrentPlayerName={getCurrentPlayerName} />
+          <HostView 
+            room={room} 
+            getCurrentPlayerName={getCurrentPlayerName}
+            onOpenVoteModal={() => setShowVoteModal(true)}
+            onCastVote={handleCastVote}
+            onEndVote={handleEndVote}
+            userId={user?.id}
+          />
         ) : (
-          <PlayerView room={room} getCurrentPlayerName={getCurrentPlayerName} />
+          <PlayerView 
+            room={room} 
+            getCurrentPlayerName={getCurrentPlayerName}
+            onCastVote={handleCastVote}
+            userId={user?.id}
+          />
         )}
       </main>
+
+      {/* Vote Modal */}
+      {showVoteModal && (
+        <VoteModal
+          room={room}
+          onClose={() => setShowVoteModal(false)}
+          onStartVote={handleStartVote}
+        />
+      )}
 
       {/* Change Nickname Modal */}
       {showRenameModal && (
@@ -198,10 +234,27 @@ export default function HomeScreen() {
   );
 }
 
-function HostView({ room, getCurrentPlayerName }) {
+function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onCastVote, onEndVote, userId }) {
+  const hasActiveActivity = room.activeActivity !== undefined;
+
   return (
     <div className="flex flex-col gap-6">
       
+      {/* Active Activity Section */}
+      {hasActiveActivity && (
+        <div>
+          <h2 className="text-2xl font-bold text-slate-300 text-center mb-4">Active Activities</h2>
+          <ActiveVote
+            activity={room.activeActivity}
+            room={room}
+            userId={userId}
+            isHost={true}
+            onVote={onCastVote}
+            onEndVote={onEndVote}
+          />
+        </div>
+      )}
+
       {/* Players Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
         <div className="flex items-center justify-between mb-4">
@@ -249,9 +302,12 @@ function HostView({ room, getCurrentPlayerName }) {
         <div className="text-violet-200 text-sm mt-1">Start a new game</div>
       </button>
 
-      {/* Vote and Forfeit Buttons - Side by Side */}
+      {/* Vote and Spin Wheel Buttons - Side by Side */}
       <div className="grid grid-cols-2 gap-4">
-        <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
+        <button 
+          onClick={onOpenVoteModal}
+          className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300"
+        >
           <div className="text-4xl mb-2">✓</div>
           <div className="text-white font-bold text-lg">Vote</div>
           <div className="text-slate-400 text-xs mt-1">Create a poll</div>
@@ -268,16 +324,32 @@ function HostView({ room, getCurrentPlayerName }) {
   );
 }
 
-function PlayerView({ room, getCurrentPlayerName }) {
+function PlayerView({ room, getCurrentPlayerName, onCastVote, userId }) {
+  const hasActiveActivity = room.activeActivity !== undefined;
+
   return (
     <div className="flex flex-col gap-6">
       
-      {/* Waiting Message */}
-      <div className="text-center py-6">
-        <div className="text-6xl mb-4 animate-pulse">⏳</div>
-        <h2 className="text-2xl font-bold text-slate-400 italic">Waiting for host...</h2>
-        <p className="text-slate-600 mt-2">The host will start the game soon</p>
-      </div>
+      {/* Waiting Message or Active Activities */}
+      {!hasActiveActivity ? (
+        <div className="text-center py-6">
+          <div className="text-6xl mb-4 animate-pulse">â³</div>
+          <h2 className="text-2xl font-bold text-slate-400 italic">Waiting for host...</h2>
+          <p className="text-slate-600 mt-2">The host will start the game soon</p>
+        </div>
+      ) : (
+        <div>
+          <h2 className="text-2xl font-bold text-slate-300 text-center mb-4">Active Activities</h2>
+          <ActiveVote
+            activity={room.activeActivity}
+            room={room}
+            userId={userId}
+            isHost={false}
+            onVote={onCastVote}
+            onEndVote={() => {}}
+          />
+        </div>
+      )}
 
       {/* Players Section */}
       <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
@@ -326,7 +398,7 @@ function PlayerView({ room, getCurrentPlayerName }) {
         <div className="text-violet-200 text-sm mt-1">Play games</div>
       </button>
 
-      {/* Vote and Forfeit Buttons - Side by Side */}
+      {/* Vote and Spin Wheel Buttons - Side by Side */}
       <div className="grid grid-cols-2 gap-4">
         <button className="group relative overflow-hidden bg-slate-800/50 border border-slate-700 hover:border-slate-600 rounded-2xl p-6 text-center shadow-lg hover:shadow-xl hover:shadow-slate-900/30 hover:-translate-y-1 active:translate-y-0 transition-all duration-300">
           <div className="text-4xl mb-2">✓</div>
