@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react';
+import { getAvatarColor } from '../utils/avatar';
 
 const ROOMS_KEY = 'gamenight_rooms';
 const ACTIVE_ROOM_KEY = 'gamenight_active_room';
@@ -104,15 +105,24 @@ export function createRoom(hostId, hostDisplayName) {
   const code = roomId.substring(5, 11).toUpperCase();
   const now = new Date().toISOString();
   
+  const hostPlayer = { 
+    id: hostId, 
+    displayName: hostDisplayName, 
+    isHost: true, 
+    joinedAt: now,
+    avatarColor: null // Will be backfilled on first render
+  };
+  
   const room = {
     id: roomId,
     code: code,
     hostId: hostId,
-    players: [
-      { id: hostId, displayName: hostDisplayName, isHost: true, joinedAt: now }
-    ],
+    players: [hostPlayer],
     createdAt: now
   };
+  
+  // Generate and save avatar color
+  hostPlayer.avatarColor = getAvatarColor(hostPlayer, roomId);
 
   const rooms = getRoomsFromStorage();
   rooms[roomId] = room;
@@ -138,12 +148,18 @@ export function joinRoom(roomId, userId, userDisplayName) {
   
   if (!existingPlayer) {
     // Add user to the room
-    room.players.push({
+    const newPlayer = {
       id: userId,
       displayName: userDisplayName,
       isHost: false,
-      joinedAt: new Date().toISOString()
-    });
+      joinedAt: new Date().toISOString(),
+      avatarColor: null // Will be set below
+    };
+    
+    // Generate and save avatar color
+    newPlayer.avatarColor = getAvatarColor(newPlayer, roomId);
+    
+    room.players.push(newPlayer);
     rooms[roomId] = room;
     saveRoomsToStorage(rooms);
   }
@@ -278,6 +294,71 @@ export function endActivity(roomId) {
   if (room) {
     delete room.activeActivity;
     saveRoomsToStorage(rooms);
+  }
+  
+  return room;
+}
+
+/**
+ * Helper to start a wheel activity
+ */
+export function startWheel(roomId, wheelData) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room) {
+    room.activeActivity = {
+      type: wheelData.type,
+      options: wheelData.options,
+      state: 'idle',
+      resultId: null,
+      spinStartTime: null,
+      spinDuration: null,
+      createdAt: new Date().toISOString()
+    };
+    saveRoomsToStorage(rooms);
+  }
+  
+  return room;
+}
+
+/**
+ * Helper to spin the wheel (host only)
+ */
+export function spinWheel(roomId) {
+  const rooms = getRoomsFromStorage();
+  const room = rooms[roomId];
+  
+  if (room && room.activeActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel')) {
+    const activity = room.activeActivity;
+    
+    // Generate truly random result using crypto
+    const randomValues = new Uint32Array(1);
+    crypto.getRandomValues(randomValues);
+    const randomIndex = randomValues[0] % activity.options.length;
+    const resultId = activity.options[randomIndex].id;
+    
+    // Generate random spin duration between 4 and 8 seconds
+    const durationArray = new Uint32Array(1);
+    crypto.getRandomValues(durationArray);
+    const duration = 4000 + (durationArray[0] % 4000); // 4000-8000ms
+    
+    activity.state = 'spinning';
+    activity.resultId = resultId;
+    activity.spinStartTime = Date.now();
+    activity.spinDuration = duration;
+    
+    saveRoomsToStorage(rooms);
+    
+    // Schedule state change to 'result' after spin completes
+    setTimeout(() => {
+      const rooms = getRoomsFromStorage();
+      const room = rooms[roomId];
+      if (room && room.activeActivity && room.activeActivity.state === 'spinning') {
+        room.activeActivity.state = 'result';
+        saveRoomsToStorage(rooms);
+      }
+    }, duration + 100);
   }
   
   return room;

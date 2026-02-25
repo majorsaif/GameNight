@@ -1,4 +1,5 @@
 import React from 'react';
+import { getInitials, getAvatarColor } from '../utils/avatar';
 
 export default function ActiveVote({ activity, room, userId, isHost, onVote, onEndVote }) {
   const userVote = activity.votes?.[userId];
@@ -31,27 +32,22 @@ export default function ActiveVote({ activity, room, userId, isHost, onVote, onE
   return (
     <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-lg font-bold text-slate-300">
-          {activity.type === 'playerVote' ? '👥' : '📝'} Active Poll
-        </h3>
+      <div className="flex items-center justify-between gap-4 mb-4">
+        <div className="flex-1">
+          <p className="text-white text-lg font-semibold">{activity.question}</p>
+          {totalVotes > 0 && (
+            <p className="text-slate-400 text-sm mt-1">
+              {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'} • {room.players.length - totalVotes} pending
+            </p>
+          )}
+        </div>
         {isHost && (
           <button
             onClick={onEndVote}
-            className="px-3 py-1 bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 text-red-400 text-xs font-bold rounded-full transition-colors"
+            className="px-3 py-1 bg-red-600/20 border border-red-500/50 hover:bg-red-600/30 text-red-400 text-xs font-bold rounded-full transition-colors whitespace-nowrap"
           >
             End Vote
           </button>
-        )}
-      </div>
-
-      {/* Question */}
-      <div className="mb-6">
-        <p className="text-white text-lg font-semibold">{activity.question}</p>
-        {totalVotes > 0 && (
-          <p className="text-slate-400 text-sm mt-2">
-            {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'} • {room.players.length - totalVotes} pending
-          </p>
         )}
       </div>
 
@@ -61,55 +57,77 @@ export default function ActiveVote({ activity, room, userId, isHost, onVote, onE
           const result = results[option.id];
           const isSelected = userVote === option.id;
           
+          // Get voter player objects
+          const voters = result.voters.map(voterId => 
+            room.players.find(p => p.id === voterId)
+          ).filter(Boolean);
+          
           // Always show clickable results with bars - allow vote changing
           return (
-            <button
-              key={option.id}
-              onClick={() => onVote(option.id)}
-              className={`w-full relative overflow-hidden p-4 rounded-xl border-2 transition-all hover:-translate-y-0.5 ${
-                isSelected
-                  ? 'bg-violet-600/20 border-violet-500 hover:border-violet-400'
-                  : 'bg-slate-900/50 border-slate-700 hover:border-slate-600'
-              }`}
-            >
-              {/* Progress bar background */}
-              {result.count > 0 && (
-                <div
-                  className={`absolute inset-0 transition-all duration-500 ${
-                    isSelected ? 'bg-violet-600/30' : 'bg-slate-700/30'
-                  }`}
-                  style={{ width: `${result.percentage}%` }}
-                />
-              )}
+            <div key={option.id} className="space-y-2">
+              <button
+                onClick={() => onVote(option.id)}
+                className={`w-full relative overflow-hidden p-4 rounded-xl border-2 transition-all hover:-translate-y-0.5 ${
+                  isSelected
+                    ? 'bg-violet-600/20 border-violet-500 hover:border-violet-400'
+                    : 'bg-slate-900/50 border-slate-700 hover:border-slate-600'
+                }`}
+              >
+                {/* Progress bar background */}
+                {result.count > 0 && (
+                  <div
+                    className={`absolute inset-0 transition-all duration-500 ${
+                      isSelected ? 'bg-violet-600/30' : 'bg-slate-700/30'
+                    }`}
+                    style={{ width: `${result.percentage}%` }}
+                  />
+                )}
 
-              {/* Content */}
-              <div className="relative flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  {isSelected && (
-                    <span className="text-violet-400 text-xl">✓</span>
-                  )}
-                  <span className={`font-medium ${
-                    isSelected ? 'text-violet-200' : 'text-white'
-                  }`}>
-                    {option.label}
-                  </span>
+                {/* Content */}
+                <div className="relative flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    {isSelected && (
+                      <span className="text-violet-400 text-xl">✓</span>
+                    )}
+                    <span className={`font-medium ${
+                      isSelected ? 'text-violet-200' : 'text-white'
+                    }`}>
+                      {option.label}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-3">
+                    <span className={`text-sm font-bold ${
+                      isSelected ? 'text-violet-300' : 'text-slate-400'
+                    }`}>
+                      {result.percentage}%
+                    </span>
+                    <span className={`text-xs font-bold px-2 py-1 rounded-full ${
+                      isSelected
+                        ? 'bg-violet-600 text-white'
+                        : 'bg-slate-700 text-slate-300'
+                    }`}>
+                      {result.count}
+                    </span>
+                  </div>
                 </div>
-                <div className="flex items-center gap-3">
-                  <span className={`text-sm font-bold ${
-                    isSelected ? 'text-violet-300' : 'text-slate-400'
-                  }`}>
-                    {result.percentage}%
-                  </span>
-                  <span className={`text-xs font-bold px-2 py-1 rounded-full ${
-                    isSelected
-                      ? 'bg-violet-600 text-white'
-                      : 'bg-slate-700 text-slate-300'
-                  }`}>
-                    {result.count}
-                  </span>
+              </button>
+              
+              {/* Voter Avatars */}
+              {voters.length > 0 && (
+                <div className="flex items-center gap-1 pl-4">
+                  {voters.map((voter, index) => (
+                    <div
+                      key={voter.id}
+                      className={`w-7 h-7 rounded-full ${getAvatarColor(voter, room.id)} flex items-center justify-center text-white text-xs font-bold border-2 border-slate-800`}
+                      style={{ marginLeft: index > 0 ? '-8px' : '0' }}
+                      title={voter.displayNameForGame || voter.displayName}
+                    >
+                      {getInitials(voter.displayNameForGame || voter.displayName)}
+                    </div>
+                  ))}
                 </div>
-              </div>
-            </button>
+              )}
+            </div>
           );
         })}
       </div>
