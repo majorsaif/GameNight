@@ -17,10 +17,17 @@ export default function WelcomeScreen() {
     setShowLoginScreen(!hasNickname);
   }, [hasNickname]);
 
-  const handleHostGame = () => {
+  const handleHostGame = async () => {
     if (!user) return;
-    const room = createRoom(user.id, user.displayName, user.avatar || null);
-    navigate(`/room/${room.id}`);
+    try {
+      console.log('📍 Starting room creation with user:', { userId: user.id, displayName: user.displayName });
+      const room = await createRoom(user.id, user.displayName, user.avatar || null);
+      console.log('✅ Room created, navigating to:', `/room/${room.id}`);
+      navigate(`/room/${room.id}`);
+    } catch (error) {
+      console.error('❌ Error in handleHostGame:', error);
+      alert('Failed to create room. Please try again.');
+    }
   };
 
   const handleContinueAsGuest = () => {
@@ -85,19 +92,28 @@ export default function WelcomeScreen() {
     setCodeDigits(newDigits);
   };
 
-  const handleJoinGame = (e) => {
+  const handleJoinGame = async (e) => {
     e.preventDefault();
     if (!user) return;
     const code = codeDigits.join('');
     if (code.length === 6) {
-      // Find room by code
-      const room = findRoomByCode(code);
-      if (room) {
-        joinRoom(room.id, user.id, user.displayName, user.avatar || null);
-        setCodeDigits(['', '', '', '', '', '']);
-        navigate(`/room/${room.id}`);
-      } else {
-        alert('Room not found. Please check the code and try again.');
+      try {
+        console.log('📍 Starting room join with code:', code);
+        // Find room by code
+        const room = await findRoomByCode(code);
+        if (room) {
+          console.log('✅ Room found, joining:', { roomId: room.id, code: code });
+          await joinRoom(room.id, user.id, user.displayName, user.avatar || null);
+          console.log('✅ Joined successfully, navigating to:', `/room/${room.id}`);
+          setCodeDigits(['', '', '', '', '', '']);
+          navigate(`/room/${room.id}`);
+        } else {
+          console.warn('❌ Room not found for code:', code);
+          alert('Room not found. Please check the code and try again.');
+        }
+      } catch (error) {
+        console.error('❌ Error in handleJoinGame:', error);
+        alert('Failed to join room. Please try again.');
       }
     }
   };

@@ -1,37 +1,26 @@
 import { useState, useEffect } from 'react';
+import {
+  collection,
+  addDoc,
+  getDocs,
+  getDoc,
+  query,
+  where,
+  onSnapshot,
+  updateDoc,
+  deleteDoc,
+  doc,
+  arrayUnion,
+  arrayRemove,
+  serverTimestamp,
+  Timestamp
+} from 'firebase/firestore';
+import { db } from '../firebase';
 import { getAvatarColor } from '../utils/avatar';
 
-const ROOMS_KEY = 'gamenight_rooms';
-const ACTIVE_ROOM_KEY = 'gamenight_active_room';
+const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
-
-/**
- * Helper to get all rooms from localStorage
- */
-function getRoomsFromStorage() {
-  try {
-    const data = localStorage.getItem(ROOMS_KEY);
-    return data ? JSON.parse(data) : {};
-  } catch (error) {
-    console.error('Error reading rooms from localStorage:', error);
-    return {};
-  }
-}
-
-/**
- * Helper to save rooms to localStorage
- */
-function saveRoomsToStorage(rooms) {
-  try {
-    localStorage.setItem(ROOMS_KEY, JSON.stringify(rooms));
-  } catch (error) {
-    console.error('Error saving rooms to localStorage:', error);
-  }
-}
-
-function getActiveRoomId() {
-  return sessionStorage.getItem(ACTIVE_ROOM_KEY);
-}
+const ACTIVE_ROOM_KEY = 'gamenight_active_room';
 
 function setActiveRoomId(roomId) {
   if (roomId) {
@@ -39,70 +28,33 @@ function setActiveRoomId(roomId) {
   }
 }
 
+function getActiveRoomId() {
+  return sessionStorage.getItem(ACTIVE_ROOM_KEY);
+}
+
 function clearActiveRoomId() {
   sessionStorage.removeItem(ACTIVE_ROOM_KEY);
 }
 
-function isRoomExpired(room) {
-  if (!room?.createdAt) return false;
-  const createdAt = new Date(room.createdAt).getTime();
-  if (Number.isNaN(createdAt)) return false;
-  return Date.now() - createdAt > ROOM_EXPIRY_MS;
+function isRoomExpired(createdAt) {
+  if (!createdAt) return false;
+  const createdTime = createdAt instanceof Timestamp ? createdAt.toMillis() : new Date(createdAt).getTime();
+  if (Number.isNaN(createdTime)) return false;
+  return Date.now() - createdTime > ROOM_EXPIRY_MS;
 }
 
 function getJoinedAtValue(player, fallback) {
-  const joinedAt = new Date(player.joinedAt || fallback || Date.now()).getTime();
+  const joinedAt = player.joinedAt instanceof Timestamp 
+    ? player.joinedAt.toMillis() 
+    : new Date(player.joinedAt || fallback || Date.now()).getTime();
   return Number.isNaN(joinedAt) ? Date.now() : joinedAt;
 }
 
-function normalizeRoom(room) {
-  if (!room) return { room, didChange: false };
-
-  let didChange = false;
-  const fallback = room.createdAt || new Date().toISOString();
-  const normalizedPlayers = (room.players || []).map((player) => {
-    if (!player.joinedAt) {
-      didChange = true;
-    }
-    return {
-      ...player,
-      joinedAt: player.joinedAt || fallback,
-    };
-  });
-
-  if (!room.players || room.players.length !== normalizedPlayers.length) {
-    didChange = true;
-  }
-
-  let hostId = room.hostId;
-  if (!hostId && normalizedPlayers.length > 0) {
-    hostId = normalizedPlayers[0].id;
-    didChange = true;
-  }
-
-  normalizedPlayers.forEach((player) => {
-    const shouldBeHost = player.id === hostId;
-    if (player.isHost !== shouldBeHost) {
-      didChange = true;
-    }
-    player.isHost = shouldBeHost;
-  });
-
-  return { room: { ...room, hostId, players: normalizedPlayers }, didChange };
-}
-
-function findRoomByPlayerId(rooms, userId) {
-  return Object.values(rooms).find((room) =>
-    room.players?.some((player) => player.id === userId)
-  );
-}
-
 /**
- * Helper to create a new room
+ * Create a new room in Firestore
  */
-export function createRoom(hostId, hostDisplayName) {
-  const roomId = 'room-' + Math.random().toString(36).substring(2, 15);
-  const code = roomId.substring(5, 11).toUpperCase();
+export async function createRoom(hostId, hostDisplayName) {
+  const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   const now = new Date().toISOString();
   
   const hostPlayer = { 
@@ -110,260 +62,343 @@ export function createRoom(hostId, hostDisplayName) {
     displayName: hostDisplayName, 
     isHost: true, 
     joinedAt: now,
-    avatarColor: null // Will be backfilled on first render
+    avatarColor: null
   };
   
-  const room = {
-    id: roomId,
+  const roomData = {
     code: code,
     hostId: hostId,
     players: [hostPlayer],
-    createdAt: now
+    createdAt: serverTimestamp(),
+    activeActivity: null
   };
   
-  // Generate and save avatar color
-  hostPlayer.avatarColor = getAvatarColor(hostPlayer, roomId);
-
-  const rooms = getRoomsFromStorage();
-  rooms[roomId] = room;
-  saveRoomsToStorage(rooms);
-  setActiveRoomId(roomId);
-
-  return room;
+  try {
+    const docRef = await addDoc(collection(db, ROOMS_COLLECTION), roomData);
+    const createdRoomId = docRef.id;
+    console.log('✅ Room created successfully:', { docId: createdRoomId, code: code });
+    
+    // Generate avatar color after room is created (we need the room ID)
+    hostPlayer.avatarColor = getAvatarColor(hostPlayer, createdRoomId);
+    await updateDoc(docRef, { players: [hostPlayer] });
+    
+    setActiveRoomId(createdRoomId);
+    
+    const result = { id: createdRoomId, code, ...roomData };
+    console.log('🌐 Room object for navigation:', result);
+    return result;
+  } catch (error) {
+    console.error('❌ Error creating room:', error);
+    throw error;
+  }
 }
 
 /**
- * Helper to join a room
+ * Find a room by code and return it
  */
-export function joinRoom(roomId, userId, userDisplayName) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-
-  if (!room) {
-    return null;
-  }
-
-  // Check if user is already in the room
-  const existingPlayer = room.players.find(p => p.id === userId);
-  
-  if (!existingPlayer) {
-    // Add user to the room
-    const newPlayer = {
-      id: userId,
-      displayName: userDisplayName,
-      isHost: false,
-      joinedAt: new Date().toISOString(),
-      avatarColor: null // Will be set below
-    };
+export async function findRoomByCode(code) {
+  try {
+    const q = query(
+      collection(db, ROOMS_COLLECTION),
+      where('code', '==', code.toUpperCase())
+    );
     
-    // Generate and save avatar color
-    newPlayer.avatarColor = getAvatarColor(newPlayer, roomId);
+    const querySnapshot = await getDocs(q);
     
-    room.players.push(newPlayer);
-    rooms[roomId] = room;
-    saveRoomsToStorage(rooms);
+    if (querySnapshot.empty) {
+      return null;
+    }
+    
+    const roomDoc = querySnapshot.docs[0];
+    const room = { id: roomDoc.id, ...roomDoc.data() };
+    
+    // Check if room is expired
+    if (isRoomExpired(room.createdAt)) {
+      try {
+        await deleteDoc(doc(db, ROOMS_COLLECTION, roomDoc.id));
+      } catch (error) {
+        console.error('Error deleting expired room:', error);
+      }
+      return null;
+    }
+    
+    return room;
+  } catch (error) {
+    console.error('Error finding room by code:', error);
+    throw error;
   }
-
-  setActiveRoomId(roomId);
-
-  return room;
 }
 
 /**
- * Helper to find a room by code
+ * Join a room
  */
-export function findRoomByCode(code) {
-  const rooms = getRoomsFromStorage();
-  const room = Object.values(rooms).find(room => room.code.toUpperCase() === code.toUpperCase());
-
-  if (room && isRoomExpired(room)) {
-    delete rooms[room.id];
-    saveRoomsToStorage(rooms);
-    return null;
+export async function joinRoom(roomId, userId, userDisplayName) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const roomDoc = await getDoc(roomRef);
+    
+    if (!roomDoc.exists()) {
+      return null;
+    }
+    
+    const room = { id: roomDoc.id, ...roomDoc.data() };
+    
+    // Check if user is already in the room
+    const existingPlayer = room.players?.find(p => p.id === userId);
+    
+    if (!existingPlayer) {
+      // Create new player
+      const newPlayer = {
+        id: userId,
+        displayName: userDisplayName,
+        isHost: false,
+        joinedAt: new Date().toISOString(),
+        avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
+      };
+      
+      // Add player to room
+      console.log('👤 joinRoom: Adding new player to Firestore:', { userId, displayName: userDisplayName });
+      await updateDoc(roomRef, {
+        players: arrayUnion(newPlayer)
+      });
+      console.log('✅ joinRoom: Player successfully added to Firestore');
+    } else {
+      console.log('👤 joinRoom: User already in room:', { userId });
+    }
+    
+    setActiveRoomId(roomId);
+    return room;
+  } catch (error) {
+    console.error('Error joining room:', error);
+    throw error;
   }
+}
 
-  if (!room) return null;
-
-  const normalized = normalizeRoom(room);
-  if (normalized.didChange) {
-    rooms[room.id] = normalized.room;
-    saveRoomsToStorage(rooms);
+/**
+ * Leave a room
+ */
+export async function leaveRoom(roomId, userId) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const roomDoc = await getDoc(roomRef);
+    
+    if (!roomDoc.exists()) {
+      clearActiveRoomId();
+      return null;
+    }
+    
+    const room = { id: roomDoc.id, ...roomDoc.data() };
+    const wasHost = room.hostId === userId;
+    const remainingPlayers = room.players?.filter((player) => player.id !== userId) || [];
+    
+    if (remainingPlayers.length === 0) {
+      // Delete room if no players left
+      await deleteDoc(roomRef);
+      clearActiveRoomId();
+      return null;
+    }
+    
+    // If leaving player was host, reassign host to next player
+    let updates = {};
+    if (wasHost) {
+      const nextHost = [...remainingPlayers].sort(
+        (a, b) => getJoinedAtValue(a, room.createdAt) - getJoinedAtValue(b, room.createdAt)
+      )[0];
+      
+      // Update all players to mark the new host
+      const updatedPlayers = remainingPlayers.map((player) => ({
+        ...player,
+        isHost: player.id === nextHost.id
+      }));
+      
+      updates.hostId = nextHost.id;
+      updates.players = updatedPlayers;
+    }
+    
+    // Remove the leaving player
+    const playerToRemove = room.players.find(p => p.id === userId);
+    if (playerToRemove) {
+      if (Object.keys(updates).length > 0) {
+        await updateDoc(roomRef, updates);
+      }
+      await updateDoc(roomRef, {
+        players: arrayRemove(playerToRemove)
+      });
+    }
+    
+    clearActiveRoomId();
+    return { id: roomDoc.id, ...room };
+  } catch (error) {
+    console.error('Error leaving room:', error);
+    throw error;
   }
-  return normalized.room;
 }
 
 /**
  * Helper to update player's display name for just this game night
  */
-export function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-  
-  if (room) {
-    const player = room.players.find(p => p.id === userId);
-    if (player) {
-      player.displayNameForGame = gameDisplayName;
-      saveRoomsToStorage(rooms);
+export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const roomDoc = await getDoc(roomRef);
+    
+    if (roomDoc.exists()) {
+      const room = roomDoc.data();
+      const playerIndex = room.players?.findIndex(p => p.id === userId);
+      
+      if (playerIndex !== undefined && playerIndex >= 0) {
+        const updatedPlayers = [...room.players];
+        updatedPlayers[playerIndex] = {
+          ...updatedPlayers[playerIndex],
+          displayNameForGame: gameDisplayName
+        };
+        
+        await updateDoc(roomRef, {
+          players: updatedPlayers
+        });
+      }
     }
+  } catch (error) {
+    console.error('Error updating player name for game:', error);
+    throw error;
   }
-  
-  return room;
-}
-
-export function leaveRoom(roomId, userId) {
-  const rooms = getRoomsFromStorage();
-  let room = rooms[roomId];
-
-  if (!room) {
-    clearActiveRoomId();
-    return null;
-  }
-
-  const normalized = normalizeRoom(room);
-  room = normalized.room;
-  const wasHost = room.hostId === userId;
-  const remainingPlayers = room.players.filter((player) => player.id !== userId);
-
-  if (remainingPlayers.length === 0) {
-    delete rooms[roomId];
-    saveRoomsToStorage(rooms);
-    clearActiveRoomId();
-    return null;
-  }
-
-  if (wasHost) {
-    const nextHost = [...remainingPlayers].sort(
-      (a, b) => getJoinedAtValue(a, room.createdAt) - getJoinedAtValue(b, room.createdAt)
-    )[0];
-    room.hostId = nextHost.id;
-  }
-
-  room.players = remainingPlayers.map((player) => ({
-    ...player,
-    isHost: player.id === room.hostId,
-  }));
-  rooms[roomId] = room;
-  saveRoomsToStorage(rooms);
-  clearActiveRoomId();
-  return room;
 }
 
 /**
- * Helper to start a vote activity
+ * Start a vote activity
  */
-export function startVote(roomId, voteData) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-  
-  if (room) {
-    room.activeActivity = {
+export async function startVote(roomId, voteData) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const activity = {
       ...voteData,
-      createdAt: new Date().toISOString()
+      createdAt: serverTimestamp()
     };
-    saveRoomsToStorage(rooms);
+    
+    await updateDoc(roomRef, {
+      activeActivity: activity
+    });
+  } catch (error) {
+    console.error('Error starting vote:', error);
+    throw error;
   }
-  
-  return room;
 }
 
 /**
- * Helper to cast a vote
+ * Cast a vote
  */
-export function castVote(roomId, userId, optionId) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-  
-  if (room && room.activeActivity) {
-    if (!room.activeActivity.votes) {
-      room.activeActivity.votes = {};
+export async function castVote(roomId, userId, optionId) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const roomDoc = await getDoc(roomRef);
+    
+    if (roomDoc.exists()) {
+      const room = roomDoc.data();
+      if (room.activeActivity) {
+        const votes = room.activeActivity.votes || {};
+        votes[userId] = optionId;
+        
+        await updateDoc(roomRef, {
+          'activeActivity.votes': votes
+        });
+      }
     }
-    room.activeActivity.votes[userId] = optionId;
-    saveRoomsToStorage(rooms);
+  } catch (error) {
+    console.error('Error casting vote:', error);
+    throw error;
   }
-  
-  return room;
 }
 
 /**
- * Helper to end current activity
+ * End current activity
  */
-export function endActivity(roomId) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-  
-  if (room) {
-    delete room.activeActivity;
-    saveRoomsToStorage(rooms);
+export async function endActivity(roomId) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    await updateDoc(roomRef, {
+      activeActivity: null
+    });
+  } catch (error) {
+    console.error('Error ending activity:', error);
+    throw error;
   }
-  
-  return room;
 }
 
 /**
- * Helper to start a wheel activity
+ * Start a wheel activity
  */
-export function startWheel(roomId, wheelData) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-  
-  if (room) {
-    room.activeActivity = {
+export async function startWheel(roomId, wheelData) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const activity = {
       type: wheelData.type,
       options: wheelData.options,
       state: 'idle',
       resultId: null,
       spinStartTime: null,
       spinDuration: null,
-      createdAt: new Date().toISOString()
+      createdAt: serverTimestamp()
     };
-    saveRoomsToStorage(rooms);
+    
+    await updateDoc(roomRef, {
+      activeActivity: activity
+    });
+  } catch (error) {
+    console.error('Error starting wheel:', error);
+    throw error;
   }
-  
-  return room;
 }
 
 /**
- * Helper to spin the wheel (host only)
+ * Spin the wheel (host only)
  */
-export function spinWheel(roomId) {
-  const rooms = getRoomsFromStorage();
-  const room = rooms[roomId];
-  
-  if (room && room.activeActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel')) {
-    const activity = room.activeActivity;
+export async function spinWheel(roomId) {
+  try {
+    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    const roomDoc = await getDoc(roomRef);
     
-    // Generate truly random result using crypto
-    const randomValues = new Uint32Array(1);
-    crypto.getRandomValues(randomValues);
-    const randomIndex = randomValues[0] % activity.options.length;
-    const resultId = activity.options[randomIndex].id;
+    if (!roomDoc.exists()) return null;
     
-    // Generate random spin duration between 4 and 8 seconds
-    const durationArray = new Uint32Array(1);
-    crypto.getRandomValues(durationArray);
-    const duration = 4000 + (durationArray[0] % 4000); // 4000-8000ms
-    
-    activity.state = 'spinning';
-    activity.resultId = resultId;
-    activity.spinStartTime = Date.now();
-    activity.spinDuration = duration;
-    
-    saveRoomsToStorage(rooms);
-    
-    // Schedule state change to 'result' after spin completes
-    setTimeout(() => {
-      const rooms = getRoomsFromStorage();
-      const room = rooms[roomId];
-      if (room && room.activeActivity && room.activeActivity.state === 'spinning') {
-        room.activeActivity.state = 'result';
-        saveRoomsToStorage(rooms);
-      }
-    }, duration + 100);
+    const room = roomDoc.data();
+    if (room.activeActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel')) {
+      const activity = room.activeActivity;
+      
+      // Generate truly random result using crypto
+      const randomValues = new Uint32Array(1);
+      crypto.getRandomValues(randomValues);
+      const randomIndex = randomValues[0] % activity.options.length;
+      const resultId = activity.options[randomIndex].id;
+      
+      // Generate random spin duration between 4 and 8 seconds
+      const durationArray = new Uint32Array(1);
+      crypto.getRandomValues(durationArray);
+      const duration = 4000 + (durationArray[0] % 4000);
+      
+      const now = Date.now();
+      
+      await updateDoc(roomRef, {
+        'activeActivity.state': 'spinning',
+        'activeActivity.resultId': resultId,
+        'activeActivity.spinStartTime': now,
+        'activeActivity.spinDuration': duration
+      });
+      
+      // Schedule state change to 'result' after spin completes
+      setTimeout(() => {
+        updateDoc(roomRef, {
+          'activeActivity.state': 'result'
+        }).catch(error => console.error('Error updating wheel state:', error));
+      }, duration + 100);
+    }
+  } catch (error) {
+    console.error('Error spinning wheel:', error);
+    throw error;
   }
-  
-  return room;
 }
 
+/**
+ * Hook for loading active room with real-time updates
+ */
 export function useActiveRoom(userId) {
   const [activeRoom, setActiveRoom] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -375,63 +410,73 @@ export function useActiveRoom(userId) {
       return;
     }
 
-    const loadActiveRoom = () => {
-      const rooms = getRoomsFromStorage();
-      let room = null;
-      let expired = false;
-      const activeRoomId = getActiveRoomId();
+    let unsubscribe = null;
 
-      if (activeRoomId && rooms[activeRoomId]) {
-        room = rooms[activeRoomId];
-        const isMember = room.players?.some((player) => player.id === userId);
-        if (!isMember) {
-          room = null;
-        }
-      }
-
-      if (!room) {
-        room = findRoomByPlayerId(rooms, userId);
-      }
-
-      if (room) {
-        if (isRoomExpired(room)) {
-          delete rooms[room.id];
-          saveRoomsToStorage(rooms);
-          clearActiveRoomId();
-          expired = true;
-          room = null;
-        } else {
-          const normalized = normalizeRoom(room);
-          room = normalized.room;
-          if (normalized.didChange) {
-            rooms[room.id] = room;
-            saveRoomsToStorage(rooms);
+    const loadActiveRoom = async () => {
+      try {
+        const activeRoomId = getActiveRoomId();
+        
+        if (activeRoomId) {
+          // Check if room exists and user is a member
+          const roomRef = doc(db, ROOMS_COLLECTION, activeRoomId);
+          const roomDoc = await getDoc(roomRef);
+          
+          if (roomDoc.exists()) {
+            const room = { id: roomDoc.id, ...roomDoc.data() };
+            const isMember = room.players?.some((player) => player.id === userId);
+            
+            if (!isMember) {
+              clearActiveRoomId();
+              setActiveRoom(null);
+              setLoading(false);
+              return;
+            }
+            
+            // Check if room is expired
+            if (isRoomExpired(room.createdAt)) {
+              await deleteDoc(roomRef);
+              clearActiveRoomId();
+              setExpiredMessage('This room has expired.');
+              setActiveRoom(null);
+              setLoading(false);
+              return;
+            }
+            
+            // Set up real-time listener
+            unsubscribe = onSnapshot(roomRef, (doc) => {
+              if (doc.exists()) {
+                const updatedRoom = { id: doc.id, ...doc.data() };
+                setActiveRoom(updatedRoom);
+                setExpiredMessage('');
+              } else {
+                clearActiveRoomId();
+                setActiveRoom(null);
+              }
+            }, (error) => {
+              console.error('Error listening to active room:', error);
+            });
+            
+            setLoading(false);
+            return;
           }
-          setActiveRoomId(room.id);
         }
-      } else {
+        
+        // No active room found
         clearActiveRoomId();
+        setActiveRoom(null);
+        setLoading(false);
+      } catch (error) {
+        console.error('Error loading active room:', error);
+        setLoading(false);
       }
-
-      setActiveRoom(room || null);
-      setExpiredMessage(expired ? 'This room has expired.' : '');
-      setLoading(false);
     };
 
     loadActiveRoom();
 
-    const handleStorageChange = (event) => {
-      if (event.key === ROOMS_KEY) {
-        loadActiveRoom();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-    const interval = setInterval(loadActiveRoom, 1000);
-
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
   }, [userId]);
 
@@ -439,8 +484,7 @@ export function useActiveRoom(userId) {
 }
 
 /**
- * Mock room data hook with localStorage sync across tabs
- * Will be replaced with Firestore listener later
+ * Hook for loading a specific room with real-time updates
  */
 export function useRoom(roomId, userId = null, userDisplayName = null, userAvatar = null) {
   const [room, setRoom] = useState(null);
@@ -449,19 +493,35 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
 
   useEffect(() => {
     if (!roomId) {
+      console.warn('⚠️ useRoom: no roomId provided');
       setLoading(false);
       return;
     }
+    
+    console.log('📍 useRoom: Setting up listener for roomId:', roomId);
 
-    // Load room from localStorage
-    const loadRoom = () => {
-      const rooms = getRoomsFromStorage();
-      const foundRoom = rooms[roomId];
+    let unsubscribe = null;
 
-      if (foundRoom) {
-        if (isRoomExpired(foundRoom)) {
-          delete rooms[roomId];
-          saveRoomsToStorage(rooms);
+    const setupRoomListener = async () => {
+      try {
+        const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+        console.log('🔍 useRoom: Fetching initial room data...');
+        const roomDoc = await getDoc(roomRef);
+
+        if (!roomDoc.exists()) {
+          console.error('❌ useRoom: Room document does not exist for roomId:', roomId);
+          setError('Room not found');
+          setRoom(null);
+          setLoading(false);
+          return;
+        }
+
+        const room = { id: roomDoc.id, ...roomDoc.data() };
+        console.log('✅ useRoom: Room found:', { roomId, players: room.players?.length || 0 });
+
+        // Check if room is expired
+        if (isRoomExpired(room.createdAt)) {
+          await deleteDoc(roomRef);
           clearActiveRoomId();
           setRoom(null);
           setError('This room has expired');
@@ -469,70 +529,66 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
           return;
         }
 
-        const normalized = normalizeRoom(foundRoom);
-        const activeRoom = normalized.room;
-
         // If we have user info and user is not in the room, add them
         if (userId && userDisplayName) {
-          const existingPlayer = activeRoom.players.find(p => p.id === userId);
+          const existingPlayer = room.players?.find(p => p.id === userId);
           if (!existingPlayer) {
-            activeRoom.players.push({
+            const newPlayer = {
               id: userId,
               displayName: userDisplayName,
               avatar: userAvatar,
               isHost: false,
-              joinedAt: new Date().toISOString()
+              joinedAt: new Date().toISOString(),
+              avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
+            };
+            
+            await updateDoc(roomRef, {
+              players: arrayUnion(newPlayer)
             });
-            rooms[roomId] = activeRoom;
-            saveRoomsToStorage(rooms);
-          } else if (!existingPlayer.joinedAt) {
-            existingPlayer.joinedAt = new Date().toISOString();
-            rooms[roomId] = activeRoom;
-            saveRoomsToStorage(rooms);
-          } else if (!existingPlayer.avatar && userAvatar) {
-            existingPlayer.avatar = userAvatar;
-            rooms[roomId] = activeRoom;
-            saveRoomsToStorage(rooms);
-          } else if (normalized.didChange) {
-            rooms[roomId] = activeRoom;
-            saveRoomsToStorage(rooms);
           }
-        } else if (normalized.didChange) {
-          rooms[roomId] = activeRoom;
-          saveRoomsToStorage(rooms);
         }
+
         setActiveRoomId(roomId);
-        setRoom(activeRoom);
-        setError(null);
-      } else {
-        setError('Room not found');
-        setRoom(null);
+        console.log('📡 useRoom: Setting up real-time listener...');
+
+        // Set up real-time listener
+        console.log('📡 useRoom: onSnapshot listener attaching to roomRef:', roomId);
+        unsubscribe = onSnapshot(roomRef, (snapshoot) => {
+          if (snapshoot.exists()) {
+            const updatedRoom = { id: snapshoot.id, ...snapshoot.data() };
+            console.log('🔄 useRoom: Room snapshot received - players count:', updatedRoom.players?.length || 0, updatedRoom.players?.map(p => p.displayName) || []);
+            setRoom(updatedRoom);
+            setError(null);
+          } else {
+            console.error('❌ useRoom listener: Room no longer exists:', roomId);
+            setError('Room not found');
+            setRoom(null);
+          }
+        }, (error) => {
+          console.error('❌ useRoom listener error:', error);
+          setError('Failed to load room');
+        });
+
+        console.log('✅ useRoom: Listener setup complete, setting loading to false');
+        setLoading(false);
+      } catch (error) {
+        console.error('Error setting up room listener:', error);
+        setError('Failed to load room');
+        setLoading(false);
       }
-      setLoading(false);
     };
 
-    // Initial load
-    loadRoom();
+    setupRoomListener();
 
-    // Listen for storage changes from other tabs
-    const handleStorageChange = (e) => {
-      if (e.key === ROOMS_KEY) {
-        loadRoom();
-      }
-    };
-
-    window.addEventListener('storage', handleStorageChange);
-
-    // Also poll for changes (since storage event doesn't fire in the same tab)
-    const interval = setInterval(loadRoom, 1000);
-
+    // Cleanup listener on unmount
     return () => {
-      window.removeEventListener('storage', handleStorageChange);
-      clearInterval(interval);
+      console.log('🧹 useRoom: Cleaning up listener for roomId:', roomId);
+      if (unsubscribe) {
+        unsubscribe();
+      }
     };
-  }, [roomId, userId, userDisplayName, userAvatar]);
+  }, [roomId]);
 
-  // Helper to check if current user is host
   const isHost = room && userId && room.hostId === userId;
 
   return { room, loading, error, isHost };
