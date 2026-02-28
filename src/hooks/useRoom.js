@@ -98,24 +98,35 @@ export async function createRoom(hostId, hostDisplayName) {
  */
 export async function findRoomByCode(code) {
   try {
+    if (!code) {
+      console.error('❌ findRoomByCode: No code provided');
+      return null;
+    }
+    
+    console.log('🔍 findRoomByCode: Querying Firestore for code:', code.toUpperCase());
     const q = query(
       collection(db, ROOMS_COLLECTION),
       where('code', '==', code.toUpperCase())
     );
     
+    console.log('⏳ findRoomByCode: Executing query...');
     const querySnapshot = await getDocs(q);
     
     if (querySnapshot.empty) {
+      console.warn('❌ findRoomByCode: No room found with code:', code.toUpperCase());
       return null;
     }
     
     const roomDoc = querySnapshot.docs[0];
     const room = { id: roomDoc.id, ...roomDoc.data() };
+    console.log('✅ findRoomByCode: Room found!', { roomId: room.id, code: room.code, playerCount: room.players?.length || 0 });
     
     // Check if room is expired
     if (isRoomExpired(room.createdAt)) {
+      console.log('⏰ findRoomByCode: Room is expired, deleting...');
       try {
         await deleteDoc(doc(db, ROOMS_COLLECTION, roomDoc.id));
+        console.log('✅ findRoomByCode: Expired room deleted');
       } catch (error) {
         console.error('Error deleting expired room:', error);
       }
@@ -124,7 +135,7 @@ export async function findRoomByCode(code) {
     
     return room;
   } catch (error) {
-    console.error('Error finding room by code:', error);
+    console.error('❌ findRoomByCode: Query failed with error:', error.message, error);
     throw error;
   }
 }
@@ -134,42 +145,62 @@ export async function findRoomByCode(code) {
  */
 export async function joinRoom(roomId, userId, userDisplayName) {
   try {
+    if (!roomId) {
+      console.error('❌ joinRoom: No roomId provided');
+      throw new Error('Room ID is required to join');
+    }
+    if (!userId) {
+      console.error('❌ joinRoom: No userId provided');
+      throw new Error('User ID is required to join');
+    }
+    if (!userDisplayName) {
+      console.error('❌ joinRoom: No userDisplayName provided');
+      throw new Error('User display name is required to join');
+    }
+    
+    console.log('📍 joinRoom: Attempting to join room:', { roomId, userId, userDisplayName });
     const roomRef = doc(db, ROOMS_COLLECTION, roomId);
+    console.log('🔍 joinRoom: Fetching room document...');
     const roomDoc = await getDoc(roomRef);
     
     if (!roomDoc.exists()) {
-      return null;
+      console.error('❌ joinRoom: Room document does not exist:', roomId);
+      throw new Error(`Room with ID ${roomId} does not exist`);
     }
     
     const room = { id: roomDoc.id, ...roomDoc.data() };
+    console.log('✅ joinRoom: Room document found:', { roomId, playerCount: room.players?.length || 0 });
     
     // Check if user is already in the room
     const existingPlayer = room.players?.find(p => p.id === userId);
     
-    if (!existingPlayer) {
-      // Create new player
-      const newPlayer = {
-        id: userId,
-        displayName: userDisplayName,
-        isHost: false,
-        joinedAt: new Date().toISOString(),
-        avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
-      };
-      
-      // Add player to room
-      console.log('👤 joinRoom: Adding new player to Firestore:', { userId, displayName: userDisplayName });
-      await updateDoc(roomRef, {
-        players: arrayUnion(newPlayer)
-      });
-      console.log('✅ joinRoom: Player successfully added to Firestore');
-    } else {
-      console.log('👤 joinRoom: User already in room:', { userId });
+    if (existingPlayer) {
+      console.log('ℹ️ joinRoom: User already in room:', { userId, displayName: existingPlayer.displayName });
+      setActiveRoomId(roomId);
+      return room;
     }
     
+    // Create new player
+    const newPlayer = {
+      id: userId,
+      displayName: userDisplayName,
+      isHost: false,
+      joinedAt: new Date().toISOString(),
+      avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
+    };
+    
+    // Add player to room
+    console.log('👤 joinRoom: Adding new player to Firestore:', { userId, displayName: userDisplayName });
+    await updateDoc(roomRef, {
+      players: arrayUnion(newPlayer)
+    });
+    console.log('✅ joinRoom: Player successfully added to Firestore');
+    
     setActiveRoomId(roomId);
+    console.log('✅ joinRoom: Active room ID set, ready to navigate');
     return room;
   } catch (error) {
-    console.error('Error joining room:', error);
+    console.error('❌ joinRoom: Failed with error:', error.message, error);
     throw error;
   }
 }

@@ -94,27 +94,48 @@ export default function WelcomeScreen() {
 
   const handleJoinGame = async (e) => {
     e.preventDefault();
-    if (!user) return;
+    
+    // Validate user auth is ready
+    if (!user) {
+      console.error('❌ handleJoinGame: User not authenticated');
+      alert('Please wait for authentication to complete or set a nickname first.');
+      return;
+    }
+    
+    if (!user.id) {
+      console.error('❌ handleJoinGame: User missing ID, auth still initializing');
+      alert('Authentication is still initializing. Please try again.');
+      return;
+    }
+    
     const code = codeDigits.join('');
-    if (code.length === 6) {
-      try {
-        console.log('📍 Starting room join with code:', code);
-        // Find room by code
-        const room = await findRoomByCode(code);
-        if (room) {
-          console.log('✅ Room found, joining:', { roomId: room.id, code: code });
-          await joinRoom(room.id, user.id, user.displayName, user.avatar || null);
-          console.log('✅ Joined successfully, navigating to:', `/room/${room.id}`);
-          setCodeDigits(['', '', '', '', '', '']);
-          navigate(`/room/${room.id}`);
-        } else {
-          console.warn('❌ Room not found for code:', code);
-          alert('Room not found. Please check the code and try again.');
-        }
-      } catch (error) {
-        console.error('❌ Error in handleJoinGame:', error);
-        alert('Failed to join room. Please try again.');
+    if (code.length !== 6) {
+      console.warn('⚠️ handleJoinGame: Code incomplete or invalid');
+      return;
+    }
+    
+    try {
+      console.log('📍 handleJoinGame: Starting join flow with code:', code, '| User:', { userId: user.id, displayName: user.displayName });
+      
+      // Find room by code
+      const room = await findRoomByCode(code);
+      if (!room) {
+        console.warn('❌ handleJoinGame: Room not found for code:', code);
+        alert('Room not found. Please check the code and try again.');
+        return;
       }
+      
+      console.log('✅ handleJoinGame: Room found, now joining:', { roomId: room.id, code: code });
+      
+      // Join the room
+      await joinRoom(room.id, user.id, user.displayName, user.avatar || null);
+      console.log('✅ handleJoinGame: Successfully joined room, navigating to:', `/room/${room.id}`);
+      
+      setCodeDigits(['', '', '', '', '', '']);
+      navigate(`/room/${room.id}`);
+    } catch (error) {
+      console.error('❌ handleJoinGame: Join failed:', error.message, error);
+      alert(`Failed to join room: ${error.message}. Please try again.`);
     }
   };
 
