@@ -11,6 +11,7 @@ import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avat
 export default function HomeScreen() {
   const { roomId } = useParams();
   const { user, loading: userLoading } = useAuth();
+  console.log('📍 HomeScreen mounted with roomId:', roomId);
   const { room, loading: roomLoading, error, isHost } = useRoom(
     roomId, 
     user?.id, 
@@ -286,8 +287,8 @@ export default function HomeScreen() {
 
 function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetup, onCastVote, onEndVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
-  const hasActiveActivity = room.activeActivity !== undefined;
-  const isWheel = hasActiveActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel');
+  const hasActiveActivity = room.activeActivity != null;
+  const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
   const isVote = hasActiveActivity && !isWheel;
   
   const hostPlayer = room.players.find(p => p.isHost);
@@ -490,8 +491,8 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
 
 function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
-  const hasActiveActivity = room.activeActivity !== undefined;
-  const isWheel = hasActiveActivity && (room.activeActivity.type === 'playerWheel' || room.activeActivity.type === 'customWheel');
+  const hasActiveActivity = room.activeActivity != null;
+  const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
   const isVote = hasActiveActivity && !isWheel;
   
   const hostPlayer = room.players.find(p => p.isHost);

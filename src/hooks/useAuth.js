@@ -1,65 +1,67 @@
 import { useState, useEffect, useCallback } from 'react';
+import { auth } from '../firebase';
+import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
 const NICKNAME_KEY = 'gamenight_nickname';
 const PROFILE_KEY = 'gamenight_profile';
 
 /**
- * Mock authentication hook
- * Uses sessionStorage for tab-specific UIDs - each tab simulates a different player
- * Uses localStorage for persistent nickname and profile across sessions
- * Will be replaced with Firebase anonymous auth later
+ * Authentication hook using Firebase anonymous auth
+ * Uses Firebase Auth as the source of truth for user UID
+ * Caches nickname and profile data in localStorage
  */
 export function useAuth() {
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [hasNickname, setHasNickname] = useState(false);
 
-  const loadUser = useCallback(() => {
-    // Check if this tab already has a UID (sessionStorage is tab-specific)
-    let uid = sessionStorage.getItem('gamenight_uid');
-    
-    if (!uid) {
-      // Generate a new UID for this tab
-      uid = 'user-' + Math.random().toString(36).substring(2, 15);
-      sessionStorage.setItem('gamenight_uid', uid);
-    }
-
-    // Get nickname from localStorage (persistent across tabs/sessions)
-    const nickname = localStorage.getItem(NICKNAME_KEY);
-    
-    // Get profile data from localStorage
-    let profileData = {};
-    try {
-      const storedProfile = localStorage.getItem(PROFILE_KEY);
-      if (storedProfile) {
-        profileData = JSON.parse(storedProfile);
+  useEffect(() => {
+    // Set up auth state listener
+    const unsubscribe = onAuthStateChanged(auth, async (firebaseUser) => {
+      if (firebaseUser) {
+        // User is signed in
+        const uid = firebaseUser.uid;
+        const nickname = localStorage.getItem(NICKNAME_KEY);
+        
+        // Get profile data from localStorage
+        let profileData = {};
+        try {
+          const storedProfile = localStorage.getItem(PROFILE_KEY);
+          if (storedProfile) {
+            profileData = JSON.parse(storedProfile);
+          }
+        } catch (e) {
+          console.error('Error loading profile data:', e);
+        }
+        
+        if (nickname) {
+          setHasNickname(true);
+          setUser({
+            id: uid,
+            displayName: nickname,
+            isAnonymous: true,
+            avatar: profileData.avatar || null,
+            favouriteGame: profileData.favouriteGame || '',
+            memberSince: profileData.memberSince || new Date().toISOString()
+          });
+        } else {
+          setHasNickname(false);
+          setUser(null);
+        }
+      } else {
+        // User is signed out - attempt to sign in anonymously
+        try {
+          await signInAnonymously(auth);
+        } catch (error) {
+          console.error('Error signing in anonymously:', error);
+        }
       }
-    } catch (e) {
-      console.error('Error loading profile data:', e);
-    }
-    
-    if (nickname) {
-      setHasNickname(true);
-      setUser({
-        id: uid,
-        displayName: nickname,
-        isAnonymous: true,
-        avatar: profileData.avatar || null,
-        favouriteGame: profileData.favouriteGame || '',
-        memberSince: profileData.memberSince || new Date().toISOString()
-      });
-    } else {
-      setHasNickname(false);
-      setUser(null);
-    }
-    
-    setLoading(false);
+      setLoading(false);
+    });
+
+    return () => unsubscribe();
   }, []);
 
-  useEffect(() => {
-    // Simulate async auth check
-    setTimeout(loadUser, 100);
-  }, [loadUser]);
 
   const setNickname = useCallback((nickname) => {
     if (!nickname || !nickname.trim()) return;
@@ -76,9 +78,20 @@ export function useAuth() {
       localStorage.setItem(PROFILE_KEY, JSON.stringify(initialProfile));
     }
     
-    // Reload user with new nickname
-    loadUser();
-  }, [loadUser]);
+    // Update user state if auth is ready
+    if (auth.currentUser) {
+      const profileData = JSON.parse(localStorage.getItem(PROFILE_KEY) || '{}');
+      setUser({
+        id: auth.currentUser.uid,
+        displayName: trimmedNickname,
+        isAnonymous: true,
+        avatar: profileData.avatar || null,
+        favouriteGame: profileData.favouriteGame || '',
+        memberSince: profileData.memberSince || new Date().toISOString()
+      });
+    }
+    setHasNickname(true);
+  }, []);
 
   const clearNickname = useCallback(() => {
     localStorage.removeItem(NICKNAME_KEY);
@@ -87,10 +100,9 @@ export function useAuth() {
   }, []);
 
   const logout = useCallback(() => {
-    // Clear all user data
+    // Clear all user data from localStorage
     localStorage.removeItem(NICKNAME_KEY);
     localStorage.removeItem(PROFILE_KEY);
-    sessionStorage.removeItem('gamenight_uid');
     setHasNickname(false);
     setUser(null);
   }, []);
@@ -118,12 +130,17 @@ export function useAuth() {
         localStorage.setItem(NICKNAME_KEY, updates.displayName);
       }
       
-      // Reload user
-      loadUser();
+      // Update user state if auth is ready
+      if (auth.currentUser && user) {
+        setUser({
+          ...user,
+          ...updates
+        });
+      }
     } catch (e) {
       console.error('Error updating profile:', e);
     }
-  }, [loadUser]);
+  }, [user]);
 
   return { user, loading, hasNickname, setNickname, clearNickname, logout, updateProfile };
 }
