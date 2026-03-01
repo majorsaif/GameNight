@@ -19,7 +19,7 @@ import { db } from '../firebase';
 import { getAvatarColor } from '../utils/avatar';
 
 const ROOMS_COLLECTION = 'rooms';
-const ROOM_EXPIRY_MS = 3 * 24 * 60 * 60 * 1000;
+const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
 const ACTIVE_ROOM_KEY = 'gamenight_active_room';
 
 function setActiveRoomId(roomId) {
@@ -36,11 +36,21 @@ function clearActiveRoomId() {
   sessionStorage.removeItem(ACTIVE_ROOM_KEY);
 }
 
-function isRoomExpired(createdAt) {
-  if (!createdAt) return false;
-  const createdTime = createdAt instanceof Timestamp ? createdAt.toMillis() : new Date(createdAt).getTime();
-  if (Number.isNaN(createdTime)) return false;
-  return Date.now() - createdTime > ROOM_EXPIRY_MS;
+function isRoomExpired(room) {
+  if (!room) return false;
+  
+  // Use lastActivity if it exists, otherwise fall back to createdAt
+  const timestampToCheck = room.lastActivity || room.createdAt;
+  
+  if (!timestampToCheck) return false;
+  
+  const checkTime = timestampToCheck instanceof Timestamp 
+    ? timestampToCheck.toMillis() 
+    : new Date(timestampToCheck).getTime();
+  
+  if (Number.isNaN(checkTime)) return false;
+  
+  return Date.now() - checkTime > ROOM_EXPIRY_MS;
 }
 
 function getJoinedAtValue(player, fallback) {
@@ -48,6 +58,19 @@ function getJoinedAtValue(player, fallback) {
     ? player.joinedAt.toMillis() 
     : new Date(player.joinedAt || fallback || Date.now()).getTime();
   return Number.isNaN(joinedAt) ? Date.now() : joinedAt;
+}
+
+/**
+ * Helper to update lastActivity timestamp
+ */
+async function updateLastActivity(roomRef) {
+  try {
+    await updateDoc(roomRef, {
+      lastActivity: serverTimestamp()
+    });
+  } catch (error) {
+    console.error('Error updating lastActivity:', error);
+  }
 }
 
 /**
@@ -70,6 +93,7 @@ export async function createRoom(hostId, hostDisplayName) {
     hostId: hostId,
     players: [hostPlayer],
     createdAt: serverTimestamp(),
+    lastActivity: serverTimestamp(),
     activeActivity: null
   };
   
@@ -122,7 +146,7 @@ export async function findRoomByCode(code) {
     console.log('✅ findRoomByCode: Room found!', { roomId: room.id, code: room.code, playerCount: room.players?.length || 0 });
     
     // Check if room is expired
-    if (isRoomExpired(room.createdAt)) {
+    if (isRoomExpired(room)) {
       console.log('⏰ findRoomByCode: Room is expired, deleting...');
       try {
         await deleteDoc(doc(db, ROOMS_COLLECTION, roomDoc.id));
@@ -196,6 +220,9 @@ export async function joinRoom(roomId, userId, userDisplayName) {
     });
     console.log('✅ joinRoom: Player successfully added to Firestore');
     
+    // Update lastActivity
+    await updateLastActivity(roomRef);
+    
     setActiveRoomId(roomId);
     console.log('✅ joinRoom: Active room ID set, ready to navigate');
     return room;
@@ -244,6 +271,9 @@ export async function leaveRoom(roomId, userId) {
       
       updates.hostId = nextHost.id;
       updates.players = updatedPlayers;
+      updates.lastActivity = serverTimestamp();
+    } else {
+      updates.lastActivity = serverTimestamp();
     }
     
     // Remove the leaving player
@@ -253,7 +283,8 @@ export async function leaveRoom(roomId, userId) {
         await updateDoc(roomRef, updates);
       }
       await updateDoc(roomRef, {
-        players: arrayRemove(playerToRemove)
+        players: arrayRemove(playerToRemove),
+        lastActivity: serverTimestamp()
       });
     }
     
@@ -285,7 +316,8 @@ export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
         };
         
         await updateDoc(roomRef, {
-          players: updatedPlayers
+          players: updatedPlayers,
+          lastActivity: serverTimestamp()
         });
       }
     }
@@ -307,7 +339,8 @@ export async function startVote(roomId, voteData) {
     };
     
     await updateDoc(roomRef, {
-      activeActivity: activity
+      activeActivity: activity,
+      lastActivity: serverTimestamp()
     });
   } catch (error) {
     console.error('Error starting vote:', error);
@@ -330,7 +363,8 @@ export async function castVote(roomId, userId, optionId) {
         votes[userId] = optionId;
         
         await updateDoc(roomRef, {
-          'activeActivity.votes': votes
+          'activeActivity.votes': votes,
+          lastActivity: serverTimestamp()
         });
       }
     }
@@ -347,7 +381,8 @@ export async function endActivity(roomId) {
   try {
     const roomRef = doc(db, ROOMS_COLLECTION, roomId);
     await updateDoc(roomRef, {
-      activeActivity: null
+      activeActivity: null,
+      lastActivity: serverTimestamp()
     });
   } catch (error) {
     console.error('Error ending activity:', error);
@@ -372,7 +407,8 @@ export async function startWheel(roomId, wheelData) {
     };
     
     await updateDoc(roomRef, {
-      activeActivity: activity
+      activeActivity: activity,
+      lastActivity: serverTimestamp()
     });
   } catch (error) {
     console.error('Error starting wheel:', error);
@@ -411,13 +447,15 @@ export async function spinWheel(roomId) {
         'activeActivity.state': 'spinning',
         'activeActivity.resultId': resultId,
         'activeActivity.spinStartTime': now,
-        'activeActivity.spinDuration': duration
+        'activeActivity.spinDuration': duration,
+        lastActivity: serverTimestamp()
       });
       
       // Schedule state change to 'result' after spin completes
       setTimeout(() => {
         updateDoc(roomRef, {
-          'activeActivity.state': 'result'
+          'activeActivity.state': 'result',
+          lastActivity: serverTimestamp()
         }).catch(error => console.error('Error updating wheel state:', error));
       }, duration + 100);
     }
@@ -464,7 +502,7 @@ export function useActiveRoom(userId) {
             }
             
             // Check if room is expired
-            if (isRoomExpired(room.createdAt)) {
+            if (isRoomExpired(room)) {
               await deleteDoc(roomRef);
               clearActiveRoomId();
               setExpiredMessage('This room has expired.');
@@ -551,7 +589,7 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
         console.log('✅ useRoom: Room found:', { roomId, players: room.players?.length || 0 });
 
         // Check if room is expired
-        if (isRoomExpired(room.createdAt)) {
+        if (isRoomExpired(room)) {
           await deleteDoc(roomRef);
           clearActiveRoomId();
           setRoom(null);
@@ -587,6 +625,16 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
         unsubscribe = onSnapshot(roomRef, (snapshoot) => {
           if (snapshoot.exists()) {
             const updatedRoom = { id: snapshoot.id, ...snapshoot.data() };
+            
+            // Check if room has expired while listening
+            if (isRoomExpired(updatedRoom)) {
+              deleteDoc(roomRef).catch(error => console.error('Error deleting expired room:', error));
+              clearActiveRoomId();
+              setError('This room has expired');
+              setRoom(null);
+              return;
+            }
+            
             console.log('🔄 useRoom: Room snapshot received - players count:', updatedRoom.players?.length || 0, updatedRoom.players?.map(p => p.displayName) || []);
             setRoom(updatedRoom);
             setError(null);
