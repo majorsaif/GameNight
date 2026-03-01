@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { createRoom, findRoomByCode, joinRoom } from '../hooks/useRoom';
+import GameNightLogo from './GameNightLogo';
 
 export default function WelcomeScreen() {
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
@@ -359,16 +360,10 @@ export default function WelcomeScreen() {
   }
 
   return (
-    <div className="min-h-screen bg-[#1a1a2e] flex flex-col">
+    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Header */}
       <header className="py-8">
-        <div className="max-w-md mx-auto px-6 flex justify-between items-center">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 bg-gradient-to-br from-purple-600 to-purple-700 rounded-lg flex items-center justify-center text-2xl">
-              🎲
-            </div>
-            <h1 className="text-2xl font-bold text-white">Gamenight</h1>
-          </div>
+        <div className="max-w-md mx-auto px-6 flex justify-end items-center">
           <button
             onClick={() => navigate('/profile')}
             className="flex items-center justify-center"
@@ -384,6 +379,14 @@ export default function WelcomeScreen() {
           </button>
         </div>
       </header>
+
+      {/* Hero Section */}
+      <div className="text-center pt-2 pb-4">
+        <h1 className="text-5xl font-black leading-tight mb-2">
+          <span className="text-white italic">GAME</span>
+          <span className="text-violet-400 italic">NIGHT</span>
+        </h1>
+      </div>
 
       <div className="flex-1">
         <div className="max-w-md mx-auto px-6 py-10 h-full flex flex-col justify-between gap-8">

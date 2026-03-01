@@ -6,6 +6,7 @@ import VoteModal from './VoteModal';
 import ActiveVote from './ActiveVote';
 import WheelSpin from './ForfeitWheel';
 import WheelSetupModal from './WheelSetupModal';
+import GameNightLogo from './GameNightLogo';
 import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 
 export default function HomeScreen() {
@@ -129,16 +130,8 @@ export default function HomeScreen() {
       {/* Top Bar */}
       <header className="relative z-40 w-full max-w-md mx-auto px-6 py-4">
         <div className="flex justify-between items-center">
-          {/* Room Code Box */}
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-violet-600 to-purple-600 rounded-xl flex items-center justify-center text-2xl shadow-lg">
-              🎲
-            </div>
-            <div className="flex flex-col w-fit">
-              <span className="text-violet-400 text-[10px] font-bold uppercase tracking-wider whitespace-nowrap">Room Code</span>
-              <span className="text-white font-black text-lg tracking-wide whitespace-nowrap">{room.code}</span>
-            </div>
-          </div>
+          {/* Logo */}
+          <GameNightLogo />
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
@@ -302,8 +295,8 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
         <h1 className="text-5xl font-black leading-tight mb-2">
-          <span className="text-white italic">GAME</span>
-          <span className="text-violet-400 italic">NIGHT</span>
+          <span className="text-slate-400 italic text-2xl block">ROOM</span>
+          <span className="text-violet-400 italic">{room.code}</span>
         </h1>
         <p className="text-slate-400 text-sm">Ready to play? Pick a challenge below!</p>
       </div>
@@ -506,8 +499,8 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
         <h1 className="text-5xl font-black leading-tight mb-2">
-          <span className="text-white italic">GAME</span>
-          <span className="text-violet-400 italic">NIGHT</span>
+          <span className="text-slate-400 italic text-2xl block">ROOM</span>
+          <span className="text-violet-400 italic">{room.code}</span>
         </h1>
         <p className="text-slate-400 text-sm">Ready to play? Pick a challenge below!</p>
       </div>
