@@ -195,19 +195,26 @@ export default function WelcomeScreen() {
   if (!hasNickname && showLoginScreen) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4 py-12">
-        <div className="w-full max-w-md">
-          <div className="bg-slate-900/50 backdrop-blur-sm border-2 border-slate-700 rounded-3xl p-8 shadow-2xl">
-            <div className="text-center mb-8">
-              <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4">
-                🎲
-              </div>
-              <h2 className="text-3xl font-black text-white mb-2">
-                Welcome to GameNight
-              </h2>
-              <p className="text-slate-400">
-                Play games, vote on dares, and have fun with friends
-              </p>
+        <div className="w-full max-w-md flex flex-col items-center gap-6">
+          {/* Title Section - Outside Card */}
+          <div className="text-center">
+            <div className="w-16 h-16 bg-gradient-to-br from-purple-600 to-purple-700 rounded-2xl flex items-center justify-center text-4xl mx-auto mb-4">
+              🎲
             </div>
+            <h1 className="text-5xl font-black leading-tight mb-6">
+              <span className="text-white italic">GAME</span>
+              <span className="text-violet-400 italic">NIGHT</span>
+            </h1>
+          </div>
+
+          {/* Subtitle - Outside Card */}
+
+          {/* Card with Buttons */}
+          <div className="bg-slate-900/50 backdrop-blur-sm border-2 border-slate-700 rounded-3xl p-8 shadow-2xl w-full">
+            {/* Subtitle - Inside Card */}
+            <p className="text-slate-400 text-center mb-6">
+              Play games, vote on dares, and have fun with friends
+            </p>
 
             <div className="space-y-4">
               <button
@@ -299,11 +306,12 @@ export default function WelcomeScreen() {
                 </>
               )}
             </div>
-
-            <p className="text-slate-500 text-xs text-center mt-6">
-              By continuing, you agree to our Terms of Service and Privacy Policy
-            </p>
           </div>
+
+          {/* Terms of Service - Below Card */}
+          <p className="text-slate-500 text-xs text-center">
+            By continuing, you agree to our Terms of Service and Privacy Policy
+          </p>
         </div>
       </div>
     );
