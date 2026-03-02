@@ -10,10 +10,11 @@ import { useMafiaSound } from '../hooks/useMafiaSound';
 export default function MafiaGame() {
   const { roomId } = useParams();
   const navigate = useNavigate();
-  const { user } = useAuth();
-  const { room, isHost } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
+  const { user, loading: authLoading } = useAuth();
+  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
   
   const [gameState, setGameState] = useState(null);
+  const [gameStateLoaded, setGameStateLoaded] = useState(false);
   const [myRole, setMyRole] = useState(null);
   const [showRole, setShowRole] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
@@ -60,8 +61,17 @@ export default function MafiaGame() {
 
     const roomRef = doc(db, 'rooms', roomId);
     const unsubscribe = onSnapshot(roomRef, (snapshot) => {
+      // Mark that we've received at least one snapshot
+      setGameStateLoaded(true);
+      
       if (snapshot.exists()) {
         const data = snapshot.data();
+        console.log('[MafiaGame] Firestore update received:', { 
+          hasActiveActivity: !!data.activeActivity, 
+          phase: data.activeActivity?.phase,
+          playersCount: data.activeActivity?.players?.length || 0
+        });
+        
         if (data.activeActivity && data.activeActivity.type === 'mafia') {
           setGameState(data.activeActivity);
           
@@ -70,6 +80,7 @@ export default function MafiaGame() {
           const prevPhase = previousPhaseRef.current;
           
           if (prevPhase !== newPhase) {
+            console.log('[MafiaGame] Phase changed:', { from: prevPhase, to: newPhase });
             // Phase has changed
             if (newPhase === 'night-mafia') {
               playShh();
@@ -93,8 +104,11 @@ export default function MafiaGame() {
             previousPhaseRef.current = newPhase;
           }
         } else {
+          console.log('[MafiaGame] No active Mafia game found');
           setGameState(null);
         }
+      } else {
+        console.log('[MafiaGame] Room document does not exist');
       }
     });
 
@@ -106,6 +120,7 @@ export default function MafiaGame() {
     if (gameState && gameState.players && user) {
       const myPlayer = gameState.players.find(p => p.uid === user.id);
       if (myPlayer) {
+        console.log('[MafiaGame] Setting myRole:', myPlayer.role);
         setMyRole(myPlayer.role);
       }
     }
@@ -733,39 +748,42 @@ export default function MafiaGame() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Show loading
-  if (!room) {
+  // Show loading screen while waiting for auth and room data to load
+  const isLoading = authLoading || roomLoading || !gameStateLoaded;
+  
+  if (isLoading) {
+    console.log('[MafiaGame] Still loading...', { authLoading, roomLoading, gameStateLoaded });
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-white">Loading...</div>
+        <div className="text-center">
+          <div className="text-6xl mb-4 animate-spin">⏳</div>
+          <div className="text-white text-xl">Loading game...</div>
+          <p className="text-slate-400 text-sm mt-2">Please wait</p>
+        </div>
       </div>
     );
   }
 
+  // All data loaded - now safe to check redirect conditions
+  
   // Phase 1: No active game - redirect to home
   if (!gameState) {
-    if (isHost) {
-      navigate(`/room/${roomId}`);
-      return null;
-    }
+    console.log('[MafiaGame] No gameState found - redirecting to room');
     navigate(`/room/${roomId}`);
     return null;
   }
 
   // Phase 2: Lobby - should be handled on HomeScreen, redirect if accessed directly
   if (gameState?.phase === 'lobby') {
-    // Redirect non-hosts back to HomeScreen
-    if (!isHost) {
-      navigate(`/room/${roomId}`);
-      return null;
-    }
-    // Hosts should also return to HomeScreen to manage lobby there
+    console.log('[MafiaGame] User accessed lobby directly - redirecting to room', { isHost });
+    // Redirect non-hosts and hosts back to HomeScreen to manage lobby there
     navigate(`/room/${roomId}`);
     return null;
   }
 
   // Phase 3: Role reveal
   if (gameState?.phase === 'roles') {
+    console.log('[MafiaGame] Rendering roles phase', { myRole, user: user?.id });
     if (!myRole) return null;
 
     return (
@@ -1349,6 +1367,7 @@ export default function MafiaGame() {
 
   // End game
   if (gameState?.phase === 'ended') {
+    console.log('[MafiaGame] Rendering end game phase', { winner: gameState.winner, playersCount: gameState.players?.length });
     const winner = gameState.winner;
 
     return (
