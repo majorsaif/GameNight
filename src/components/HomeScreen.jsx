@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useRoom, updatePlayerNameForGame, leaveRoom, startVote, castVote, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
 import VoteModal from './VoteModal';
@@ -21,14 +21,13 @@ export default function HomeScreen() {
     user?.avatar || null
   );
   const navigate = useNavigate();
+  const location = useLocation();
   const [showSettings, setShowSettings] = useState(false);
   const [showRenameModal, setShowRenameModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showWheelSetup, setShowWheelSetup] = useState(false);
   const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
   const settingsRef = useRef(null);
-  const previousMafiaPhaseRef = useRef(null);
-  const mafiaAutoNavTriggeredRef = useRef(false);
 
   // Backfill avatar colors for existing players
   useEffect(() => {
@@ -37,31 +36,26 @@ export default function HomeScreen() {
     }
   }, [roomId, room]);
 
-  // Auto-navigate players who joined Mafia lobby when phase leaves lobby
+  // Auto-navigate lobby participants whenever Mafia is beyond lobby and user is not already on Mafia page
   useEffect(() => {
     if (!room || !roomId || !user?.id) return;
 
     const activity = room.activeActivity;
 
-    if (!activity || activity.type !== 'mafia') {
-      previousMafiaPhaseRef.current = null;
-      mafiaAutoNavTriggeredRef.current = false;
-      return;
-    }
+    if (!activity || activity.type !== 'mafia') return;
 
     const newPhase = activity.phase;
-    const prevPhase = previousMafiaPhaseRef.current;
     const lobbyPlayers = activity.lobbyPlayers || [];
     const isLobbyParticipant = lobbyPlayers.includes(user.id);
-    const movedAwayFromLobby = (prevPhase === 'lobby' || prevPhase === null) && newPhase && newPhase !== 'lobby';
+    const isBeyondLobby = newPhase && newPhase !== 'lobby';
+    const mafiaRoute = `/room/${roomId}/games/mafia`;
+    const alreadyOnMafiaPage = location.pathname === mafiaRoute;
 
-    if (movedAwayFromLobby && isLobbyParticipant && !mafiaAutoNavTriggeredRef.current) {
-      mafiaAutoNavTriggeredRef.current = true;
+    if (isBeyondLobby && isLobbyParticipant && !alreadyOnMafiaPage) {
+      console.log('[HomeScreen] Auto-joining Mafia game', { phase: newPhase, userId: user.id });
       navigate(`/room/${roomId}/games/mafia`);
     }
-
-    previousMafiaPhaseRef.current = newPhase;
-  }, [room, roomId, user?.id, navigate]);
+  }, [room, roomId, user?.id, navigate, location.pathname]);
 
   // Close settings menu when clicking outside
   useEffect(() => {

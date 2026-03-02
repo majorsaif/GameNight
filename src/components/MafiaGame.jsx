@@ -91,15 +91,6 @@ export default function MafiaGame() {
               playWaking();
             }
             
-            // If phase changed from lobby to roles, non-hosts who are in lobbyPlayers should navigate
-            if (prevPhase === 'lobby' && newPhase === 'roles' && !isHost) {
-              const lobbyPlayers = data.activeActivity.lobbyPlayers || [];
-              if (lobbyPlayers.includes(user?.id)) {
-                // User is in lobbyPlayers, do nothing here - they're already in the game
-                // They will be navigated by the MafiaGame component
-              }
-            }
-            
             previousPhaseRef.current = newPhase;
           }
         } else {
@@ -176,6 +167,11 @@ export default function MafiaGame() {
       }
     };
   }, [gameState?.phaseEndsAt, gameState?.phaseStartedAt, gameState?.phaseDurationMs, isHost]);
+
+  useEffect(() => {
+    const phaseEndsAt = gameState?.phaseEndsAt?.toMillis ? gameState.phaseEndsAt.toMillis() : gameState?.phaseEndsAt;
+    console.log('[MafiaGame] phaseEndsAt updated:', { phase: gameState?.phase, phaseEndsAt });
+  }, [gameState?.phaseEndsAt, gameState?.phase]);
 
   // Reset confirmed status when phase changes
   useEffect(() => {
@@ -314,24 +310,28 @@ export default function MafiaGame() {
       // All confirmed, shorten timer to 5 seconds for synchronized clients
       switch (gameState.phase) {
         case 'night-mafia':
+          console.log('Jumping timer for phase night-mafia');
           await updateDoc(roomRef, {
             'activeActivity.phaseEndsAt': Date.now() + 5000,
             lastActivity: serverTimestamp()
           });
           break;
         case 'night-doctor':
+          console.log('Jumping timer for phase night-doctor');
           await updateDoc(roomRef, {
             'activeActivity.phaseEndsAt': Date.now() + 5000,
             lastActivity: serverTimestamp()
           });
           break;
         case 'night-detective':
+          console.log('Jumping timer for phase night-detective');
           await updateDoc(roomRef, {
             'activeActivity.phaseEndsAt': Date.now() + 5000,
             lastActivity: serverTimestamp()
           });
           break;
         case 'day-vote':
+          console.log('Jumping timer for phase day-vote');
           await updateDoc(roomRef, {
             'activeActivity.phaseEndsAt': Date.now() + 5000,
             lastActivity: serverTimestamp()
@@ -716,6 +716,7 @@ export default function MafiaGame() {
 
   // Show loading screen while waiting for auth and room data to load
   const isLoading = authLoading || roomLoading || !gameStateLoaded;
+  console.log('[MafiaGame] Render state', { phase: gameState?.phase, isHost, isLoading });
   
   if (isLoading) {
     console.log('[MafiaGame] Still loading...', { authLoading, roomLoading, gameStateLoaded });
