@@ -27,6 +27,8 @@ export default function HomeScreen() {
   const [showWheelSetup, setShowWheelSetup] = useState(false);
   const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
   const settingsRef = useRef(null);
+  const previousMafiaPhaseRef = useRef(null);
+  const mafiaAutoNavTriggeredRef = useRef(false);
 
   // Backfill avatar colors for existing players
   useEffect(() => {
@@ -34,6 +36,32 @@ export default function HomeScreen() {
       backfillAvatarColors(roomId);
     }
   }, [roomId, room]);
+
+  // Auto-navigate players who joined Mafia lobby when phase leaves lobby
+  useEffect(() => {
+    if (!room || !roomId || !user?.id) return;
+
+    const activity = room.activeActivity;
+
+    if (!activity || activity.type !== 'mafia') {
+      previousMafiaPhaseRef.current = null;
+      mafiaAutoNavTriggeredRef.current = false;
+      return;
+    }
+
+    const newPhase = activity.phase;
+    const prevPhase = previousMafiaPhaseRef.current;
+    const lobbyPlayers = activity.lobbyPlayers || [];
+    const isLobbyParticipant = lobbyPlayers.includes(user.id);
+    const movedAwayFromLobby = (prevPhase === 'lobby' || prevPhase === null) && newPhase && newPhase !== 'lobby';
+
+    if (movedAwayFromLobby && isLobbyParticipant && !mafiaAutoNavTriggeredRef.current) {
+      mafiaAutoNavTriggeredRef.current = true;
+      navigate(`/room/${roomId}/games/mafia`);
+    }
+
+    previousMafiaPhaseRef.current = newPhase;
+  }, [room, roomId, user?.id, navigate]);
 
   // Close settings menu when clicking outside
   useEffect(() => {

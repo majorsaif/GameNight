@@ -123,13 +123,13 @@ export default function MafiaLobbyCard({
           <h4 className="text-white font-semibold mb-3 text-sm">
             Players Joined ({lobbyPlayers.length})
           </h4>
-          <div className="flex flex-wrap gap-2">
+          <div className="space-y-2">
             {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => (
               <div
                 key={player.uid}
-                className="flex items-center gap-2 bg-red-800/50 rounded-full px-3 py-2"
+                className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
               >
-                <div className={`w-7 h-7 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
                   {getInitials(player.displayName)}
                 </div>
                 <span className="text-white text-sm font-medium">{player.displayName}</span>
@@ -273,13 +273,13 @@ export default function MafiaLobbyCard({
         <h4 className="text-white font-semibold mb-3 text-sm">
           Players Joined ({lobbyPlayers.length})
         </h4>
-        <div className="flex flex-wrap gap-2">
+        <div className="space-y-2">
           {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => (
             <div
               key={player.uid}
-              className="flex items-center gap-2 bg-red-800/50 rounded-full px-3 py-2"
+              className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
             >
-              <div className={`w-7 h-7 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+              <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
                 {getInitials(player.displayName)}
               </div>
               <span className="text-white text-sm font-medium">{player.displayName}</span>

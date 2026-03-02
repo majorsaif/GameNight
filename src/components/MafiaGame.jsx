@@ -20,9 +20,8 @@ export default function MafiaGame() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
-  const roleTimerRef = useRef(null);
   const phaseTimerRef = useRef(null);
-  const { playShh, playMurder, playAngelic, playDetective, playWaking } = useMafiaSound();
+  const { playShh, playMurder, playAngelic, playWaking } = useMafiaSound();
 
   // Rules form state
   const [rules, setRules] = useState({
@@ -139,18 +138,26 @@ export default function MafiaGame() {
     }
   }, [isHost, gameState?.phase, gameState?.skipVotes, gameState?.players, roomId]);
 
-  // Handle phase timer countdown using server time
+  // Handle phase timer countdown using Firestore phaseEndsAt with fallback
   useEffect(() => {
-    if (!gameState || !gameState.phaseStartedAt || !gameState.phaseDurationMs) {
+    if (!gameState || (!gameState.phaseEndsAt && (!gameState.phaseStartedAt || !gameState.phaseDurationMs))) {
       setTimeLeft(null);
       return;
     }
 
     const updateTimer = () => {
-      const phaseStarted = gameState.phaseStartedAt.toMillis ? gameState.phaseStartedAt.toMillis() : gameState.phaseStartedAt;
       const now = Date.now();
-      const elapsed = now - phaseStarted;
-      const remaining = Math.max(0, gameState.phaseDurationMs - elapsed);
+      const phaseEndsAt = gameState.phaseEndsAt?.toMillis ? gameState.phaseEndsAt.toMillis() : gameState.phaseEndsAt;
+      const phaseStarted = gameState.phaseStartedAt?.toMillis ? gameState.phaseStartedAt.toMillis() : gameState.phaseStartedAt;
+
+      let remaining = 0;
+      if (phaseEndsAt) {
+        remaining = Math.max(0, phaseEndsAt - now);
+      } else if (phaseStarted && gameState.phaseDurationMs) {
+        const elapsed = now - phaseStarted;
+        remaining = Math.max(0, gameState.phaseDurationMs - elapsed);
+      }
+
       const remainingSeconds = Math.max(0, Math.ceil(remaining / 1000));
       setTimeLeft(remainingSeconds);
 
@@ -168,7 +175,7 @@ export default function MafiaGame() {
         clearInterval(phaseTimerRef.current);
       }
     };
-  }, [gameState?.phaseStartedAt, gameState?.phaseDurationMs, isHost]);
+  }, [gameState?.phaseEndsAt, gameState?.phaseStartedAt, gameState?.phaseDurationMs, isHost]);
 
   // Reset confirmed status when phase changes
   useEffect(() => {
@@ -228,27 +235,10 @@ export default function MafiaGame() {
 
   const handleRevealRole = () => {
     setShowRole(true);
-    playDetective();
-
-    // Auto-hide after 30 seconds
-    roleTimerRef.current = setTimeout(() => {
-      setShowRole(false);
-      // If everyone has seen roles, host advances
-      if (isHost) {
-        startNightPhase();
-      }
-    }, 30000);
   };
 
   const handleHideRole = () => {
     setShowRole(false);
-    if (roleTimerRef.current) {
-      clearTimeout(roleTimerRef.current);
-    }
-    // If host hides early, advance
-    if (isHost) {
-      startNightPhase();
-    }
   };
 
   const startNightPhase = async () => {
@@ -260,6 +250,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'night-eyes-closed',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': 3000,
+      'activeActivity.phaseEndsAt': Date.now() + 3000,
       'activeActivity.nightVotes': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
@@ -274,6 +265,7 @@ export default function MafiaGame() {
         'activeActivity.phase': 'night-mafia',
         'activeActivity.phaseStartedAt': serverTimestamp(),
         'activeActivity.phaseDurationMs': 30000,
+        'activeActivity.phaseEndsAt': Date.now() + 30000,
         'activeActivity.confirmedVotes': [],
         'activeActivity.nightVotes': {},
         lastActivity: serverTimestamp()
@@ -306,47 +298,44 @@ export default function MafiaGame() {
 
     setHasConfirmed(true);
 
-    if (isHost && (gameState.phase === 'night-mafia' || gameState.phase === 'night-doctor')) {
-      const activePlayerUids = getActivePlayers().map((player) => player.uid);
-      const allConfirmed = activePlayerUids.length > 0 && activePlayerUids.every((uid) => confirmedVotes.includes(uid));
-
-      if (allConfirmed) {
-        if (gameState.phase === 'night-mafia') {
-          await advanceFromMafiaPhase(roomRef, 5000);
-        } else if (gameState.phase === 'night-doctor') {
-          await advanceFromDoctorPhase(roomRef, 5000);
-        }
-        return;
-      }
-    }
-
-    // Check if all active players have confirmed
     if (isHost) {
-      checkAllConfirmed();
+      await checkAllConfirmed(confirmedVotes);
     }
   };
 
-  const checkAllConfirmed = async () => {
+  const checkAllConfirmed = async (confirmedVotesOverride) => {
     if (!isHost || !gameState) return;
 
     const roomRef = doc(db, 'rooms', roomId);
     const activePlayerUids = getActivePlayers().map(p => p.uid);
-    const confirmed = gameState.confirmedVotes || [];
+    const confirmed = confirmedVotesOverride || gameState.confirmedVotes || [];
 
-    if (activePlayerUids.every(uid => confirmed.includes(uid))) {
-      // All confirmed, advance phase
+    if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
+      // All confirmed, shorten timer to 5 seconds for synchronized clients
       switch (gameState.phase) {
         case 'night-mafia':
-          await advanceFromMafiaPhase(roomRef);
+          await updateDoc(roomRef, {
+            'activeActivity.phaseEndsAt': Date.now() + 5000,
+            lastActivity: serverTimestamp()
+          });
           break;
         case 'night-doctor':
-          await advanceFromDoctorPhase(roomRef);
+          await updateDoc(roomRef, {
+            'activeActivity.phaseEndsAt': Date.now() + 5000,
+            lastActivity: serverTimestamp()
+          });
           break;
         case 'night-detective':
-          await advanceFromDetectivePhase(roomRef);
+          await updateDoc(roomRef, {
+            'activeActivity.phaseEndsAt': Date.now() + 5000,
+            lastActivity: serverTimestamp()
+          });
           break;
         case 'day-vote':
-          await processVoteAndCheckWin(roomRef);
+          await updateDoc(roomRef, {
+            'activeActivity.phaseEndsAt': Date.now() + 5000,
+            lastActivity: serverTimestamp()
+          });
           break;
       }
     }
@@ -382,6 +371,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'night-eyes-closed-2',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': closeEyesMs,
+      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
       'activeActivity.confirmedVotes': [],
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
@@ -396,6 +386,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'night-doctor',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': phaseDuration,
+      'activeActivity.phaseEndsAt': Date.now() + phaseDuration,
       'activeActivity.confirmedVotes': [],
       lastActivity: serverTimestamp()
     });
@@ -429,6 +420,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'night-eyes-closed-3',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': closeEyesMs,
+      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
@@ -442,6 +434,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'night-detective',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': phaseDuration,
+      'activeActivity.phaseEndsAt': Date.now() + phaseDuration,
       'activeActivity.confirmedVotes': [],
       lastActivity: serverTimestamp()
     });
@@ -469,6 +462,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'night-detective-result',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': 5000,
+      'activeActivity.phaseEndsAt': Date.now() + 5000,
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
@@ -496,6 +490,7 @@ export default function MafiaGame() {
         'activeActivity.lastSaved': isSaved ? pendingVictim : null,
         'activeActivity.phase': 'ended',
         'activeActivity.winner': winner,
+        'activeActivity.phaseEndsAt': null,
         'activeActivity.phaseStartedAt': null,
         'activeActivity.phaseDurationMs': null,
         lastActivity: serverTimestamp()
@@ -509,6 +504,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'day-discussion',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': discussionDurationMs,
+      'activeActivity.phaseEndsAt': Date.now() + discussionDurationMs,
       'activeActivity.players': updatedPlayers,
       'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
       'activeActivity.lastSaved': isSaved ? pendingVictim : null,
@@ -525,6 +521,7 @@ export default function MafiaGame() {
       'activeActivity.phase': 'day-vote',
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': votingDurationMs,
+      'activeActivity.phaseEndsAt': Date.now() + votingDurationMs,
       'activeActivity.dayVotes': {},
       'activeActivity.skipVotes': [],
       'activeActivity.confirmedVotes': [],
@@ -576,12 +573,15 @@ export default function MafiaGame() {
         'activeActivity.phase': 'ended',
         'activeActivity.winner': winner,
         'activeActivity.phaseEndsAt': null,
+        'activeActivity.phaseStartedAt': null,
+        'activeActivity.phaseDurationMs': null,
         lastActivity: serverTimestamp()
       });
     } else {
       // Continue to next round
       await updateDoc(roomRef, {
         'activeActivity.roundNumber': gameState.roundNumber + 1,
+        'activeActivity.phaseEndsAt': null,
         'activeActivity.phaseStartedAt': null,
         'activeActivity.phaseDurationMs': null,
         lastActivity: serverTimestamp()
@@ -750,7 +750,18 @@ export default function MafiaGame() {
   // Phase 3: Role reveal
   if (gameState?.phase === 'roles') {
     console.log('[MafiaGame] Rendering roles phase', { myRole, user: user?.id });
-    if (!myRole) return null;
+    if (!myRole) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
+          <div className="w-full max-w-md text-center">
+            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8">
+              <div className="text-6xl mb-4">⏳</div>
+              <p className="text-slate-300 text-lg">Waiting for host to start the night...</p>
+            </div>
+          </div>
+        </div>
+      );
+    }
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
@@ -785,6 +796,21 @@ export default function MafiaGame() {
               </button>
             </div>
           )}
+
+          <div className="mt-6">
+            {isHost ? (
+              <button
+                onClick={startNightPhase}
+                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+              >
+                Start Night 🌙
+              </button>
+            ) : (
+              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
+                <p className="text-slate-300">Waiting for host to start the night...</p>
+              </div>
+            )}
+          </div>
         </div>
       </div>
     );
