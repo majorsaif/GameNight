@@ -5,6 +5,7 @@ import HomeScreen from './components/HomeScreen';
 import GamesScreen from './components/GamesScreen';
 import WheelSpin from './components/ForfeitWheel';
 import ProfileScreen from './components/ProfileScreen';
+import MafiaGame from './components/MafiaGame';
 
 function App() {
   return (
@@ -13,6 +14,7 @@ function App() {
         <Route path="/" element={<WelcomeScreen />} />
         <Route path="/room/:roomId" element={<HomeScreen />} />
         <Route path="/room/:roomId/games" element={<GamesScreen />} />
+        <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />
         <Route path="/wheel" element={<WheelSpin />} />
         <Route path="/profile" element={<ProfileScreen />} />
       </Routes>

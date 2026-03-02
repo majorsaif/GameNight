@@ -11,6 +11,10 @@ export default function GamesScreen() {
     setTimeout(() => setShowComingSoon(false), 2000);
   };
 
+  const handleMafiaClick = () => {
+    navigate(`/room/${roomId}/games/mafia`);
+  };
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
       {/* Sticky Back Button Container */}
@@ -97,7 +101,7 @@ export default function GamesScreen() {
 
           {/* Mafia */}
           <button 
-            onClick={handleGameClick}
+            onClick={handleMafiaClick}
             className="group relative overflow-hidden bg-gradient-to-br from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
           >
             <div className="relative z-10">

@@ -282,7 +282,8 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity != null;
   const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
-  const isVote = hasActiveActivity && !isWheel;
+  const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const isVote = hasActiveActivity && !isWheel && !isMafia;
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -412,6 +413,21 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
               onVote={onCastVote}
               onEndVote={onEndVote}
             />
+          ) : isMafia ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/mafia`)}
+              className="w-full bg-gradient-to-br from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🔪
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Mafia Game Active</h3>
+                  <p className="text-red-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
           ) : (
             <WheelSpin
               activity={room.activeActivity}
@@ -486,7 +502,8 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity != null;
   const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
-  const isVote = hasActiveActivity && !isWheel;
+  const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const isVote = hasActiveActivity && !isWheel && !isMafia;
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -616,6 +633,21 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
               onVote={onCastVote}
               onEndVote={() => {}}
             />
+          ) : isMafia ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/mafia`)}
+              className="w-full bg-gradient-to-br from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-red-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🔪
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">A Mafia game is starting!</h3>
+                  <p className="text-red-100 text-sm">Click to join the lobby</p>
+                </div>
+              </div>
+            </button>
           ) : (
             <WheelSpin
               activity={room.activeActivity}
