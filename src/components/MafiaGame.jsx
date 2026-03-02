@@ -2,97 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRoom } from '../hooks/useRoom';
-import { doc, updateDoc, serverTimestamp, onSnapshot, getDoc } from 'firebase/firestore';
+import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
-
-// Web Audio API sound generator
-const playSound = (type) => {
-  const audioContext = new (window.AudioContext || window.webkitAudioContext)();
-  const now = audioContext.currentTime;
-
-  switch (type) {
-    case 'shhh': {
-      // White noise fade in/out
-      const bufferSize = audioContext.sampleRate * 2;
-      const buffer = audioContext.createBuffer(1, bufferSize, audioContext.sampleRate);
-      const data = buffer.getChannelData(0);
-      for (let i = 0; i < bufferSize; i++) {
-        data[i] = Math.random() * 2 - 1;
-      }
-      const noise = audioContext.createBufferSource();
-      noise.buffer = buffer;
-      const gainNode = audioContext.createGain();
-      noise.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      gainNode.gain.setValueAtTime(0, now);
-      gainNode.gain.linearRampToValueAtTime(0.1, now + 0.5);
-      gainNode.gain.linearRampToValueAtTime(0, now + 1.5);
-      noise.start(now);
-      noise.stop(now + 2);
-      break;
-    }
-    case 'murder': {
-      // Sharp descending tone
-      const osc = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      osc.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      osc.frequency.setValueAtTime(800, now);
-      osc.frequency.exponentialRampToValueAtTime(200, now + 0.3);
-      gainNode.gain.setValueAtTime(0.3, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
-      osc.start(now);
-      osc.stop(now + 0.3);
-      break;
-    }
-    case 'angelic': {
-      // Soft ascending chime
-      const osc = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      osc.type = 'sine';
-      osc.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      osc.frequency.setValueAtTime(523.25, now); // C5
-      osc.frequency.linearRampToValueAtTime(659.25, now + 0.2); // E5
-      osc.frequency.linearRampToValueAtTime(783.99, now + 0.4); // G5
-      gainNode.gain.setValueAtTime(0.2, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.8);
-      osc.start(now);
-      osc.stop(now + 0.8);
-      break;
-    }
-    case 'detective': {
-      // Short punchy jazz tone
-      const osc = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      osc.type = 'square';
-      osc.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      osc.frequency.setValueAtTime(440, now);
-      gainNode.gain.setValueAtTime(0.2, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.15);
-      osc.start(now);
-      osc.stop(now + 0.15);
-      break;
-    }
-    case 'waking': {
-      // Ascending alarm tone
-      const osc = audioContext.createOscillator();
-      const gainNode = audioContext.createGain();
-      osc.type = 'sine';
-      osc.connect(gainNode);
-      gainNode.connect(audioContext.destination);
-      osc.frequency.setValueAtTime(300, now);
-      osc.frequency.exponentialRampToValueAtTime(800, now + 0.5);
-      gainNode.gain.setValueAtTime(0.3, now);
-      gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
-      osc.start(now);
-      osc.stop(now + 0.6);
-      break;
-    }
-  }
-};
+import { useMafiaSound } from '../hooks/useMafiaSound';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -106,9 +19,9 @@ export default function MafiaGame() {
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
-  const [detectiveResult, setDetectiveResult] = useState(null);
   const roleTimerRef = useRef(null);
   const phaseTimerRef = useRef(null);
+  const { playShh, playMurder, playAngelic, playDetective, playWaking } = useMafiaSound();
 
   // Rules form state
   const [rules, setRules] = useState({
@@ -121,6 +34,27 @@ export default function MafiaGame() {
   });
   const [selectingNarrator, setSelectingNarrator] = useState(false);
   const [selectedNarrator, setSelectedNarrator] = useState(null);
+  const activeRules = gameState?.rules || rules;
+
+  const getCurrentPlayer = () => gameState?.players?.find((player) => player.uid === user?.id);
+
+  const isCurrentUserAlive = () => {
+    const currentPlayer = getCurrentPlayer();
+    return Boolean(currentPlayer && currentPlayer.isAlive);
+  };
+
+  const getLivingNonNarrators = (players = gameState?.players || []) => {
+    return players.filter((player) => player.isAlive && player.role !== 'narrator');
+  };
+
+  const getWinnerFromPlayers = (players) => {
+    const livingMafia = players.filter((player) => player.role === 'mafia' && player.isAlive).length;
+    const livingInnocent = players.filter((player) => player.role !== 'mafia' && player.role !== 'narrator' && player.isAlive).length;
+
+    if (livingMafia === 0) return 'town';
+    if (livingMafia >= livingInnocent) return 'mafia';
+    return null;
+  };
 
   // Subscribe to game state
   useEffect(() => {
@@ -150,6 +84,19 @@ export default function MafiaGame() {
       }
     }
   }, [gameState, user]);
+
+  // Host auto-advances discussion if all living players voted to skip
+  useEffect(() => {
+    if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
+
+    const livingUids = getLivingNonNarrators().map((player) => player.uid);
+    const skipVotes = gameState.skipVotes || [];
+
+    if (livingUids.length > 0 && livingUids.every((uid) => skipVotes.includes(uid))) {
+      const roomRef = doc(db, 'rooms', roomId);
+      startDayVotePhase(roomRef);
+    }
+  }, [isHost, gameState?.phase, gameState?.skipVotes, gameState?.players, roomId]);
 
   // Handle phase timer countdown
   useEffect(() => {
@@ -202,11 +149,30 @@ export default function MafiaGame() {
       case 'night-mafia':
         await advanceFromMafiaPhase(roomRef);
         break;
+      case 'night-eyes-closed-2':
+        if (activeRules.doctor) {
+          await startDoctorPhase(roomRef);
+        } else if (activeRules.detective) {
+          await startDetectivePhase(roomRef);
+        } else {
+          await startDayPhase(roomRef);
+        }
+        break;
       case 'night-doctor':
         await advanceFromDoctorPhase(roomRef);
         break;
+      case 'night-eyes-closed-3':
+        if (activeRules.detective) {
+          await startDetectivePhase(roomRef);
+        } else {
+          await startDayPhase(roomRef);
+        }
+        break;
       case 'night-detective':
         await advanceFromDetectivePhase(roomRef);
+        break;
+      case 'night-detective-result':
+        await startDayPhase(roomRef);
         break;
       case 'day-discussion':
         await startDayVotePhase(roomRef);
@@ -235,6 +201,7 @@ export default function MafiaGame() {
         detectiveResult: null,
         nightVotes: {},
         dayVotes: {},
+        skipVotes: [],
         confirmedVotes: [],
         lastEliminated: null,
         lastSaved: null,
@@ -353,7 +320,7 @@ export default function MafiaGame() {
 
   const handleRevealRole = () => {
     setShowRole(true);
-    playSound('detective');
+    playDetective();
 
     // Auto-hide after 30 seconds
     roleTimerRef.current = setTimeout(() => {
@@ -380,10 +347,11 @@ export default function MafiaGame() {
     if (!isHost) return;
     
     const roomRef = doc(db, 'rooms', roomId);
-    playSound('shhh');
+    playShh();
 
     await updateDoc(roomRef, {
       'activeActivity.phase': 'night-eyes-closed',
+      'activeActivity.phaseEndsAt': null,
       'activeActivity.nightVotes': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
@@ -398,30 +366,51 @@ export default function MafiaGame() {
       await updateDoc(roomRef, {
         'activeActivity.phase': 'night-mafia',
         'activeActivity.phaseEndsAt': endsAt,
+        'activeActivity.confirmedVotes': [],
+        'activeActivity.nightVotes': {},
         lastActivity: serverTimestamp()
       });
     }, 3000);
   };
 
   const handleVotePlayer = async (targetUid) => {
-    if (!user || hasConfirmed) return;
+    if (!user || hasConfirmed || !gameState) return;
+    if (!isCurrentUserAlive()) return;
+    if (myRole === 'narrator') return;
     
     setSelectedPlayer(targetUid);
   };
 
   const handleConfirmVote = async () => {
-    if (!user || !selectedPlayer || hasConfirmed) return;
+    if (!user || !selectedPlayer || hasConfirmed || !gameState) return;
+    if (!isCurrentUserAlive()) return;
+    if (myRole === 'narrator') return;
 
     const roomRef = doc(db, 'rooms', roomId);
     const voteField = gameState.phase === 'day-vote' ? 'dayVotes' : 'nightVotes';
+    const confirmedVotes = Array.from(new Set([...(gameState.confirmedVotes || []), user.id]));
 
     await updateDoc(roomRef, {
       [`activeActivity.${voteField}.${user.id}`]: selectedPlayer,
-      'activeActivity.confirmedVotes': [...(gameState.confirmedVotes || []), user.id],
+      'activeActivity.confirmedVotes': confirmedVotes,
       lastActivity: serverTimestamp()
     });
 
     setHasConfirmed(true);
+
+    if (isHost && (gameState.phase === 'night-mafia' || gameState.phase === 'night-doctor')) {
+      const activePlayerUids = getActivePlayers().map((player) => player.uid);
+      const allConfirmed = activePlayerUids.length > 0 && activePlayerUids.every((uid) => confirmedVotes.includes(uid));
+
+      if (allConfirmed) {
+        if (gameState.phase === 'night-mafia') {
+          await advanceFromMafiaPhase(roomRef, 5000);
+        } else if (gameState.phase === 'night-doctor') {
+          await advanceFromDoctorPhase(roomRef, 5000);
+        }
+        return;
+      }
+    }
 
     // Check if all active players have confirmed
     if (isHost) {
@@ -455,7 +444,7 @@ export default function MafiaGame() {
     }
   };
 
-  const advanceFromMafiaPhase = async (roomRef) => {
+  const advanceFromMafiaPhase = async (roomRef, closeEyesMs = 2000) => {
     if (!isHost) return;
 
     // Count votes
@@ -480,25 +469,16 @@ export default function MafiaGame() {
     // Random tiebreak
     const victim = victims.length > 0 ? victims[Math.floor(Math.random() * victims.length)] : null;
 
-    playSound('murder');
+    playMurder();
 
     await updateDoc(roomRef, {
       'activeActivity.pendingVictim': victim,
       'activeActivity.phase': 'night-eyes-closed-2',
+      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
       'activeActivity.confirmedVotes': [],
+      'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
-
-    // Wait 2 seconds then advance to doctor/detective
-    setTimeout(async () => {
-      if (rules.doctor) {
-        await startDoctorPhase(roomRef);
-      } else if (rules.detective) {
-        await startDetectivePhase(roomRef);
-      } else {
-        await startDayPhase(roomRef);
-      }
-    }, 2000);
   };
 
   const startDoctorPhase = async (roomRef) => {
@@ -512,46 +492,49 @@ export default function MafiaGame() {
         lastActivity: serverTimestamp()
       });
 
-      setTimeout(async () => {
-        if (rules.detective) {
-          await startDetectivePhase(roomRef);
-        } else {
-          await startDayPhase(roomRef);
-        }
-      }, 10000);
     } else {
       // Doctor is alive
-      playSound('angelic');
+      playAngelic();
       
       await updateDoc(roomRef, {
         'activeActivity.phase': 'night-doctor',
         'activeActivity.phaseEndsAt': Date.now() + 30000,
+        'activeActivity.confirmedVotes': [],
         lastActivity: serverTimestamp()
       });
     }
   };
 
-  const advanceFromDoctorPhase = async (roomRef) => {
+  const advanceFromDoctorPhase = async (roomRef, closeEyesMs = 2000) => {
     if (!isHost) return;
 
     const doctorPlayer = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
     const save = doctorPlayer ? gameState.nightVotes?.[doctorPlayer.uid] : null;
 
-    await updateDoc(roomRef, {
-      'activeActivity.doctorSave': save,
-      'activeActivity.confirmedVotes': [],
-      'activeActivity.phase': 'night-eyes-closed-3',
-      lastActivity: serverTimestamp()
-    });
+    if (!doctorPlayer) {
+      await updateDoc(roomRef, {
+        'activeActivity.doctorSave': null,
+        'activeActivity.confirmedVotes': [],
+        'activeActivity.nightVotes': {},
+        lastActivity: serverTimestamp()
+      });
 
-    // Wait 2 seconds then advance
-    setTimeout(async () => {
-      if (rules.detective) {
+      if (activeRules.detective) {
         await startDetectivePhase(roomRef);
       } else {
         await startDayPhase(roomRef);
       }
-    }, 2000);
+      return;
+    }
+
+    await updateDoc(roomRef, {
+      'activeActivity.doctorSave': save,
+      'activeActivity.confirmedVotes': [],
+      'activeActivity.phase': 'night-eyes-closed-3',
+      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
+      'activeActivity.nightVotes': {},
+      lastActivity: serverTimestamp()
+    });
   };
 
   const startDetectivePhase = async (roomRef) => {
@@ -565,16 +548,14 @@ export default function MafiaGame() {
         lastActivity: serverTimestamp()
       });
 
-      setTimeout(async () => {
-        await startDayPhase(roomRef);
-      }, 10000);
     } else {
       // Detective is alive
-      playSound('detective');
+      playDetective();
       
       await updateDoc(roomRef, {
         'activeActivity.phase': 'night-detective',
         'activeActivity.phaseEndsAt': Date.now() + 30000,
+        'activeActivity.confirmedVotes': [],
         lastActivity: serverTimestamp()
       });
     }
@@ -600,35 +581,64 @@ export default function MafiaGame() {
       'activeActivity.detectiveResult': result,
       'activeActivity.confirmedVotes': [],
       'activeActivity.phase': 'night-detective-result',
+      'activeActivity.phaseEndsAt': Date.now() + 5000,
+      'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
-
-    // Show result for 5 seconds
-    setTimeout(async () => {
-      await startDayPhase(roomRef);
-    }, 5000);
   };
 
   const startDayPhase = async (roomRef) => {
-    playSound('waking');
+    playWaking();
 
-    const endsAt = Date.now() + (rules.discussionTime * 60 * 1000);
-    
+    const currentPlayers = [...(gameState?.players || [])];
+    const pendingVictim = gameState?.pendingVictim || null;
+    const doctorAlive = currentPlayers.some((player) => player.role === 'doctor' && player.isAlive);
+    const isSaved = Boolean(activeRules.doctor && doctorAlive && pendingVictim && gameState?.doctorSave === pendingVictim);
+
+    const updatedPlayers = currentPlayers.map((player) => {
+      if (!pendingVictim || isSaved) return player;
+      if (player.uid === pendingVictim) {
+        return { ...player, isAlive: false };
+      }
+      return player;
+    });
+
+    const winner = getWinnerFromPlayers(updatedPlayers);
+    if (winner) {
+      await updateDoc(roomRef, {
+        'activeActivity.players': updatedPlayers,
+        'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
+        'activeActivity.lastSaved': isSaved ? pendingVictim : null,
+        'activeActivity.phase': 'ended',
+        'activeActivity.winner': winner,
+        'activeActivity.phaseEndsAt': null,
+        lastActivity: serverTimestamp()
+      });
+      return;
+    }
+
+    const endsAt = Date.now() + (activeRules.discussionTime * 60 * 1000);
+
     await updateDoc(roomRef, {
       'activeActivity.phase': 'day-discussion',
       'activeActivity.phaseEndsAt': endsAt,
+      'activeActivity.players': updatedPlayers,
+      'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
+      'activeActivity.lastSaved': isSaved ? pendingVictim : null,
+      'activeActivity.skipVotes': [],
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
   };
 
   const startDayVotePhase = async (roomRef) => {
-    const endsAt = Date.now() + (rules.votingTime * 60 * 1000);
+    const endsAt = Date.now() + (activeRules.votingTime * 60 * 1000);
     
     await updateDoc(roomRef, {
       'activeActivity.phase': 'day-vote',
       'activeActivity.phaseEndsAt': endsAt,
       'activeActivity.dayVotes': {},
+      'activeActivity.skipVotes': [],
       'activeActivity.confirmedVotes': [],
       lastActivity: serverTimestamp()
     });
@@ -671,29 +681,20 @@ export default function MafiaGame() {
     });
 
     // Check win condition
-    const livingMafia = updatedPlayers.filter(p => p.role === 'mafia' && p.isAlive).length;
-    const livingInnocent = updatedPlayers.filter(p => 
-      p.role !== 'mafia' && p.role !== 'narrator' && p.isAlive
-    ).length;
+    const winner = getWinnerFromPlayers(updatedPlayers);
 
-    if (livingMafia >= livingInnocent) {
-      // Mafia wins
+    if (winner) {
       await updateDoc(roomRef, {
         'activeActivity.phase': 'ended',
-        'activeActivity.winner': 'mafia',
-        lastActivity: serverTimestamp()
-      });
-    } else if (livingMafia === 0) {
-      // Town wins
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': 'town',
+        'activeActivity.winner': winner,
+        'activeActivity.phaseEndsAt': null,
         lastActivity: serverTimestamp()
       });
     } else {
       // Continue to next round
       await updateDoc(roomRef, {
         'activeActivity.roundNumber': gameState.roundNumber + 1,
+        'activeActivity.phaseEndsAt': null,
         lastActivity: serverTimestamp()
       });
 
@@ -701,6 +702,30 @@ export default function MafiaGame() {
       setTimeout(async () => {
         await startNightPhase();
       }, 5000);
+    }
+  };
+
+  const handleToggleSkipDiscussion = async () => {
+    if (!gameState || !user || gameState.phase !== 'day-discussion') return;
+    if (!isCurrentUserAlive() || myRole === 'narrator') return;
+
+    const roomRef = doc(db, 'rooms', roomId);
+    const currentSkipVotes = gameState.skipVotes || [];
+    const hasVoted = currentSkipVotes.includes(user.id);
+    const updatedSkipVotes = hasVoted
+      ? currentSkipVotes.filter((uid) => uid !== user.id)
+      : [...currentSkipVotes, user.id];
+
+    await updateDoc(roomRef, {
+      'activeActivity.skipVotes': updatedSkipVotes,
+      lastActivity: serverTimestamp()
+    });
+
+    if (isHost) {
+      const livingUids = getLivingNonNarrators().map((player) => player.uid);
+      if (livingUids.length > 0 && livingUids.every((uid) => updatedSkipVotes.includes(uid))) {
+        await startDayVotePhase(roomRef);
+      }
     }
   };
 
@@ -735,7 +760,7 @@ export default function MafiaGame() {
         const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
         return detective ? [detective] : [];
       case 'day-vote':
-        return gameState.players.filter(p => p.isAlive && p.role !== 'narrator');
+        return gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator');
       default:
         return [];
     }
@@ -752,7 +777,7 @@ export default function MafiaGame() {
       case 'night-detective':
         return gameState.players.filter(p => p.isAlive && p.uid !== user?.id && p.role !== 'narrator');
       case 'day-vote':
-        return gameState.players.filter(p => p.isAlive && p.role !== 'narrator');
+        return gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator');
       default:
         return [];
     }
@@ -1096,11 +1121,15 @@ export default function MafiaGame() {
 
   // Night phase - Eyes closed
   if (gameState?.phase?.startsWith('night-eyes-closed')) {
+    const isPostVoteClose = gameState.phase === 'night-eyes-closed-2' || gameState.phase === 'night-eyes-closed-3';
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
         <div className="text-center">
-          <div className="text-8xl mb-6">🤫</div>
-          <h1 className="text-white text-4xl font-black">Close your eyes</h1>
+          <div className="text-8xl mb-6">{isPostVoteClose ? '😴' : '🤫'}</div>
+          <h1 className="text-white text-4xl font-black">{isPostVoteClose ? 'Close your eyes... 😴' : 'Close your eyes 🤫'}</h1>
+          {timeLeft !== null && (
+            <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
+          )}
         </div>
       </div>
     );
@@ -1447,8 +1476,15 @@ export default function MafiaGame() {
   if (gameState?.phase === 'day-discussion') {
     const spectator = isSpectator();
     const victimUid = gameState.pendingVictim;
-    const saved = gameState.doctorSave === victimUid && rules.doctor;
+    const saved = gameState.lastSaved && gameState.lastSaved === victimUid;
     const victim = victimUid ? gameState.players.find(p => p.uid === victimUid) : null;
+    const livingPlayers = gameState.players.filter((p) => p.isAlive && p.role !== 'narrator');
+    const skipVotes = gameState.skipVotes || [];
+    const canSkipVote = !spectator && isCurrentUserAlive() && myRole !== 'narrator';
+    const mySkipVote = skipVotes.includes(user?.id);
+    const skipVotePlayers = skipVotes
+      .map((uid) => gameState.players.find((p) => p.uid === uid))
+      .filter(Boolean);
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -1503,7 +1539,7 @@ export default function MafiaGame() {
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
             <h3 className="text-white font-semibold mb-3">Alive Players</h3>
             <div className="space-y-2">
-              {gameState.players.filter(p => p.isAlive && p.role !== 'narrator').map((player) => (
+              {livingPlayers.map((player) => (
                 <div
                   key={player.uid}
                   className="flex items-center gap-3 bg-slate-700/50 rounded-lg p-3"
@@ -1516,6 +1552,40 @@ export default function MafiaGame() {
               ))}
             </div>
           </div>
+
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mt-4">
+            <button
+              onClick={handleToggleSkipDiscussion}
+              disabled={!canSkipVote}
+              className={`w-full py-3 rounded-xl font-bold transition-colors ${
+                canSkipVote
+                  ? mySkipVote
+                    ? 'bg-violet-700 hover:bg-violet-600 text-white'
+                    : 'bg-violet-600 hover:bg-violet-500 text-white'
+                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+              }`}
+            >
+              {mySkipVote ? 'Undo Skip Vote' : 'Skip Discussion'}
+            </button>
+            <p className="text-slate-300 text-sm mt-3">
+              Voted to skip: {skipVotes.length}/{livingPlayers.length}
+            </p>
+            <div className="flex items-center mt-2">
+              {skipVotePlayers.length === 0 ? (
+                <span className="text-slate-500 text-sm">No votes yet</span>
+              ) : (
+                skipVotePlayers.map((player, index) => (
+                  <div
+                    key={player.uid}
+                    className={`w-7 h-7 ${player.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
+                    title={player.displayName}
+                  >
+                    {getInitials(player.displayName)}
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1524,8 +1594,10 @@ export default function MafiaGame() {
   // Day phase - Voting
   if (gameState?.phase === 'day-vote') {
     const spectator = isSpectator();
-    const canVote = !spectator;
+    const canVote = !spectator && isCurrentUserAlive();
     const selectablePlayers = getSelectablePlayers();
+    const dayVotes = gameState.dayVotes || {};
+    const livingVoterUids = new Set(gameState.players.filter((p) => p.isAlive && p.role !== 'narrator').map((p) => p.uid));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -1551,7 +1623,13 @@ export default function MafiaGame() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.map((player) => (
+            {selectablePlayers.filter((player) => player.isAlive === true).map((player) => {
+              const votersForPlayer = Object.entries(dayVotes)
+                .filter(([voterUid, targetUid]) => targetUid === player.uid && livingVoterUids.has(voterUid))
+                .map(([voterUid]) => gameState.players.find((p) => p.uid === voterUid))
+                .filter(Boolean);
+
+              return (
               <button
                 key={player.uid}
                 onClick={() => canVote && handleVotePlayer(player.uid)}
@@ -1565,9 +1643,23 @@ export default function MafiaGame() {
                 <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
                   {getInitials(player.displayName)}
                 </div>
-                <span className="text-white font-semibold">{player.displayName}</span>
+                <div className="flex-1">
+                  <span className="text-white font-semibold block">{player.displayName}</span>
+                  <div className="flex items-center mt-2">
+                    {votersForPlayer.map((voter, index) => (
+                      <div
+                        key={`${player.uid}-${voter.uid}`}
+                        className={`w-7 h-7 ${voter.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
+                        title={voter.displayName}
+                      >
+                        {getInitials(voter.displayName)}
+                      </div>
+                    ))}
+                  </div>
+                </div>
               </button>
-            ))}
+              );
+            })}
           </div>
 
           {canVote && (
