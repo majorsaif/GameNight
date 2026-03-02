@@ -1,10 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useAuth } from '../hooks/useAuth';
+import { useRoom } from '../hooks/useRoom';
 
 export default function GamesScreen() {
   const navigate = useNavigate();
   const { roomId } = useParams();
+  const { user } = useAuth();
+  const { isHost } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
   const [showComingSoon, setShowComingSoon] = useState(false);
+  const [showHostOnly, setShowHostOnly] = useState(false);
 
   const handleGameClick = () => {
     setShowComingSoon(true);
@@ -12,6 +17,11 @@ export default function GamesScreen() {
   };
 
   const handleMafiaClick = () => {
+    if (!isHost) {
+      setShowHostOnly(true);
+      setTimeout(() => setShowHostOnly(false), 3000);
+      return;
+    }
     navigate(`/room/${roomId}/games/mafia`);
   };
 
@@ -126,6 +136,15 @@ export default function GamesScreen() {
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
           <div className="bg-slate-800 border border-slate-700 rounded-xl px-6 py-3 shadow-2xl">
             <p className="text-white font-semibold">Coming soon! 🎮</p>
+          </div>
+        </div>
+      )}
+
+      {/* Host Only Toast */}
+      {showHostOnly && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+          <div className="bg-red-800 border border-red-700 rounded-xl px-6 py-3 shadow-2xl">
+            <p className="text-white font-semibold">Only the host can start a game 🔐</p>
           </div>
         </div>
       )}

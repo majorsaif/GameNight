@@ -6,6 +6,7 @@ import VoteModal from './VoteModal';
 import ActiveVote from './ActiveVote';
 import WheelSpin from './ForfeitWheel';
 import WheelSetupModal from './WheelSetupModal';
+import MafiaLobbyCard from './MafiaLobbyCard';
 import GameNightLogo from './GameNightLogo';
 import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 
@@ -280,9 +281,19 @@ export default function HomeScreen() {
 
 function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetup, onCastVote, onEndVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
+  const [showRulesModal, setShowRulesModal] = useState(false);
+  const [mafiaRules, setMafiaRules] = useState(room.activeActivity?.rules || {
+    mafiaCount: 1,
+    doctor: true,
+    detective: true,
+    discussionTime: 3,
+    votingTime: 1
+  });
+  
   const hasActiveActivity = room.activeActivity != null;
   const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
   const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
   const isVote = hasActiveActivity && !isWheel && !isMafia;
   
   const hostPlayer = room.players.find(p => p.isHost);
@@ -413,6 +424,18 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
               onVote={onCastVote}
               onEndVote={onEndVote}
             />
+          ) : isMafiaLobby ? (
+            <MafiaLobbyCard
+              lobbyState={room.activeActivity}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={true}
+              rules={mafiaRules}
+              setRules={setMafiaRules}
+              showRulesModal={showRulesModal}
+              setShowRulesModal={setShowRulesModal}
+            />
           ) : isMafia ? (
             <button
               onClick={() => navigate(`/room/${roomId}/games/mafia`)}
@@ -503,6 +526,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const hasActiveActivity = room.activeActivity != null;
   const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
   const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
   const isVote = hasActiveActivity && !isWheel && !isMafia;
   
   const hostPlayer = room.players.find(p => p.isHost);
@@ -633,6 +657,14 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
               onVote={onCastVote}
               onEndVote={() => {}}
             />
+          ) : isMafiaLobby ? (
+            <MafiaLobbyCard
+              lobbyState={room.activeActivity}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={false}
+            />
           ) : isMafia ? (
             <button
               onClick={() => navigate(`/room/${roomId}/games/mafia`)}
@@ -644,7 +676,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-lg">A Mafia game is starting!</h3>
-                  <p className="text-red-100 text-sm">Click to join the lobby</p>
+                  <p className="text-red-100 text-sm">Click to join the game</p>
                 </div>
               </div>
             </button>

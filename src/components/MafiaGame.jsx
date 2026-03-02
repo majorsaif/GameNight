@@ -25,16 +25,14 @@ export default function MafiaGame() {
 
   // Rules form state
   const [rules, setRules] = useState({
-    narrator: false,
     mafiaCount: 1,
     doctor: true,
     detective: true,
     discussionTime: 3,
     votingTime: 1
   });
-  const [selectingNarrator, setSelectingNarrator] = useState(false);
-  const [selectedNarrator, setSelectedNarrator] = useState(null);
   const activeRules = gameState?.rules || rules;
+  const previousPhaseRef = useRef(null);
 
   const getCurrentPlayer = () => gameState?.players?.find((player) => player.uid === user?.id);
 
@@ -43,20 +41,20 @@ export default function MafiaGame() {
     return Boolean(currentPlayer && currentPlayer.isAlive);
   };
 
-  const getLivingNonNarrators = (players = gameState?.players || []) => {
-    return players.filter((player) => player.isAlive && player.role !== 'narrator');
+  const getLivingPlayers = (players = gameState?.players || []) => {
+    return players.filter((player) => player.isAlive);
   };
 
   const getWinnerFromPlayers = (players) => {
     const livingMafia = players.filter((player) => player.role === 'mafia' && player.isAlive).length;
-    const livingInnocent = players.filter((player) => player.role !== 'mafia' && player.role !== 'narrator' && player.isAlive).length;
+    const livingInnocent = players.filter((player) => player.role !== 'mafia' && player.isAlive).length;
 
     if (livingMafia === 0) return 'town';
     if (livingMafia >= livingInnocent) return 'mafia';
     return null;
   };
 
-  // Subscribe to game state
+  // Subscribe to game state and detect phase changes for sounds
   useEffect(() => {
     if (!roomId) return;
 
@@ -66,6 +64,34 @@ export default function MafiaGame() {
         const data = snapshot.data();
         if (data.activeActivity && data.activeActivity.type === 'mafia') {
           setGameState(data.activeActivity);
+          
+          // Detect phase change and play appropriate sound
+          const newPhase = data.activeActivity.phase;
+          const prevPhase = previousPhaseRef.current;
+          
+          if (prevPhase !== newPhase) {
+            // Phase has changed
+            if (newPhase === 'night-mafia') {
+              playShh();
+            } else if (newPhase === 'night-doctor') {
+              playMurder();
+            } else if (newPhase === 'night-detective') {
+              playAngelic();
+            } else if (newPhase === 'day-discussion') {
+              playWaking();
+            }
+            
+            // If phase changed from lobby to roles, non-hosts who are in lobbyPlayers should navigate
+            if (prevPhase === 'lobby' && newPhase === 'roles' && !isHost) {
+              const lobbyPlayers = data.activeActivity.lobbyPlayers || [];
+              if (lobbyPlayers.includes(user?.id)) {
+                // User is in lobbyPlayers, do nothing here - they're already in the game
+                // They will be navigated by the MafiaGame component
+              }
+            }
+            
+            previousPhaseRef.current = newPhase;
+          }
         } else {
           setGameState(null);
         }
@@ -73,7 +99,7 @@ export default function MafiaGame() {
     });
 
     return () => unsubscribe();
-  }, [roomId]);
+  }, [roomId, isHost, user?.id, playShh, playMurder, playAngelic, playWaking]);
 
   // Set my role when game state changes
   useEffect(() => {
@@ -89,7 +115,7 @@ export default function MafiaGame() {
   useEffect(() => {
     if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
 
-    const livingUids = getLivingNonNarrators().map((player) => player.uid);
+    const livingUids = getLivingPlayers().map((player) => player.uid);
     const skipVotes = gameState.skipVotes || [];
 
     if (livingUids.length > 0 && livingUids.every((uid) => skipVotes.includes(uid))) {
@@ -98,34 +124,36 @@ export default function MafiaGame() {
     }
   }, [isHost, gameState?.phase, gameState?.skipVotes, gameState?.players, roomId]);
 
-  // Handle phase timer countdown
+  // Handle phase timer countdown using server time
   useEffect(() => {
-    if (!gameState || !gameState.phaseEndsAt) {
+    if (!gameState || !gameState.phaseStartedAt || !gameState.phaseDurationMs) {
       setTimeLeft(null);
       return;
     }
 
     const updateTimer = () => {
+      const phaseStarted = gameState.phaseStartedAt.toMillis ? gameState.phaseStartedAt.toMillis() : gameState.phaseStartedAt;
       const now = Date.now();
-      const endsAt = gameState.phaseEndsAt.toMillis ? gameState.phaseEndsAt.toMillis() : gameState.phaseEndsAt;
-      const remaining = Math.max(0, Math.floor((endsAt - now) / 1000));
-      setTimeLeft(remaining);
+      const elapsed = now - phaseStarted;
+      const remaining = Math.max(0, gameState.phaseDurationMs - elapsed);
+      const remainingSeconds = Math.max(0, Math.ceil(remaining / 1000));
+      setTimeLeft(remainingSeconds);
 
       // Only host auto-advances phases
-      if (isHost && remaining <= 0) {
+      if (isHost && remainingSeconds <= 0) {
         handlePhaseTimeout();
       }
     };
 
     updateTimer();
-    phaseTimerRef.current = setInterval(updateTimer, 1000);
+    phaseTimerRef.current = setInterval(updateTimer, 100);
 
     return () => {
       if (phaseTimerRef.current) {
         clearInterval(phaseTimerRef.current);
       }
     };
-  }, [gameState, isHost]);
+  }, [gameState?.phaseStartedAt, gameState?.phaseDurationMs, isHost]);
 
   // Reset confirmed status when phase changes
   useEffect(() => {
@@ -187,7 +215,6 @@ export default function MafiaGame() {
     if (!isHost) return;
 
     const roomRef = doc(db, 'rooms', roomId);
-    const now = Date.now();
 
     await updateDoc(roomRef, {
       activeActivity: {
@@ -195,7 +222,7 @@ export default function MafiaGame() {
         phase: 'lobby',
         rules,
         players: [],
-        narratorUid: null,
+        lobbyPlayers: [user?.id],
         pendingVictim: null,
         doctorSave: null,
         detectiveResult: null,
@@ -206,116 +233,16 @@ export default function MafiaGame() {
         lastEliminated: null,
         lastSaved: null,
         winner: null,
-        phaseEndsAt: null,
+        phaseStartedAt: null,
+        phaseDurationMs: null,
         roundNumber: 1,
-        createdAt: now
+        createdAt: serverTimestamp()
       },
       lastActivity: serverTimestamp()
     });
-  };
 
-  const handleJoinLobby = async () => {
-    if (!gameState || !user || !room) return;
-
-    // Check if already joined
-    if (gameState.players.some(p => p.uid === user.id)) return;
-
-    const roomRef = doc(db, 'rooms', roomId);
-    const playerData = room.players.find(p => p.id === user.id);
-
-    const newPlayer = {
-      uid: user.id,
-      displayName: playerData?.displayNameForGame || user.displayName,
-      role: null,
-      isAlive: true,
-      avatarColor: playerData?.avatarColor || getAvatarColor({ id: user.id })
-    };
-
-    const updatedPlayers = [...gameState.players, newPlayer];
-
-    await updateDoc(roomRef, {
-      'activeActivity.players': updatedPlayers,
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const handleEditRules = () => {
-    // Go back to setup phase
-    setGameState(null);
-  };
-
-  const handleStartGame = async () => {
-    if (!isHost || !gameState) return;
-
-    if (gameState.players.length < 4) {
-      alert('Need at least 4 players to start');
-      return;
-    }
-
-    // If narrator is enabled, show narrator selection
-    if (rules.narrator) {
-      setSelectingNarrator(true);
-    } else {
-      await assignRolesAndStart();
-    }
-  };
-
-  const handleConfirmNarrator = async () => {
-    if (!selectedNarrator) return;
-    await assignRolesAndStart(selectedNarrator);
-  };
-
-  const assignRolesAndStart = async (narratorUid = null) => {
-    const roomRef = doc(db, 'rooms', roomId);
-    const players = [...gameState.players];
-
-    // Shuffle players
-    const shuffled = players.sort(() => Math.random() - 0.5);
-    
-    let availablePlayers = narratorUid 
-      ? shuffled.filter(p => p.uid !== narratorUid)
-      : shuffled;
-
-    // Assign narrator
-    if (narratorUid) {
-      const narrator = players.find(p => p.uid === narratorUid);
-      narrator.role = 'narrator';
-      narrator.isAlive = false; // Narrator doesn't participate
-    }
-
-    // Assign detective
-    if (rules.detective && availablePlayers.length > 0) {
-      availablePlayers[0].role = 'detective';
-      availablePlayers = availablePlayers.slice(1);
-    }
-
-    // Assign doctor
-    if (rules.doctor && availablePlayers.length > 0) {
-      availablePlayers[0].role = 'doctor';
-      availablePlayers = availablePlayers.slice(1);
-    }
-
-    // Assign mafia
-    const mafiaCount = Math.min(rules.mafiaCount, availablePlayers.length);
-    for (let i = 0; i < mafiaCount; i++) {
-      if (availablePlayers[i]) {
-        availablePlayers[i].role = 'mafia';
-      }
-    }
-
-    // Assign civilians to remaining
-    for (let i = mafiaCount; i < availablePlayers.length; i++) {
-      availablePlayers[i].role = 'civilian';
-    }
-
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'roles',
-      'activeActivity.players': players,
-      'activeActivity.narratorUid': narratorUid,
-      lastActivity: serverTimestamp()
-    });
-
-    setSelectingNarrator(false);
+    // Redirect host back to HomeScreen to manage lobby there
+    navigate(`/room/${roomId}`);
   };
 
   const handleRevealRole = () => {
@@ -347,11 +274,11 @@ export default function MafiaGame() {
     if (!isHost) return;
     
     const roomRef = doc(db, 'rooms', roomId);
-    playShh();
 
     await updateDoc(roomRef, {
       'activeActivity.phase': 'night-eyes-closed',
-      'activeActivity.phaseEndsAt': null,
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': 3000,
       'activeActivity.nightVotes': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
@@ -362,10 +289,10 @@ export default function MafiaGame() {
 
     // After 3 seconds, advance to mafia turn
     setTimeout(async () => {
-      const endsAt = Date.now() + 30000; // 30 second timer
       await updateDoc(roomRef, {
         'activeActivity.phase': 'night-mafia',
-        'activeActivity.phaseEndsAt': endsAt,
+        'activeActivity.phaseStartedAt': serverTimestamp(),
+        'activeActivity.phaseDurationMs': 30000,
         'activeActivity.confirmedVotes': [],
         'activeActivity.nightVotes': {},
         lastActivity: serverTimestamp()
@@ -469,12 +396,11 @@ export default function MafiaGame() {
     // Random tiebreak
     const victim = victims.length > 0 ? victims[Math.floor(Math.random() * victims.length)] : null;
 
-    playMurder();
-
     await updateDoc(roomRef, {
       'activeActivity.pendingVictim': victim,
       'activeActivity.phase': 'night-eyes-closed-2',
-      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': closeEyesMs,
       'activeActivity.confirmedVotes': [],
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
@@ -483,26 +409,15 @@ export default function MafiaGame() {
 
   const startDoctorPhase = async (roomRef) => {
     const doctorPlayer = gameState.players.find(p => p.role === 'doctor');
+    const phaseDuration = doctorPlayer && doctorPlayer.isAlive ? 30000 : 10000;
     
-    if (!doctorPlayer || !doctorPlayer.isAlive) {
-      // Doctor is dead, run silent timer
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'night-doctor',
-        'activeActivity.phaseEndsAt': Date.now() + 10000,
-        lastActivity: serverTimestamp()
-      });
-
-    } else {
-      // Doctor is alive
-      playAngelic();
-      
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'night-doctor',
-        'activeActivity.phaseEndsAt': Date.now() + 30000,
-        'activeActivity.confirmedVotes': [],
-        lastActivity: serverTimestamp()
-      });
-    }
+    await updateDoc(roomRef, {
+      'activeActivity.phase': 'night-doctor',
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': phaseDuration,
+      'activeActivity.confirmedVotes': [],
+      lastActivity: serverTimestamp()
+    });
   };
 
   const advanceFromDoctorPhase = async (roomRef, closeEyesMs = 2000) => {
@@ -531,7 +446,8 @@ export default function MafiaGame() {
       'activeActivity.doctorSave': save,
       'activeActivity.confirmedVotes': [],
       'activeActivity.phase': 'night-eyes-closed-3',
-      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': closeEyesMs,
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
@@ -539,26 +455,15 @@ export default function MafiaGame() {
 
   const startDetectivePhase = async (roomRef) => {
     const detectivePlayer = gameState.players.find(p => p.role === 'detective');
+    const phaseDuration = detectivePlayer && detectivePlayer.isAlive ? 30000 : 10000;
     
-    if (!detectivePlayer || !detectivePlayer.isAlive) {
-      // Detective is dead, run silent timer
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'night-detective',
-        'activeActivity.phaseEndsAt': Date.now() + 10000,
-        lastActivity: serverTimestamp()
-      });
-
-    } else {
-      // Detective is alive
-      playDetective();
-      
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'night-detective',
-        'activeActivity.phaseEndsAt': Date.now() + 30000,
-        'activeActivity.confirmedVotes': [],
-        lastActivity: serverTimestamp()
-      });
-    }
+    await updateDoc(roomRef, {
+      'activeActivity.phase': 'night-detective',
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': phaseDuration,
+      'activeActivity.confirmedVotes': [],
+      lastActivity: serverTimestamp()
+    });
   };
 
   const advanceFromDetectivePhase = async (roomRef) => {
@@ -581,15 +486,14 @@ export default function MafiaGame() {
       'activeActivity.detectiveResult': result,
       'activeActivity.confirmedVotes': [],
       'activeActivity.phase': 'night-detective-result',
-      'activeActivity.phaseEndsAt': Date.now() + 5000,
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': 5000,
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
   };
 
   const startDayPhase = async (roomRef) => {
-    playWaking();
-
     const currentPlayers = [...(gameState?.players || [])];
     const pendingVictim = gameState?.pendingVictim || null;
     const doctorAlive = currentPlayers.some((player) => player.role === 'doctor' && player.isAlive);
@@ -611,17 +515,19 @@ export default function MafiaGame() {
         'activeActivity.lastSaved': isSaved ? pendingVictim : null,
         'activeActivity.phase': 'ended',
         'activeActivity.winner': winner,
-        'activeActivity.phaseEndsAt': null,
+        'activeActivity.phaseStartedAt': null,
+        'activeActivity.phaseDurationMs': null,
         lastActivity: serverTimestamp()
       });
       return;
     }
 
-    const endsAt = Date.now() + (activeRules.discussionTime * 60 * 1000);
+    const discussionDurationMs = activeRules.discussionTime * 60 * 1000;
 
     await updateDoc(roomRef, {
       'activeActivity.phase': 'day-discussion',
-      'activeActivity.phaseEndsAt': endsAt,
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': discussionDurationMs,
       'activeActivity.players': updatedPlayers,
       'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
       'activeActivity.lastSaved': isSaved ? pendingVictim : null,
@@ -632,11 +538,12 @@ export default function MafiaGame() {
   };
 
   const startDayVotePhase = async (roomRef) => {
-    const endsAt = Date.now() + (activeRules.votingTime * 60 * 1000);
+    const votingDurationMs = activeRules.votingTime * 60 * 1000;
     
     await updateDoc(roomRef, {
       'activeActivity.phase': 'day-vote',
-      'activeActivity.phaseEndsAt': endsAt,
+      'activeActivity.phaseStartedAt': serverTimestamp(),
+      'activeActivity.phaseDurationMs': votingDurationMs,
       'activeActivity.dayVotes': {},
       'activeActivity.skipVotes': [],
       'activeActivity.confirmedVotes': [],
@@ -694,7 +601,8 @@ export default function MafiaGame() {
       // Continue to next round
       await updateDoc(roomRef, {
         'activeActivity.roundNumber': gameState.roundNumber + 1,
-        'activeActivity.phaseEndsAt': null,
+        'activeActivity.phaseStartedAt': null,
+        'activeActivity.phaseDurationMs': null,
         lastActivity: serverTimestamp()
       });
 
@@ -707,7 +615,7 @@ export default function MafiaGame() {
 
   const handleToggleSkipDiscussion = async () => {
     if (!gameState || !user || gameState.phase !== 'day-discussion') return;
-    if (!isCurrentUserAlive() || myRole === 'narrator') return;
+    if (!isCurrentUserAlive()) return;
 
     const roomRef = doc(db, 'rooms', roomId);
     const currentSkipVotes = gameState.skipVotes || [];
@@ -722,7 +630,7 @@ export default function MafiaGame() {
     });
 
     if (isHost) {
-      const livingUids = getLivingNonNarrators().map((player) => player.uid);
+      const livingUids = getLivingPlayers().map((player) => player.uid);
       if (livingUids.length > 0 && livingUids.every((uid) => updatedSkipVotes.includes(uid))) {
         await startDayVotePhase(roomRef);
       }
@@ -760,7 +668,7 @@ export default function MafiaGame() {
         const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
         return detective ? [detective] : [];
       case 'day-vote':
-        return gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator');
+        return gameState.players.filter(p => p.isAlive === true);
       default:
         return [];
     }
@@ -771,13 +679,13 @@ export default function MafiaGame() {
 
     switch (gameState.phase) {
       case 'night-mafia':
-        return gameState.players.filter(p => p.role !== 'mafia' && p.isAlive && p.role !== 'narrator');
+        return gameState.players.filter(p => p.role !== 'mafia' && p.isAlive);
       case 'night-doctor':
-        return gameState.players.filter(p => p.isAlive && p.role !== 'narrator');
+        return gameState.players.filter(p => p.isAlive);
       case 'night-detective':
-        return gameState.players.filter(p => p.isAlive && p.uid !== user?.id && p.role !== 'narrator');
+        return gameState.players.filter(p => p.isAlive && p.uid !== user?.id);
       case 'day-vote':
-        return gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator');
+        return gameState.players.filter(p => p.isAlive === true);
       default:
         return [];
     }
@@ -785,7 +693,6 @@ export default function MafiaGame() {
 
   const isSpectator = () => {
     if (!myRole) return true;
-    if (myRole === 'narrator') return true;
     const me = gameState?.players?.find(p => p.uid === user?.id);
     return me && !me.isAlive;
   };
@@ -800,8 +707,6 @@ export default function MafiaGame() {
         return '⚕️';
       case 'detective':
         return '🔍';
-      case 'narrator':
-        return '🎙️';
       default:
         return '❓';
     }
@@ -817,8 +722,6 @@ export default function MafiaGame() {
         return 'from-green-900 to-green-800';
       case 'detective':
         return 'from-yellow-900 to-yellow-800';
-      case 'narrator':
-        return 'from-purple-900 to-purple-800';
       default:
         return 'from-slate-900 to-slate-800';
     }
@@ -839,241 +742,26 @@ export default function MafiaGame() {
     );
   }
 
-  // Phase 1: Host Setup (no active game)
-  if (!gameState && isHost) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="w-full max-w-md mx-auto px-6 py-8">
-          <button
-            onClick={() => navigate(`/room/${roomId}`)}
-            className="mb-6 flex items-center justify-center w-11 h-11 bg-slate-800 border border-slate-700 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-          >
-            <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-            </svg>
-          </button>
-
-          <h1 className="text-white text-3xl font-black uppercase tracking-tight mb-2">Mafia</h1>
-          <p className="text-slate-400 mb-8">Configure game rules</p>
-
-          <div className="space-y-6">
-            {/* Narrator */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-white font-semibold">Narrator</label>
-                  <p className="text-slate-400 text-sm">One player guides the game</p>
-                </div>
-                <button
-                  onClick={() => setRules({ ...rules, narrator: !rules.narrator })}
-                  className={`w-12 h-7 rounded-full transition-colors ${
-                    rules.narrator ? 'bg-violet-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    rules.narrator ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-            </div>
-
-            {/* Number of mafias */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <label className="text-white font-semibold block mb-2">Number of Mafias</label>
-              <input
-                type="number"
-                min="1"
-                max={Math.floor((room.players.length || 4) / 2)}
-                value={rules.mafiaCount}
-                onChange={(e) => setRules({ ...rules, mafiaCount: parseInt(e.target.value) || 1 })}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-              />
-            </div>
-
-            {/* Doctor */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-white font-semibold">Doctor</label>
-                  <p className="text-slate-400 text-sm">Can save one player each night</p>
-                </div>
-                <button
-                  onClick={() => setRules({ ...rules, doctor: !rules.doctor })}
-                  className={`w-12 h-7 rounded-full transition-colors ${
-                    rules.doctor ? 'bg-violet-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    rules.doctor ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-            </div>
-
-            {/* Detective */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <div className="flex items-center justify-between">
-                <div>
-                  <label className="text-white font-semibold">Detective</label>
-                  <p className="text-slate-400 text-sm">Can investigate one player each night</p>
-                </div>
-                <button
-                  onClick={() => setRules({ ...rules, detective: !rules.detective })}
-                  className={`w-12 h-7 rounded-full transition-colors ${
-                    rules.detective ? 'bg-violet-600' : 'bg-slate-600'
-                  }`}
-                >
-                  <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
-                    rules.detective ? 'translate-x-6' : 'translate-x-1'
-                  }`} />
-                </button>
-              </div>
-            </div>
-
-            {/* Discussion time */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <label className="text-white font-semibold block mb-2">Discussion Time</label>
-              <select
-                value={rules.discussionTime}
-                onChange={(e) => setRules({ ...rules, discussionTime: parseInt(e.target.value) })}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-              >
-                <option value={1}>1 minute</option>
-                <option value={2}>2 minutes</option>
-                <option value={3}>3 minutes</option>
-                <option value={5}>5 minutes</option>
-              </select>
-            </div>
-
-            {/* Voting time */}
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <label className="text-white font-semibold block mb-2">Voting Time</label>
-              <select
-                value={rules.votingTime}
-                onChange={(e) => setRules({ ...rules, votingTime: parseFloat(e.target.value) })}
-                className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-              >
-                <option value={0.5}>30 seconds</option>
-                <option value={1}>1 minute</option>
-                <option value={2}>2 minutes</option>
-              </select>
-            </div>
-
-            <button
-              onClick={handleStartLobby}
-              className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
-            >
-              Start Lobby
-            </button>
-          </div>
-        </div>
-      </div>
-    );
+  // Phase 1: No active game - redirect to home
+  if (!gameState) {
+    if (isHost) {
+      navigate(`/room/${roomId}`);
+      return null;
+    }
+    navigate(`/room/${roomId}`);
+    return null;
   }
 
-  // Phase 2: Lobby
+  // Phase 2: Lobby - should be handled on HomeScreen, redirect if accessed directly
   if (gameState?.phase === 'lobby') {
-    const hasJoined = gameState.players.some(p => p.uid === user?.id);
-    const canStart = gameState.players.length >= 4;
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="w-full max-w-md mx-auto px-6 py-8">
-          {isHost && (
-            <button
-              onClick={handleCancelGame}
-              className="mb-6 flex items-center justify-center w-11 h-11 bg-slate-800 border border-slate-700 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-            >
-              <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
-              </svg>
-            </button>
-          )}
-
-          <h1 className="text-white text-3xl font-black uppercase tracking-tight mb-2">Mafia Lobby</h1>
-          <p className="text-slate-400 mb-8">
-            {hasJoined ? 'Waiting for players...' : 'Join the game!'}
-          </p>
-
-          {!hasJoined && (
-            <button
-              onClick={handleJoinLobby}
-              className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors mb-6"
-            >
-              Join Lobby
-            </button>
-          )}
-
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6">
-            <h2 className="text-white font-semibold mb-4">
-              Players ({gameState.players.length})
-            </h2>
-            <div className="space-y-2">
-              {gameState.players.map((player) => (
-                <div
-                  key={player.uid}
-                  className="flex items-center gap-3 bg-slate-700/50 rounded-lg p-3"
-                >
-                  <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {getInitials(player.displayName)}
-                  </div>
-                  <span className="text-white">{player.displayName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          {isHost && selectingNarrator && (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-6">
-              <h2 className="text-white font-semibold mb-4">Select Narrator</h2>
-              <div className="space-y-2 mb-4">
-                {gameState.players.map((player) => (
-                  <button
-                    key={player.uid}
-                    onClick={() => setSelectedNarrator(player.uid)}
-                    className={`w-full flex items-center gap-3 rounded-lg p-3 transition-colors ${
-                      selectedNarrator === player.uid
-                        ? 'bg-violet-600'
-                        : 'bg-slate-700/50 hover:bg-slate-700'
-                    }`}
-                  >
-                    <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                      {getInitials(player.displayName)}
-                    </div>
-                    <span className="text-white">{player.displayName}</span>
-                  </button>
-                ))}
-              </div>
-              <button
-                onClick={handleConfirmNarrator}
-                disabled={!selectedNarrator}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-slate-600 disabled:to-slate-600 text-white font-bold py-3 rounded-xl transition-colors"
-              >
-                Confirm Narrator
-              </button>
-            </div>
-          )}
-
-          {isHost && !selectingNarrator && (
-            <div className="space-y-3">
-              <button
-                onClick={handleEditRules}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-3 rounded-xl transition-colors"
-              >
-                Edit Rules
-              </button>
-              <button
-                onClick={handleStartGame}
-                disabled={!canStart}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:from-slate-600 disabled:to-slate-600 text-white font-bold py-4 rounded-xl transition-colors"
-              >
-                {canStart ? 'Start Game' : 'Need 4+ players'}
-              </button>
-            </div>
-          )}
-        </div>
-      </div>
-    );
+    // Redirect non-hosts back to HomeScreen
+    if (!isHost) {
+      navigate(`/room/${roomId}`);
+      return null;
+    }
+    // Hosts should also return to HomeScreen to manage lobby there
+    navigate(`/room/${roomId}`);
+    return null;
   }
 
   // Phase 3: Role reveal
@@ -1104,7 +792,6 @@ export default function MafiaGame() {
                 {myRole === 'civilian' && 'Find and eliminate the mafia'}
                 {myRole === 'doctor' && 'Save players from the mafia each night'}
                 {myRole === 'detective' && 'Investigate players to find the mafia'}
-                {myRole === 'narrator' && 'Guide the game and observe all actions'}
               </p>
               <button
                 onClick={handleHideRole}
@@ -1148,18 +835,10 @@ export default function MafiaGame() {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
-            {myRole === 'narrator' && (
-              <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
-                <div className="text-4xl mb-2">🎙️</div>
-                <h2 className="text-white font-bold text-xl">NARRATOR</h2>
-              </div>
-            )}
-            {myRole !== 'narrator' && (
-              <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-                <div className="text-4xl mb-2">💀</div>
-                <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
-              </div>
-            )}
+            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
+              <div className="text-4xl mb-2">💀</div>
+              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
+            </div>
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-4">
               <div className="text-center mb-4">
@@ -1357,18 +1036,10 @@ export default function MafiaGame() {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
-            {myRole === 'narrator' && (
-              <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
-                <div className="text-4xl mb-2">🎙️</div>
-                <h2 className="text-white font-bold text-xl">NARRATOR</h2>
-              </div>
-            )}
-            {myRole !== 'narrator' && (
-              <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-                <div className="text-4xl mb-2">💀</div>
-                <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
-              </div>
-            )}
+            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
+              <div className="text-4xl mb-2">💀</div>
+              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
+            </div>
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
               <div className="text-center mb-4">
