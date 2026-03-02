@@ -2,14 +2,24 @@ import React, { useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRoom } from '../hooks/useRoom';
+import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
+import { db } from '../firebase';
 
 export default function GamesScreen() {
   const navigate = useNavigate();
   const { roomId } = useParams();
   const { user } = useAuth();
-  const { isHost } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
+  const { isHost, room } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHostOnly, setShowHostOnly] = useState(false);
+  const [showMafiaSetup, setShowMafiaSetup] = useState(false);
+  const [rules, setRules] = useState({
+    mafiaCount: 1,
+    doctor: true,
+    detective: true,
+    discussionTime: 3,
+    votingTime: 1
+  });
 
   const handleGameClick = () => {
     setShowComingSoon(true);
@@ -22,7 +32,52 @@ export default function GamesScreen() {
       setTimeout(() => setShowHostOnly(false), 3000);
       return;
     }
-    navigate(`/room/${roomId}/games/mafia`);
+    // Open rules modal instead of navigating
+    setShowMafiaSetup(true);
+  };
+
+  const handleStartLobby = async () => {
+    if (!isHost || !roomId || !user) return;
+
+    const roomRef = doc(db, 'rooms', roomId);
+
+    // Get all room players and format them for the game
+    const gamePlayers = room.players.map(p => ({
+      uid: p.id,
+      displayName: p.displayNameForGame || p.displayName,
+      avatarColor: p.avatarColor,
+      isAlive: true,
+      role: null
+    }));
+
+    await updateDoc(roomRef, {
+      activeActivity: {
+        type: 'mafia',
+        phase: 'lobby',
+        rules,
+        players: gamePlayers,
+        lobbyPlayers: [user.id],
+        pendingVictim: null,
+        doctorSave: null,
+        detectiveResult: null,
+        nightVotes: {},
+        dayVotes: {},
+        skipVotes: [],
+        confirmedVotes: [],
+        lastEliminated: null,
+        lastSaved: null,
+        winner: null,
+        phaseStartedAt: null,
+        phaseDurationMs: null,
+        roundNumber: 1,
+        createdAt: serverTimestamp()
+      },
+      lastActivity: serverTimestamp()
+    });
+
+    // Close modal and navigate back to HomeScreen
+    setShowMafiaSetup(false);
+    navigate(`/room/${roomId}`);
   };
 
   return (
@@ -145,6 +200,114 @@ export default function GamesScreen() {
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
           <div className="bg-red-800 border border-red-700 rounded-xl px-6 py-3 shadow-2xl">
             <p className="text-white font-semibold">Only the host can start a game 🔐</p>
+          </div>
+        </div>
+      )}
+
+      {/* Mafia Setup Modal */}
+      {showMafiaSetup && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-white text-2xl font-bold">🔪 Mafia Setup</h2>
+              <button
+                onClick={() => setShowMafiaSetup(false)}
+                className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Number of mafias */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <label className="text-white font-semibold block mb-2">Number of Mafias</label>
+                <input
+                  type="number"
+                  min="1"
+                  max={Math.floor((room?.players?.length || 4) / 2)}
+                  value={rules.mafiaCount}
+                  onChange={(e) => setRules({ ...rules, mafiaCount: parseInt(e.target.value) || 1 })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                />
+              </div>
+
+              {/* Doctor */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-white font-semibold">Doctor ⚕️</label>
+                    <p className="text-slate-400 text-sm">Can save one player each night</p>
+                  </div>
+                  <button
+                    onClick={() => setRules({ ...rules, doctor: !rules.doctor })}
+                    className={`w-12 h-7 rounded-full transition-colors ${
+                      rules.doctor ? 'bg-violet-600' : 'bg-slate-600'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                      rules.doctor ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Detective */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-white font-semibold">Detective 🔍</label>
+                    <p className="text-slate-400 text-sm">Can investigate one player each night</p>
+                  </div>
+                  <button
+                    onClick={() => setRules({ ...rules, detective: !rules.detective })}
+                    className={`w-12 h-7 rounded-full transition-colors ${
+                      rules.detective ? 'bg-violet-600' : 'bg-slate-600'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                      rules.detective ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Discussion time */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <label className="text-white font-semibold block mb-2">Discussion Time</label>
+                <select
+                  value={rules.discussionTime}
+                  onChange={(e) => setRules({ ...rules, discussionTime: parseInt(e.target.value) })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                >
+                  <option value={1}>1 minute</option>
+                  <option value={2}>2 minutes</option>
+                  <option value={3}>3 minutes</option>
+                  <option value={5}>5 minutes</option>
+                </select>
+              </div>
+
+              {/* Voting time */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <label className="text-white font-semibold block mb-2">Voting Time</label>
+                <select
+                  value={rules.votingTime}
+                  onChange={(e) => setRules({ ...rules, votingTime: parseFloat(e.target.value) })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                >
+                  <option value={0.5}>30 seconds</option>
+                  <option value={1}>1 minute</option>
+                  <option value={2}>2 minutes</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleStartLobby}
+                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+              >
+                Start Lobby
+              </button>
+            </div>
           </div>
         </div>
       )}

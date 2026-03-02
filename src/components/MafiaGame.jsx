@@ -226,40 +226,6 @@ export default function MafiaGame() {
     }
   };
 
-  const handleStartLobby = async () => {
-    if (!isHost) return;
-
-    const roomRef = doc(db, 'rooms', roomId);
-
-    await updateDoc(roomRef, {
-      activeActivity: {
-        type: 'mafia',
-        phase: 'lobby',
-        rules,
-        players: [],
-        lobbyPlayers: [user?.id],
-        pendingVictim: null,
-        doctorSave: null,
-        detectiveResult: null,
-        nightVotes: {},
-        dayVotes: {},
-        skipVotes: [],
-        confirmedVotes: [],
-        lastEliminated: null,
-        lastSaved: null,
-        winner: null,
-        phaseStartedAt: null,
-        phaseDurationMs: null,
-        roundNumber: 1,
-        createdAt: serverTimestamp()
-      },
-      lastActivity: serverTimestamp()
-    });
-
-    // Redirect host back to HomeScreen to manage lobby there
-    navigate(`/room/${roomId}`);
-  };
-
   const handleRevealRole = () => {
     setShowRole(true);
     playDetective();
