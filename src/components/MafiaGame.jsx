@@ -193,6 +193,23 @@ export default function MafiaGame() {
 
     switch (gameState.phase) {
       case 'night-mafia':
+        const mafiaVotes = gameState.nightVotes || {};
+        const mafiaCounts = {};
+        Object.values(mafiaVotes).forEach(targetUid => {
+          mafiaCounts[targetUid] = (mafiaCounts[targetUid] || 0) + 1;
+        });
+        let maxMafiaVotes = 0;
+        let mafiaVictims = [];
+        Object.entries(mafiaCounts).forEach(([uid, count]) => {
+          if (count > maxMafiaVotes) {
+            maxMafiaVotes = count;
+            mafiaVictims = [uid];
+          } else if (count === maxMafiaVotes) {
+            mafiaVictims.push(uid);
+          }
+        });
+        const mafiaVictim = mafiaVictims.length > 0 ? mafiaVictims[Math.floor(Math.random() * mafiaVictims.length)] : null;
+        console.log('Timer expired for night-mafia, using fallback result:', { victim: mafiaVictim, voteCount: Object.keys(mafiaVotes).length });
         await advanceFromMafiaPhase(roomRef);
         break;
       case 'night-eyes-closed-2':
@@ -205,6 +222,9 @@ export default function MafiaGame() {
         }
         break;
       case 'night-doctor':
+        const doctorPlayer = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
+        const doctorVote = doctorPlayer ? gameState.nightVotes?.[doctorPlayer.uid] : null;
+        console.log('Timer expired for night-doctor, using fallback result:', { save: doctorVote, doctorVoted: !!doctorVote });
         await advanceFromDoctorPhase(roomRef);
         break;
       case 'night-eyes-closed-3':
@@ -215,6 +235,9 @@ export default function MafiaGame() {
         }
         break;
       case 'night-detective':
+        const detectivePlayer = gameState.players.find(p => p.role === 'detective' && p.isAlive);
+        const detectiveVote = detectivePlayer ? gameState.nightVotes?.[detectivePlayer.uid] : null;
+        console.log('Timer expired for night-detective, using fallback result:', { investigation: detectiveVote, detectiveVoted: !!detectiveVote });
         await advanceFromDetectivePhase(roomRef);
         break;
       case 'night-detective-result':
@@ -224,6 +247,23 @@ export default function MafiaGame() {
         await startDayVotePhase(roomRef);
         break;
       case 'day-vote':
+        const dayVotes = gameState.dayVotes || {};
+        const dayCounts = {};
+        Object.values(dayVotes).forEach(targetUid => {
+          dayCounts[targetUid] = (dayCounts[targetUid] || 0) + 1;
+        });
+        let maxDayVotes = 0;
+        let dayCandidates = [];
+        Object.entries(dayCounts).forEach(([uid, count]) => {
+          if (count > maxDayVotes) {
+            maxDayVotes = count;
+            dayCandidates = [uid];
+          } else if (count === maxDayVotes) {
+            dayCandidates.push(uid);
+          }
+        });
+        const dayEliminated = dayCandidates.length > 0 ? dayCandidates[Math.floor(Math.random() * dayCandidates.length)] : null;
+        console.log('Timer expired for day-vote, using fallback result:', { eliminated: dayEliminated, voteCount: Object.keys(dayVotes).length });
         await processVoteAndCheckWin(roomRef);
         break;
     }
@@ -310,32 +350,48 @@ export default function MafiaGame() {
       // All confirmed, shorten timer to 5 seconds for synchronized clients
       switch (gameState.phase) {
         case 'night-mafia':
-          console.log('Jumping timer for phase night-mafia');
-          await updateDoc(roomRef, {
-            'activeActivity.phaseEndsAt': Date.now() + 5000,
-            lastActivity: serverTimestamp()
-          });
+          try {
+            console.log('Jumping timer for phase night-mafia');
+            await updateDoc(roomRef, {
+              'activeActivity.phaseEndsAt': Date.now() + 5000,
+              lastActivity: serverTimestamp()
+            });
+          } catch (error) {
+            console.error('Error jumping timer for night-mafia:', error);
+          }
           break;
         case 'night-doctor':
-          console.log('Jumping timer for phase night-doctor');
-          await updateDoc(roomRef, {
-            'activeActivity.phaseEndsAt': Date.now() + 5000,
-            lastActivity: serverTimestamp()
-          });
+          try {
+            console.log('Jumping timer for phase night-doctor');
+            await updateDoc(roomRef, {
+              'activeActivity.phaseEndsAt': Date.now() + 5000,
+              lastActivity: serverTimestamp()
+            });
+          } catch (error) {
+            console.error('Error jumping timer for night-doctor:', error);
+          }
           break;
         case 'night-detective':
-          console.log('Jumping timer for phase night-detective');
-          await updateDoc(roomRef, {
-            'activeActivity.phaseEndsAt': Date.now() + 5000,
-            lastActivity: serverTimestamp()
-          });
+          try {
+            console.log('Jumping timer for phase night-detective');
+            await updateDoc(roomRef, {
+              'activeActivity.phaseEndsAt': Date.now() + 5000,
+              lastActivity: serverTimestamp()
+            });
+          } catch (error) {
+            console.error('Error jumping timer for night-detective:', error);
+          }
           break;
         case 'day-vote':
-          console.log('Jumping timer for phase day-vote');
-          await updateDoc(roomRef, {
-            'activeActivity.phaseEndsAt': Date.now() + 5000,
-            lastActivity: serverTimestamp()
-          });
+          try {
+            console.log('Jumping timer for phase day-vote');
+            await updateDoc(roomRef, {
+              'activeActivity.phaseEndsAt': Date.now() + 5000,
+              lastActivity: serverTimestamp()
+            });
+          } catch (error) {
+            console.error('Error jumping timer for day-vote:', error);
+          }
           break;
       }
     }

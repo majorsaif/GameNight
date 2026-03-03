@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { doc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
@@ -18,7 +18,16 @@ export default function MafiaLobbyCard({
   const allPlayers = lobbyState?.players || [];
   const gameRules = lobbyState?.rules || rules;
   const [showRulesEdit, setShowRulesEdit] = useState(showRulesModal);
-  const [editRules, setEditRules] = useState(gameRules);
+  const [editRules, setEditRules] = useState({ ...gameRules, mafiaCount: String(gameRules.mafiaCount || '1') });
+  const [mafiaCountError, setMafiaCountError] = useState('');
+
+  // Re-initialize editRules when modal is opened or gameRules change
+  useEffect(() => {
+    if (showRulesEdit) {
+      setEditRules({ ...gameRules, mafiaCount: String(gameRules.mafiaCount || '1') });
+      setMafiaCountError('');
+    }
+  }, [showRulesEdit, gameRules]);
 
   const handleJoinLobby = async () => {
     const roomRef = doc(db, 'rooms', roomId);
@@ -52,6 +61,23 @@ export default function MafiaLobbyCard({
       return;
     }
 
+    // Parse mafiaCount from editRules
+    const mafiaCount = typeof editRules.mafiaCount === 'string' 
+      ? parseInt(editRules.mafiaCount, 10) 
+      : editRules.mafiaCount;
+
+    if (isNaN(mafiaCount) || mafiaCount < 1) {
+      alert('Invalid number of mafias');
+      return;
+    }
+
+    // Check 25% limit based on lobby players
+    const maxAllowed = Math.max(1, Math.floor(lobbyPlayers.length * 0.25));
+    if (mafiaCount > maxAllowed) {
+      alert(`Too many mafias! With ${lobbyPlayers.length} players, you can have a maximum of ${maxAllowed} mafia.`);
+      return;
+    }
+
     // Shuffle players
     const shuffled = [...playersToAssign].sort(() => Math.random() - 0.5);
     
@@ -59,11 +85,11 @@ export default function MafiaLobbyCard({
     const withRoles = shuffled.map((player, index) => {
       let role = 'civilian';
       
-      if (index < editRules.mafiaCount) {
+      if (index < mafiaCount) {
         role = 'mafia';
-      } else if (editRules.doctor && index === editRules.mafiaCount) {
+      } else if (editRules.doctor && index === mafiaCount) {
         role = 'doctor';
-      } else if (editRules.detective && index === editRules.mafiaCount + (editRules.doctor ? 1 : 0)) {
+      } else if (editRules.detective && index === mafiaCount + (editRules.doctor ? 1 : 0)) {
         role = 'detective';
       }
       
@@ -71,10 +97,15 @@ export default function MafiaLobbyCard({
     });
 
     // Start game at roles phase
+    const finalRules = {
+      ...editRules,
+      mafiaCount: mafiaCount
+    };
+
     await updateDoc(roomRef, {
       'activeActivity.phase': 'roles',
       'activeActivity.players': withRoles,
-      'activeActivity.rules': editRules,
+      'activeActivity.rules': finalRules,
       'activeActivity.phaseStartedAt': serverTimestamp(),
       'activeActivity.phaseDurationMs': 30000,
       lastActivity: serverTimestamp()
@@ -85,9 +116,38 @@ export default function MafiaLobbyCard({
 
   const handleSaveRules = async () => {
     if (!isHost) return;
+
+    setMafiaCountError('');
+
+    // Validate mafia count
+    const mafiaCountValue = editRules.mafiaCount.toString().trim();
+    if (!mafiaCountValue) {
+      setMafiaCountError('Number of mafias is required');
+      return;
+    }
+
+    const mafiaCount = parseInt(mafiaCountValue, 10);
+    if (isNaN(mafiaCount) || mafiaCount < 1) {
+      setMafiaCountError('Number of mafias must be at least 1');
+      return;
+    }
+
+    // Check 25% limit based on current lobby players
+    const totalPlayers = lobbyPlayers.length;
+    const maxAllowed = Math.max(1, Math.floor(totalPlayers * 0.25));
+    if (mafiaCount > maxAllowed) {
+      setMafiaCountError(`Too many mafias! With ${totalPlayers} players, you can have a maximum of ${maxAllowed} mafia.`);
+      return;
+    }
+
     const roomRef = doc(db, 'rooms', roomId);
+    const finalRules = {
+      ...editRules,
+      mafiaCount: mafiaCount
+    };
+    
     await updateDoc(roomRef, {
-      'activeActivity.rules': editRules,
+      'activeActivity.rules': finalRules,
       lastActivity: serverTimestamp()
     });
     setShowRulesEdit(false);
@@ -171,13 +231,19 @@ export default function MafiaLobbyCard({
                 <div>
                   <label className="text-white font-semibold block mb-2 text-sm">Number of Mafias</label>
                   <input
-                    type="number"
-                    min="1"
-                    max="3"
+                    type="text"
+                    inputMode="numeric"
                     value={editRules.mafiaCount}
-                    onChange={(e) => setEditRules({ ...editRules, mafiaCount: parseInt(e.target.value) || 1 })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                    onChange={(e) => {
+                      setEditRules({ ...editRules, mafiaCount: e.target.value });
+                      setMafiaCountError('');
+                    }}
+                    placeholder="Enter number"
+                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                   />
+                  {mafiaCountError && (
+                    <p className="text-red-400 text-sm mt-2">{mafiaCountError}</p>
+                  )}
                 </div>
 
                 <div>

@@ -13,8 +13,9 @@ export default function GamesScreen() {
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHostOnly, setShowHostOnly] = useState(false);
   const [showMafiaSetup, setShowMafiaSetup] = useState(false);
+  const [mafiaCountError, setMafiaCountError] = useState('');
   const [rules, setRules] = useState({
-    mafiaCount: 1,
+    mafiaCount: '1',
     doctor: true,
     detective: true,
     discussionTime: 3,
@@ -39,6 +40,29 @@ export default function GamesScreen() {
   const handleStartLobby = async () => {
     if (!isHost || !roomId || !user) return;
 
+    setMafiaCountError('');
+
+    // Validate mafia count
+    const mafiaCountValue = rules.mafiaCount.trim();
+    if (!mafiaCountValue) {
+      setMafiaCountError('Number of mafias is required');
+      return;
+    }
+
+    const mafiaCount = parseInt(mafiaCountValue, 10);
+    if (isNaN(mafiaCount) || mafiaCount < 1) {
+      setMafiaCountError('Number of mafias must be at least 1');
+      return;
+    }
+
+    // Check 25% limit based on current room players
+    const totalPlayers = room?.players?.length || 0;
+    const maxAllowed = Math.max(1, Math.floor(totalPlayers * 0.25));
+    if (mafiaCount > maxAllowed) {
+      setMafiaCountError(`Too many mafias! With ${totalPlayers} players, you can have a maximum of ${maxAllowed} mafia.`);
+      return;
+    }
+
     const roomRef = doc(db, 'rooms', roomId);
 
     // Get all room players and format them for the game
@@ -50,11 +74,16 @@ export default function GamesScreen() {
       role: null
     }));
 
+    const finalRules = {
+      ...rules,
+      mafiaCount: mafiaCount
+    };
+
     await updateDoc(roomRef, {
       activeActivity: {
         type: 'mafia',
         phase: 'lobby',
-        rules,
+        rules: finalRules,
         players: gamePlayers,
         lobbyPlayers: [user.id],
         pendingVictim: null,
@@ -223,13 +252,19 @@ export default function GamesScreen() {
               <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
                 <label className="text-white font-semibold block mb-2">Number of Mafias</label>
                 <input
-                  type="number"
-                  min="1"
-                  max={Math.floor((room?.players?.length || 4) / 2)}
+                  type="text"
+                  inputMode="numeric"
                   value={rules.mafiaCount}
-                  onChange={(e) => setRules({ ...rules, mafiaCount: parseInt(e.target.value) || 1 })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                  onChange={(e) => {
+                    setRules({ ...rules, mafiaCount: e.target.value });
+                    setMafiaCountError('');
+                  }}
+                  placeholder="Enter number"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                 />
+                {mafiaCountError && (
+                  <p className="text-red-400 text-sm mt-2">{mafiaCountError}</p>
+                )}
               </div>
 
               {/* Doctor */}
