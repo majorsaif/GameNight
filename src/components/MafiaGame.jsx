@@ -82,17 +82,15 @@ export default function MafiaGame() {
 
     const roomRef = doc(db, 'rooms', roomId);
     const unsubscribe = onSnapshot(roomRef, (snapshot) => {
-      // Mark that we've received at least one snapshot
-      setGameStateLoaded(true);
-      
       if (snapshot.exists()) {
         const data = snapshot.data();
-        console.log('[MafiaGame] Firestore update received:', { 
-          hasActiveActivity: !!data.activeActivity, 
+        console.log('[MafiaGame] Firestore update received:', {
           phase: data.activeActivity?.phase,
-          playersCount: data.activeActivity?.players?.length || 0
+          phaseEndsAt: data.activeActivity?.phaseEndsAt,
+          confirmedVotes: data.activeActivity?.confirmedVotes,
+          players: data.activeActivity?.players,
         });
-        
+
         if (data.activeActivity && data.activeActivity.type === 'mafia') {
           setGameState(data.activeActivity);
           
@@ -119,13 +117,11 @@ export default function MafiaGame() {
           console.log('[MafiaGame] No active Mafia game found');
           setGameState(null);
         }
-      } else {
-        console.log('[MafiaGame] Room document does not exist');
       }
     });
 
     return () => unsubscribe();
-  }, [roomId, isHost, user?.id, playShh, playMurder, playAngelic, playWaking]);
+  }, [roomId]);
 
   // Set my role when game state changes
   useEffect(() => {
@@ -174,6 +170,12 @@ export default function MafiaGame() {
     }
   }, [isHost, gameState?.phase, gameState?.confirmedVotes, gameState?.players, roomId]);
 
+  // Store the latest gameState in a ref to prevent stale closures
+  const gameStateRef = useRef(gameState);
+  useEffect(() => {
+    gameStateRef.current = gameState;
+  }, [gameState]);
+
   // Handle phase timer countdown using Firestore phaseEndsAt with fallback
   useEffect(() => {
     if (!gameState || (!gameState.phaseEndsAt && (!gameState.phaseStartedAt || !gameState.phaseDurationMs))) {
@@ -183,15 +185,16 @@ export default function MafiaGame() {
 
     const updateTimer = () => {
       const now = Date.now();
-      const phaseEndsAt = gameState.phaseEndsAt?.toMillis ? gameState.phaseEndsAt.toMillis() : gameState.phaseEndsAt;
-      const phaseStarted = gameState.phaseStartedAt?.toMillis ? gameState.phaseStartedAt.toMillis() : gameState.phaseStartedAt;
+      const currentGameState = gameStateRef.current;
+      const phaseEndsAt = currentGameState.phaseEndsAt?.toMillis ? currentGameState.phaseEndsAt.toMillis() : currentGameState.phaseEndsAt;
+      const phaseStarted = currentGameState.phaseStartedAt?.toMillis ? currentGameState.phaseStartedAt.toMillis() : currentGameState.phaseStartedAt;
 
       let remaining = 0;
       if (phaseEndsAt) {
         remaining = Math.max(0, phaseEndsAt - now);
-      } else if (phaseStarted && gameState.phaseDurationMs) {
+      } else if (phaseStarted && currentGameState.phaseDurationMs) {
         const elapsed = now - phaseStarted;
-        remaining = Math.max(0, gameState.phaseDurationMs - elapsed);
+        remaining = Math.max(0, currentGameState.phaseDurationMs - elapsed);
       }
 
       const remainingSeconds = Math.max(0, Math.ceil(remaining / 1000));
@@ -200,20 +203,21 @@ export default function MafiaGame() {
       // Only host auto-advances phases — guard prevents multiple calls during
       // the gap between Firestore write and snapshot propagation (FIX 2)
       if (isHost && remainingSeconds <= 0 && !phaseTimeoutTriggeredRef.current) {
+        console.log('[MafiaGame] Triggering handlePhaseTimeout:', { remainingSeconds });
         phaseTimeoutTriggeredRef.current = true;
         handlePhaseTimeout();
       }
     };
 
     updateTimer();
-    phaseTimerRef.current = setInterval(updateTimer, 100);
+    phaseTimerRef.current = setInterval(updateTimer, 1000);
 
     return () => {
       if (phaseTimerRef.current) {
         clearInterval(phaseTimerRef.current);
       }
     };
-  }, [gameState?.phaseEndsAt, gameState?.phaseStartedAt, gameState?.phaseDurationMs, isHost]);
+  }, [isHost]);
 
   useEffect(() => {
     const phaseEndsAt = gameState?.phaseEndsAt?.toMillis ? gameState.phaseEndsAt.toMillis() : gameState?.phaseEndsAt;
@@ -239,81 +243,31 @@ export default function MafiaGame() {
 
     const roomRef = doc(db, 'rooms', roomId);
 
-    switch (gameState.phase) {
-      case 'night-mafia':
-        const mafiaVotes = gameState.nightVotes || {};
-        const mafiaCounts = {};
-        Object.values(mafiaVotes).forEach(targetUid => {
-          mafiaCounts[targetUid] = (mafiaCounts[targetUid] || 0) + 1;
-        });
-        let maxMafiaVotes = 0;
-        let mafiaVictims = [];
-        Object.entries(mafiaCounts).forEach(([uid, count]) => {
-          if (count > maxMafiaVotes) {
-            maxMafiaVotes = count;
-            mafiaVictims = [uid];
-          } else if (count === maxMafiaVotes) {
-            mafiaVictims.push(uid);
-          }
-        });
-        const mafiaVictim = mafiaVictims.length > 0 ? mafiaVictims[Math.floor(Math.random() * mafiaVictims.length)] : null;
-        console.log('Timer expired for night-mafia, using fallback result:', { victim: mafiaVictim, voteCount: Object.keys(mafiaVotes).length });
-        await advanceFromMafiaPhase(roomRef);
-        break;
-      case 'night-eyes-closed-2':
-        if (activeRules.doctor) {
-          await startDoctorPhase(roomRef);
-        } else if (activeRules.detective) {
-          await startDetectivePhase(roomRef);
-        } else {
-          await startDayPhase(roomRef);
-        }
-        break;
-      case 'night-doctor':
-        const doctorPlayer = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-        const doctorVote = doctorPlayer ? gameState.nightVotes?.[doctorPlayer.uid] : null;
-        console.log('Timer expired for night-doctor, using fallback result:', { save: doctorVote, doctorVoted: !!doctorVote });
-        await advanceFromDoctorPhase(roomRef);
-        break;
-      case 'night-eyes-closed-3':
-        if (activeRules.detective) {
-          await startDetectivePhase(roomRef);
-        } else {
-          await startDayPhase(roomRef);
-        }
-        break;
-      case 'night-detective':
-        const detectivePlayer = gameState.players.find(p => p.role === 'detective' && p.isAlive);
-        const detectiveVote = detectivePlayer ? gameState.nightVotes?.[detectivePlayer.uid] : null;
-        console.log('Timer expired for night-detective, using fallback result:', { investigation: detectiveVote, detectiveVoted: !!detectiveVote });
-        await advanceFromDetectivePhase(roomRef);
-        break;
-      case 'night-detective-result':
-        await startDayPhase(roomRef);
-        break;
-      case 'day-discussion':
-        await startDayVotePhase(roomRef);
-        break;
-      case 'day-vote':
-        const dayVotes = gameState.dayVotes || {};
-        const dayCounts = {};
-        Object.values(dayVotes).forEach(targetUid => {
-          dayCounts[targetUid] = (dayCounts[targetUid] || 0) + 1;
-        });
-        let maxDayVotes = 0;
-        let dayCandidates = [];
-        Object.entries(dayCounts).forEach(([uid, count]) => {
-          if (count > maxDayVotes) {
-            maxDayVotes = count;
-            dayCandidates = [uid];
-          } else if (count === maxDayVotes) {
-            dayCandidates.push(uid);
-          }
-        });
-        const dayEliminated = dayCandidates.length > 0 ? dayCandidates[Math.floor(Math.random() * dayCandidates.length)] : null;
-        console.log('Timer expired for day-vote, using fallback result:', { eliminated: dayEliminated, voteCount: Object.keys(dayVotes).length });
-        await processVoteAndCheckWin(roomRef);
-        break;
+    try {
+      switch (gameState.phase) {
+        case 'night-mafia':
+          console.log('HOST writing phase transition to: night-eyes-closed-2');
+          await advanceFromMafiaPhase(roomRef);
+          break;
+        case 'night-doctor':
+          console.log('HOST writing phase transition to: night-eyes-closed-3');
+          await advanceFromDoctorPhase(roomRef);
+          break;
+        case 'night-detective':
+          console.log('HOST writing phase transition to: night-detective-result');
+          await advanceFromDetectivePhase(roomRef);
+          break;
+        case 'day-discussion':
+          console.log('HOST writing phase transition to: day-vote');
+          await startDayVotePhase(roomRef);
+          break;
+        case 'day-vote':
+          console.log('HOST writing phase transition to: end-game');
+          await processVoteAndCheckWin(roomRef);
+          break;
+      }
+    } catch (error) {
+      console.error('Error in handlePhaseTimeout:', error);
     }
   };
 
