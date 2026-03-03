@@ -21,7 +21,29 @@ export default function MafiaGame() {
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const phaseTimerRef = useRef(null);
+  const phaseTimeoutTriggeredRef = useRef(false);
   const { playShh, playMurder, playAngelic, playWaking } = useMafiaSound();
+
+  // DIAGNOSIS FINDINGS:
+  // FIX 1: checkAllConfirmed (timer skip) only runs when the HOST confirms via handleConfirmVote.
+  //   Skip discussion works because it has a useEffect watching gameState.skipVotes on the host.
+  //   Confirm vote has NO equivalent useEffect — so if the host is not an active player
+  //   (e.g. host is civilian during night-mafia), checkAllConfirmed is never called.
+  //   FIX: Add a useEffect mirroring the skip discussion pattern that watches confirmedVotes.
+  //
+  // FIX 2: Doctor timer expiry IS handled in handlePhaseTimeout (calls advanceFromDoctorPhase).
+  //   But the timer setInterval(100ms) can call handlePhaseTimeout repeatedly before the
+  //   Firestore update propagates back. This race condition affects ALL phases.
+  //   FIX: Add phaseTimeoutTriggeredRef guard to prevent multiple handlePhaseTimeout calls.
+  //
+  // FIX 3: Inconsistent messaging — night-eyes-closed shows "Close your eyes 🤫" while
+  //   post-vote transitions show "Close your eyes... 😴". Non-active player screens during
+  //   voting show "Shhh..." variants. Detective-result non-detective has no countdown.
+  //   FIX: Unify all to "Close your eyes 😴" and add countdown where missing.
+  //
+  // FIX 4: advanceFromDoctorPhase uses undefined for doctorSave when doctor hasn't voted
+  //   (gameState.nightVotes?.[uid] returns undefined). Firestore ignores undefined fields.
+  //   FIX: Explicitly coalesce to null.
 
   // Rules form state
   const [rules, setRules] = useState({
@@ -129,6 +151,29 @@ export default function MafiaGame() {
     }
   }, [isHost, gameState?.phase, gameState?.skipVotes, gameState?.players, roomId]);
 
+  // FIX 1: Host auto-shortens timer if all active players have confirmed votes
+  // Mirrors the skip discussion useEffect pattern — reacts to Firestore state changes
+  // so it works even when the host is NOT one of the active/voting players.
+  useEffect(() => {
+    if (!isHost || !gameState) return;
+    const phase = gameState.phase;
+    if (phase !== 'night-mafia' && phase !== 'night-doctor' && phase !== 'night-detective' && phase !== 'day-vote') return;
+
+    const activePlayerUids = getActivePlayers().map(p => p.uid);
+    const confirmed = gameState.confirmedVotes || [];
+
+    if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
+      console.log(`[MafiaGame] All players confirmed for ${phase}, jumping timer via useEffect`);
+      const roomRef = doc(db, 'rooms', roomId);
+      updateDoc(roomRef, {
+        'activeActivity.phaseEndsAt': Date.now() + 5000,
+        lastActivity: serverTimestamp()
+      }).catch(error => {
+        console.error(`Error jumping timer for ${phase}:`, error);
+      });
+    }
+  }, [isHost, gameState?.phase, gameState?.confirmedVotes, gameState?.players, roomId]);
+
   // Handle phase timer countdown using Firestore phaseEndsAt with fallback
   useEffect(() => {
     if (!gameState || (!gameState.phaseEndsAt && (!gameState.phaseStartedAt || !gameState.phaseDurationMs))) {
@@ -152,8 +197,10 @@ export default function MafiaGame() {
       const remainingSeconds = Math.max(0, Math.ceil(remaining / 1000));
       setTimeLeft(remainingSeconds);
 
-      // Only host auto-advances phases
-      if (isHost && remainingSeconds <= 0) {
+      // Only host auto-advances phases — guard prevents multiple calls during
+      // the gap between Firestore write and snapshot propagation (FIX 2)
+      if (isHost && remainingSeconds <= 0 && !phaseTimeoutTriggeredRef.current) {
+        phaseTimeoutTriggeredRef.current = true;
         handlePhaseTimeout();
       }
     };
@@ -173,8 +220,9 @@ export default function MafiaGame() {
     console.log('[MafiaGame] phaseEndsAt updated:', { phase: gameState?.phase, phaseEndsAt });
   }, [gameState?.phaseEndsAt, gameState?.phase]);
 
-  // Reset confirmed status when phase changes
+  // Reset confirmed status and timeout guard when phase changes
   useEffect(() => {
+    phaseTimeoutTriggeredRef.current = false;
     if (gameState) {
       setHasConfirmed(gameState.confirmedVotes?.includes(user?.id) || false);
       if (gameState.phase === 'night-mafia' || gameState.phase === 'night-doctor' || 
@@ -452,7 +500,7 @@ export default function MafiaGame() {
     if (!isHost) return;
 
     const doctorPlayer = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-    const save = doctorPlayer ? gameState.nightVotes?.[doctorPlayer.uid] : null;
+    const save = doctorPlayer ? (gameState.nightVotes?.[doctorPlayer.uid] ?? null) : null;
 
     if (!doctorPlayer) {
       await updateDoc(roomRef, {
@@ -875,12 +923,11 @@ export default function MafiaGame() {
 
   // Night phase - Eyes closed
   if (gameState?.phase?.startsWith('night-eyes-closed')) {
-    const isPostVoteClose = gameState.phase === 'night-eyes-closed-2' || gameState.phase === 'night-eyes-closed-3';
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
         <div className="text-center">
-          <div className="text-8xl mb-6">{isPostVoteClose ? '😴' : '🤫'}</div>
-          <h1 className="text-white text-4xl font-black">{isPostVoteClose ? 'Close your eyes... 😴' : 'Close your eyes 🤫'}</h1>
+          <div className="text-8xl mb-6">😴</div>
+          <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
           {timeLeft !== null && (
             <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
           )}
@@ -947,7 +994,7 @@ export default function MafiaGame() {
         <div className="min-h-screen bg-black flex items-center justify-center p-6">
           <div className="text-center">
             <div className="text-8xl mb-6">😴</div>
-            <h1 className="text-white text-3xl font-black">Shhh... the mafia is awake</h1>
+            <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
           </div>
         </div>
       );
@@ -1042,7 +1089,7 @@ export default function MafiaGame() {
         <div className="min-h-screen bg-black flex items-center justify-center p-6">
           <div className="text-center">
             <div className="text-8xl mb-6">😴</div>
-            <h1 className="text-white text-3xl font-black">Shhh...</h1>
+            <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
           </div>
         </div>
       );
@@ -1126,7 +1173,7 @@ export default function MafiaGame() {
         <div className="min-h-screen bg-black flex items-center justify-center p-6">
           <div className="text-center">
             <div className="text-8xl mb-6">😴</div>
-            <h1 className="text-white text-3xl font-black">Shhh...</h1>
+            <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
           </div>
         </div>
       );
@@ -1204,7 +1251,10 @@ export default function MafiaGame() {
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
         <div className="text-center">
           <div className="text-8xl mb-6">😴</div>
-          <h1 className="text-white text-3xl font-black">Shhh...</h1>
+          <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+          {timeLeft !== null && (
+            <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
+          )}
         </div>
       </div>
     );
