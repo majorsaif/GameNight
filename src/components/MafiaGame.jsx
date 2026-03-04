@@ -6,6 +6,7 @@ import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 import { useMafiaSound } from '../hooks/useMafiaSound';
+import { throttledUpdate } from '../utils/firestoreThrottle';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -151,10 +152,14 @@ export default function MafiaGame() {
       console.log(`[MafiaGame] All players confirmed for ${phase}, jumping timer via useEffect`);
       timerJumpedRef.current = true; // Mark timer jump as fired
       const roomRef = doc(db, 'rooms', roomId);
-      updateDoc(roomRef, {
-        'activeActivity.phaseEndsAt': Date.now() + 5000,
-        lastActivity: serverTimestamp()
-      }).catch(error => {
+      throttledUpdate(
+        `timer-jump-${phase}`,
+        () => updateDoc(roomRef, {
+          'activeActivity.phaseEndsAt': Date.now() + 5000,
+          lastActivity: serverTimestamp()
+        }),
+        2000
+      ).catch(error => {
         console.error(`Error jumping timer for ${phase}:`, error);
       });
     }
@@ -333,6 +338,10 @@ export default function MafiaGame() {
 
   const checkAllConfirmed = async (confirmedVotesOverride) => {
     if (!isHost || !gameState) return;
+    if (timerJumpedRef.current) {
+      console.log('[checkAllConfirmed] Timer already jumped for this phase, skipping');
+      return;
+    }
 
     const roomRef = doc(db, 'rooms', roomId);
     const activePlayerUids = getActivePlayers().map(p => p.uid);
@@ -340,14 +349,19 @@ export default function MafiaGame() {
 
     if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
       // All confirmed, shorten timer to 5 seconds for synchronized clients
+      timerJumpedRef.current = true; // Mark timer jump as fired
       switch (gameState.phase) {
         case 'night-mafia':
           try {
             console.log('Jumping timer for phase night-mafia');
-            await updateDoc(roomRef, {
-              'activeActivity.phaseEndsAt': Date.now() + 5000,
-              lastActivity: serverTimestamp()
-            });
+            await throttledUpdate(
+              'timer-jump-night-mafia',
+              () => updateDoc(roomRef, {
+                'activeActivity.phaseEndsAt': Date.now() + 5000,
+                lastActivity: serverTimestamp()
+              }),
+              2000
+            );
           } catch (error) {
             console.error('Error jumping timer for night-mafia:', error);
           }
@@ -355,10 +369,14 @@ export default function MafiaGame() {
         case 'night-doctor':
           try {
             console.log('Jumping timer for phase night-doctor');
-            await updateDoc(roomRef, {
-              'activeActivity.phaseEndsAt': Date.now() + 5000,
-              lastActivity: serverTimestamp()
-            });
+            await throttledUpdate(
+              'timer-jump-night-doctor',
+              () => updateDoc(roomRef, {
+                'activeActivity.phaseEndsAt': Date.now() + 5000,
+                lastActivity: serverTimestamp()
+              }),
+              2000
+            );
           } catch (error) {
             console.error('Error jumping timer for night-doctor:', error);
           }
@@ -366,10 +384,14 @@ export default function MafiaGame() {
         case 'night-detective':
           try {
             console.log('Jumping timer for phase night-detective');
-            await updateDoc(roomRef, {
-              'activeActivity.phaseEndsAt': Date.now() + 5000,
-              lastActivity: serverTimestamp()
-            });
+            await throttledUpdate(
+              'timer-jump-night-detective',
+              () => updateDoc(roomRef, {
+                'activeActivity.phaseEndsAt': Date.now() + 5000,
+                lastActivity: serverTimestamp()
+              }),
+              2000
+            );
           } catch (error) {
             console.error('Error jumping timer for night-detective:', error);
           }
@@ -377,10 +399,14 @@ export default function MafiaGame() {
         case 'day-vote':
           try {
             console.log('Jumping timer for phase day-vote');
-            await updateDoc(roomRef, {
-              'activeActivity.phaseEndsAt': Date.now() + 5000,
-              lastActivity: serverTimestamp()
-            });
+            await throttledUpdate(
+              'timer-jump-day-vote',
+              () => updateDoc(roomRef, {
+                'activeActivity.phaseEndsAt': Date.now() + 5000,
+                lastActivity: serverTimestamp()
+              }),
+              2000
+            );
           } catch (error) {
             console.error('Error jumping timer for day-vote:', error);
           }
