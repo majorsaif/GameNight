@@ -23,6 +23,7 @@ export default function MafiaGame() {
   const phaseTimerRef = useRef(null);
   const phaseTimeoutTriggeredRef = useRef(false);
   const { playShh, playMurder, playAngelic, playWaking } = useMafiaSound();
+  const timerJumpedRef = useRef(false);
 
   // DIAGNOSIS FINDINGS:
   // FIX 1: checkAllConfirmed (timer skip) only runs when the HOST confirms via handleConfirmVote.
@@ -54,7 +55,6 @@ export default function MafiaGame() {
     votingTime: 1
   });
   const activeRules = gameState?.rules || rules;
-  const previousPhaseRef = useRef(null);
 
   const getCurrentPlayer = () => gameState?.players?.find((player) => player.uid === user?.id);
 
@@ -95,24 +95,10 @@ export default function MafiaGame() {
           setGameState(data.activeActivity);
           setGameStateLoaded(true); // Ensure gameStateLoaded is updated when valid data is received
 
-          // Detect phase change and play appropriate sound
           const newPhase = data.activeActivity.phase;
-          const prevPhase = previousPhaseRef.current;
-
-          if (prevPhase !== newPhase) {
-            console.log('[MafiaGame] Phase changed:', { from: prevPhase, to: newPhase });
-            // Phase has changed
-            if (newPhase === 'night-mafia') {
-              playShh();
-            } else if (newPhase === 'night-doctor') {
-              playMurder();
-            } else if (newPhase === 'night-detective') {
-              playAngelic();
-            } else if (newPhase === 'day-discussion') {
-              playWaking();
-            }
-
+          if (newPhase !== previousPhaseRef.current) {
             previousPhaseRef.current = newPhase;
+            timerJumpedRef.current = false; // Reset timer jump guard on phase change
           }
         } else {
           console.log('[MafiaGame] No active Mafia game found');
@@ -156,11 +142,14 @@ export default function MafiaGame() {
     const phase = gameState.phase;
     if (phase !== 'night-mafia' && phase !== 'night-doctor' && phase !== 'night-detective' && phase !== 'day-vote') return;
 
+    if (timerJumpedRef.current) return; // Prevent repeated timer jumps
+
     const activePlayerUids = getActivePlayers().map(p => p.uid);
     const confirmed = gameState.confirmedVotes || [];
 
     if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
       console.log(`[MafiaGame] All players confirmed for ${phase}, jumping timer via useEffect`);
+      timerJumpedRef.current = true; // Mark timer jump as fired
       const roomRef = doc(db, 'rooms', roomId);
       updateDoc(roomRef, {
         'activeActivity.phaseEndsAt': Date.now() + 5000,
