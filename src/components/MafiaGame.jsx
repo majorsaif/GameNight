@@ -93,11 +93,12 @@ export default function MafiaGame() {
 
         if (data.activeActivity && data.activeActivity.type === 'mafia') {
           setGameState(data.activeActivity);
-          
+          setGameStateLoaded(true); // Ensure gameStateLoaded is updated when valid data is received
+
           // Detect phase change and play appropriate sound
           const newPhase = data.activeActivity.phase;
           const prevPhase = previousPhaseRef.current;
-          
+
           if (prevPhase !== newPhase) {
             console.log('[MafiaGame] Phase changed:', { from: prevPhase, to: newPhase });
             // Phase has changed
@@ -110,7 +111,7 @@ export default function MafiaGame() {
             } else if (newPhase === 'day-discussion') {
               playWaking();
             }
-            
+
             previousPhaseRef.current = newPhase;
           }
         } else {
@@ -446,7 +447,8 @@ export default function MafiaGame() {
       'activeActivity.phaseDurationMs': phaseDuration,
       'activeActivity.phaseEndsAt': Date.now() + phaseDuration,
       'activeActivity.confirmedVotes': [],
-      lastActivity: serverTimestamp()
+      lastActivity: serverTimestamp(),
+      'activeActivity.doctorEmoji': '🩺' // Updated emoji for doctor role
     });
   };
 
@@ -781,7 +783,7 @@ export default function MafiaGame() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="text-center">
-          <div className="text-6xl mb-4 animate-spin">⏳</div>
+          <div className="text-6xl mb-4 animate-pulse">⌛</div>
           <div className="text-white text-xl">Loading game...</div>
           <p className="text-slate-400 text-sm mt-2">Please wait</p>
         </div>
