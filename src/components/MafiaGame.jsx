@@ -254,13 +254,35 @@ export default function MafiaGame() {
           console.log('HOST writing phase transition to: night-eyes-closed-2');
           await advanceFromMafiaPhase(roomRef);
           break;
+        case 'night-eyes-closed-2':
+          console.log('HOST advancing from night-eyes-closed-2');
+          if (activeRules.doctor) {
+            await startDoctorPhase(roomRef);
+          } else if (activeRules.detective) {
+            await startDetectivePhase(roomRef);
+          } else {
+            await startDayPhase(roomRef);
+          }
+          break;
         case 'night-doctor':
           console.log('HOST writing phase transition to: night-eyes-closed-3');
           await advanceFromDoctorPhase(roomRef);
           break;
+        case 'night-eyes-closed-3':
+          console.log('HOST advancing from night-eyes-closed-3');
+          if (activeRules.detective) {
+            await startDetectivePhase(roomRef);
+          } else {
+            await startDayPhase(roomRef);
+          }
+          break;
         case 'night-detective':
           console.log('HOST writing phase transition to: night-detective-result');
           await advanceFromDetectivePhase(roomRef);
+          break;
+        case 'night-detective-result':
+          console.log('HOST advancing from night-detective-result to day');
+          await startDayPhase(roomRef);
           break;
         case 'day-discussion':
           console.log('HOST writing phase transition to: day-vote');
@@ -269,6 +291,9 @@ export default function MafiaGame() {
         case 'day-vote':
           console.log('HOST writing phase transition to: end-game');
           await processVoteAndCheckWin(roomRef);
+          break;
+        default:
+          console.warn('[handlePhaseTimeout] Unhandled phase:', gameState.phase);
           break;
       }
     } catch (error) {
