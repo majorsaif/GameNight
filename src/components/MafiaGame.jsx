@@ -26,6 +26,7 @@ export default function MafiaGame() {
   const { playShh, playMurder, playAngelic, playWaking } = useMafiaSound();
   const timerJumpedRef = useRef(false);
   const previousPhaseRef = useRef(null);
+  const handlePhaseTimeoutRef = useRef(null);
 
   // DIAGNOSIS FINDINGS:
   // FIX 1: checkAllConfirmed (timer skip) only runs when the HOST confirms via handleConfirmVote.
@@ -207,7 +208,7 @@ export default function MafiaGame() {
       if (isHost && remainingSeconds <= 0 && !phaseTimeoutTriggeredRef.current) {
         console.log('[MafiaGame] Triggering handlePhaseTimeout:', { remainingSeconds });
         phaseTimeoutTriggeredRef.current = true;
-        handlePhaseTimeout();
+        handlePhaseTimeoutRef.current();
       }
     };
 
@@ -274,6 +275,11 @@ export default function MafiaGame() {
       console.error('Error in handlePhaseTimeout:', error);
     }
   };
+
+  // Keep ref always pointing to the latest handlePhaseTimeout so the
+  // setInterval closure (which depends only on [isHost]) never calls a
+  // stale version that sees gameState === null.
+  handlePhaseTimeoutRef.current = handlePhaseTimeout;
 
   const handleRevealRole = () => {
     setShowRole(true);
