@@ -198,6 +198,12 @@ export default function MafiaGame() {
 
       // Only host auto-advances phases — guard prevents multiple calls during
       // the gap between Firestore write and snapshot propagation (FIX 2)
+      if (remainingSeconds <= 0) {
+        console.log('[MafiaGame] Timer hit zero, attempting phase transition for:', currentGameState.phase);
+        console.log('[MafiaGame] isHost check:', isHost);
+        console.log('[MafiaGame] phaseTimeoutTriggeredRef:', phaseTimeoutTriggeredRef.current);
+      }
+      
       if (isHost && remainingSeconds <= 0 && !phaseTimeoutTriggeredRef.current) {
         console.log('[MafiaGame] Triggering handlePhaseTimeout:', { remainingSeconds });
         phaseTimeoutTriggeredRef.current = true;
@@ -235,6 +241,8 @@ export default function MafiaGame() {
   }, [gameState?.phase]);
 
   const handlePhaseTimeout = async () => {
+    console.log('[handlePhaseTimeout] Called with phase:', gameState?.phase, 'isHost:', isHost, 'gameState exists:', !!gameState);
+    
     if (!isHost || !gameState) return;
 
     const roomRef = doc(db, 'rooms', roomId);
