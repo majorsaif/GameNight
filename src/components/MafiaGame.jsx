@@ -25,6 +25,7 @@ export default function MafiaGame() {
   const phaseTimeoutTriggeredRef = useRef(false);
   const { playShh, playMurder, playAngelic, playWaking } = useMafiaSound();
   const timerJumpedRef = useRef(false);
+  const previousPhaseRef = useRef(null);
 
   // DIAGNOSIS FINDINGS:
   // FIX 1: checkAllConfirmed (timer skip) only runs when the HOST confirms via handleConfirmVote.
