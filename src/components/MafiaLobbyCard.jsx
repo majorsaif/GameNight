@@ -305,7 +305,7 @@ export default function MafiaLobbyCard({
                       onChange={(e) => setEditRules({ ...editRules, doctor: e.target.checked })}
                       className="w-4 h-4"
                     />
-                    Doctor ⚕️
+                    Doctor 🩺
                   </label>
                   <p className="text-slate-400 text-xs">Can save one player each night</p>
                 </div>

@@ -271,7 +271,7 @@ export default function GamesScreen() {
               <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-white font-semibold">Doctor ⚕️</label>
+                    <label className="text-white font-semibold">Doctor 🩺</label>
                     <p className="text-slate-400 text-sm">Can save one player each night</p>
                   </div>
                   <button

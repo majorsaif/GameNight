@@ -390,9 +390,9 @@ export default function WelcomeScreen() {
 
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
-        <div className="flex items-center justify-center gap-3">
+        <div className="flex items-center justify-center gap-0">
           <div className="flex items-center justify-center">
-            <span className="text-5xl font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap">ITS</span>
+            <span className="text-xl leading-none font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap -mr-1">ITS</span>
           </div>
           <h1 className="text-5xl font-black leading-tight mb-2">
             <span className="text-white italic">GAME</span>

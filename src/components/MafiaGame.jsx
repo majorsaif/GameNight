@@ -871,7 +871,7 @@ export default function MafiaGame() {
       case 'civilian':
         return '👤';
       case 'doctor':
-        return '⚕️';
+        return '🩺';
       case 'detective':
         return '🔍';
       default:

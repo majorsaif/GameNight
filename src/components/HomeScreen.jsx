@@ -545,49 +545,37 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
 }
 
 function GameRulesSection({ activityType }) {
-  const [expanded, setExpanded] = useState(false);
   let rules = null;
   if (activityType === 'mafia') rules = mafiaRules;
   if (!rules) return null;
 
   return (
     <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden">
-      <button
-        onClick={() => setExpanded(e => !e)}
-        className="w-full flex items-center justify-between px-5 py-4 text-left"
-      >
-        <span className="text-white font-bold text-base flex items-center gap-2">
-          {rules.emoji} {rules.title} Rules
+      <div className="px-5 py-4 border-b border-slate-700/70">
+        <span className="text-white font-bold text-base">
+          {rules.title} Rules
         </span>
-        <svg
-          className={`w-5 h-5 text-slate-400 transition-transform ${expanded ? 'rotate-180' : ''}`}
-          fill="none" stroke="currentColor" viewBox="0 0 24 24"
-        >
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-        </svg>
-      </button>
-      {expanded && (
-        <div className="px-5 pb-5 space-y-4">
-          <p className="text-slate-300 text-sm leading-relaxed">{rules.summary}</p>
-          {rules.sections.map((section, i) => (
-            <div key={i}>
-              <h4 className="text-violet-400 font-semibold text-sm mb-1">{section.heading}</h4>
-              {section.text && (
-                <p className="text-slate-400 text-sm leading-relaxed">{section.text}</p>
-              )}
-              {section.items && (
-                <ul className="space-y-1">
-                  {section.items.map((item, j) => (
-                    <li key={j} className="text-slate-400 text-sm leading-relaxed">
-                      <span className="text-white font-medium">{item.role}:</span> {item.text}
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          ))}
-        </div>
-      )}
+      </div>
+      <div className="px-5 pb-5 pt-4 space-y-4">
+        <p className="text-slate-300 text-sm leading-relaxed">{rules.summary}</p>
+        {rules.sections.map((section, i) => (
+          <div key={i}>
+            <h4 className="text-violet-400 font-semibold text-sm mb-1">{section.heading}</h4>
+            {section.text && (
+              <p className="text-slate-400 text-sm leading-relaxed">{section.text}</p>
+            )}
+            {section.items && (
+              <ul className="space-y-1">
+                {section.items.map((item, j) => (
+                  <li key={j} className="text-slate-400 text-sm leading-relaxed">
+                    <span className="text-white font-medium">{item.role}:</span> {item.text}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

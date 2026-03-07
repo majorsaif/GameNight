@@ -2,9 +2,9 @@ import React from 'react';
 
 export default function GameNightLogo() {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex items-center gap-0">
       <div className="flex items-center justify-center">
-        <span className="text-2xl font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap">ITS</span>
+        <span className="text-xs leading-none font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap -mr-0.5">ITS</span>
       </div>
       <h1 className="text-2xl font-black">
         <span className="text-white italic">GAME</span>
