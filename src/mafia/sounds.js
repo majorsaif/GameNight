@@ -3,7 +3,7 @@
 
 export const MAFIA_SOUNDS = {
   // Shushing/night ambience - soft whoosh
-  NIGHT_START: '/sounds/night-start.wav',
+  NIGHT_START: '/sounds/night-start.m4a',
   
   // Knife unsheathing - blade sound
   MAFIA_WAKE: '/sounds/mafia-wake.wav',
