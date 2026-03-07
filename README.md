@@ -1,11 +1,11 @@
-# GameNight
+# GamesNight
 
-A React web app for managing game nights, built with Vite and React Router.
+A React web app for managing games nights, built with Vite and React Router.
 
 ## Project Structure
 
 ```
-GameNight/
+GamesNight/
 ├── src/
 │   ├── components/
 │   │   ├── WelcomeScreen.jsx    # Landing page with Host/Join options
@@ -26,13 +26,13 @@ GameNight/
 ## Features
 
 - **WelcomeScreen** (`/`):
-  - Host a Game Night button
+  - Host a Games Night button
   - Join with room code input
   - My Nights section (placeholder for saved games)
 
 - **HomeScreen** (`/room/:roomId`):
   - Conditional rendering based on host status
-  - Host view: Player list, Games button, Forfeit Wheel, End Game Night
+  - Host view: Player list, Games button, Forfeit Wheel, End Games Night
   - Player view: Player list, Games button, Forfeit Wheel, Leave Game
   - Settings icon in top right corner
   - Room code display

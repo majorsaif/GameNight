@@ -20,7 +20,7 @@ import { getAvatarColor } from '../utils/avatar';
 
 const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
-const ACTIVE_ROOM_KEY = 'gamenight_active_room';
+const ACTIVE_ROOM_KEY = 'gamesnight_active_room';
 
 function setActiveRoomId(roomId) {
   if (roomId) {
@@ -297,7 +297,7 @@ export async function leaveRoom(roomId, userId) {
 }
 
 /**
- * Helper to update player's display name for just this game night
+ * Helper to update player's display name for just this games night
  */
 export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
   try {

@@ -2,8 +2,8 @@ import { useState, useEffect, useCallback } from 'react';
 import { auth } from '../firebase';
 import { signInAnonymously, onAuthStateChanged } from 'firebase/auth';
 
-const NICKNAME_KEY = 'gamenight_nickname';
-const PROFILE_KEY = 'gamenight_profile';
+const NICKNAME_KEY = 'gamesnight_nickname';
+const PROFILE_KEY = 'gamesnight_profile';
 
 /**
  * Authentication hook using Firebase anonymous auth

@@ -202,7 +202,7 @@ export default function WelcomeScreen() {
               🎲
             </div>
             <h1 className="text-5xl font-black leading-tight mb-6">
-              <span className="text-white italic">GAME</span>
+              <span className="text-white italic">GAMES</span>
               <span className="text-violet-400 italic">NIGHT</span>
             </h1>
           </div>
@@ -395,7 +395,7 @@ export default function WelcomeScreen() {
             <span className="text-xl leading-none font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap -mr-1">ITS</span>
           </div>
           <h1 className="text-5xl font-black leading-tight mb-2">
-            <span className="text-white italic">GAME</span>
+            <span className="text-white italic">GAMES</span>
             <span className="text-violet-400 italic">NIGHT</span>
           </h1>
         </div>

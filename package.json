@@ -1,7 +1,7 @@
 {
-  "name": "gamenight",
+  "name": "gamesnight",
   "version": "1.0.0",
-  "description": "GameNight - A React app for game nights",
+  "description": "GamesNight - A React app for games nights",
   "type": "module",
   "scripts": {
     "dev": "vite",

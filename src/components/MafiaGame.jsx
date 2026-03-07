@@ -804,7 +804,7 @@ export default function MafiaGame() {
     }
   };
 
-  const handleReturnToGameNight = async () => {
+  const handleReturnToGamesNight = async () => {
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
       activeActivity: null,
@@ -1590,10 +1590,10 @@ export default function MafiaGame() {
           </div>
 
           <button
-            onClick={handleReturnToGameNight}
+            onClick={handleReturnToGamesNight}
             className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
           >
-            Return to Game Night
+            Return to Games Night
           </button>
         </div>
       </div>
