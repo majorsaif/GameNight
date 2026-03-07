@@ -53,16 +53,16 @@ export function getAvatarColor(player, roomId = null) {
   
   // If we have a roomId, save the color back to localStorage
   if (roomId) {
-    const rooms = JSON.parse(localStorage.getItem('gamenight_rooms') || '{}');
+    const rooms = JSON.parse(localStorage.getItem('gamesnight_rooms') || '{}');
     if (rooms[roomId]) {
       const playerIndex = rooms[roomId].players.findIndex(p => p.id === player.id || p.uid === player.uid);
       if (playerIndex !== -1) {
         rooms[roomId].players[playerIndex].avatarColor = color;
-        localStorage.setItem('gamenight_rooms', JSON.stringify(rooms));
+        localStorage.setItem('gamesnight_rooms', JSON.stringify(rooms));
         
         // Trigger storage event for cross-tab sync
         window.dispatchEvent(new StorageEvent('storage', {
-          key: 'gamenight_rooms',
+          key: 'gamesnight_rooms',
           newValue: JSON.stringify(rooms),
           url: window.location.href,
           storageArea: localStorage
@@ -78,7 +78,7 @@ export function getAvatarColor(player, roomId = null) {
  * Backfill avatar colors for existing players in a room
  */
 export function backfillAvatarColors(roomId) {
-  const rooms = JSON.parse(localStorage.getItem('gamenight_rooms') || '{}');
+  const rooms = JSON.parse(localStorage.getItem('gamesnight_rooms') || '{}');
   if (!rooms[roomId]) return;
   
   let updated = false;
@@ -94,9 +94,9 @@ export function backfillAvatarColors(roomId) {
   });
   
   if (updated) {
-    localStorage.setItem('gamenight_rooms', JSON.stringify(rooms));
+    localStorage.setItem('gamesnight_rooms', JSON.stringify(rooms));
     window.dispatchEvent(new StorageEvent('storage', {
-      key: 'gamenight_rooms',
+      key: 'gamesnight_rooms',
       newValue: JSON.stringify(rooms),
       url: window.location.href,
       storageArea: localStorage

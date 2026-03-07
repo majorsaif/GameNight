@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { doc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
+import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 
@@ -48,13 +48,44 @@ export default function MafiaLobbyCard({
   };
 
   const handleStartGame = async () => {
-    if (lobbyPlayers.length < 4) {
-      alert('Need at least 4 players to start');
+    const roomRef = doc(db, 'rooms', roomId);
+    const roomDoc = await getDoc(roomRef);
+
+    if (!roomDoc.exists()) {
+      alert('Room not found');
       return;
     }
 
-    const roomRef = doc(db, 'rooms', roomId);
-    const playersToAssign = allPlayers.filter(p => lobbyPlayers.includes(p.uid));
+    const currentRoom = roomDoc.data();
+    const currentActivity = currentRoom.activeActivity || {};
+    const latestLobbyPlayers = Array.isArray(currentActivity.lobbyPlayers) ? currentActivity.lobbyPlayers : [];
+    const latestGamePlayers = Array.isArray(currentActivity.players) ? currentActivity.players : allPlayers;
+
+    if (latestLobbyPlayers.length < 4) {
+      alert(`Need at least 4 players to start (${latestLobbyPlayers.length})`);
+      return;
+    }
+
+    const roomPlayers = Array.isArray(currentRoom.players) ? currentRoom.players : [];
+    const roomPlayersById = new Map(roomPlayers.map((player) => [player.id, player]));
+    const latestGamePlayersById = new Map(latestGamePlayers.map((player) => [player.uid, player]));
+    const playersToAssign = latestLobbyPlayers
+      .map((playerId) => {
+        const existingActivityPlayer = latestGamePlayersById.get(playerId);
+        if (existingActivityPlayer) return existingActivityPlayer;
+
+        const roomPlayer = roomPlayersById.get(playerId);
+        if (!roomPlayer) return null;
+
+        return {
+          uid: roomPlayer.id,
+          displayName: roomPlayer.displayNameForGame || roomPlayer.displayName,
+          avatarColor: roomPlayer.avatarColor,
+          isAlive: true,
+          role: null
+        };
+      })
+      .filter(Boolean);
     
     if (playersToAssign.length < 4) {
       alert('Need at least 4 players to start');
@@ -72,9 +103,9 @@ export default function MafiaLobbyCard({
     }
 
     // Check 25% limit based on lobby players
-    const maxAllowed = Math.max(1, Math.floor(lobbyPlayers.length * 0.25));
+    const maxAllowed = Math.max(1, Math.floor(latestLobbyPlayers.length * 0.25));
     if (mafiaCount > maxAllowed) {
-      alert(`Too many mafias! With ${lobbyPlayers.length} players, you can have a maximum of ${maxAllowed} mafia.`);
+      alert(`Too many mafias! With ${latestLobbyPlayers.length} players, you can have a maximum of ${maxAllowed} mafia.`);
       return;
     }
 
@@ -162,8 +193,28 @@ export default function MafiaLobbyCard({
     });
   };
 
+  const spectators = lobbyState?.spectators || [];
+  const isSpectating = spectators.includes(userId);
   const hasJoined = lobbyPlayers.includes(userId);
   const canStart = lobbyPlayers.length >= 4;
+
+  const handleSpectate = async () => {
+    const roomRef = doc(db, 'rooms', roomId);
+    await updateDoc(roomRef, {
+      'activeActivity.lobbyPlayers': arrayRemove(userId),
+      'activeActivity.spectators': arrayUnion(userId),
+      lastActivity: serverTimestamp()
+    });
+  };
+
+  const handleJoinFromSpectate = async () => {
+    const roomRef = doc(db, 'rooms', roomId);
+    await updateDoc(roomRef, {
+      'activeActivity.spectators': arrayRemove(userId),
+      'activeActivity.lobbyPlayers': arrayUnion(userId),
+      lastActivity: serverTimestamp()
+    });
+  };
 
   if (isHost) {
     return (
@@ -254,7 +305,7 @@ export default function MafiaLobbyCard({
                       onChange={(e) => setEditRules({ ...editRules, doctor: e.target.checked })}
                       className="w-4 h-4"
                     />
-                    Doctor ⚕️
+                    Doctor 🩺
                   </label>
                   <p className="text-slate-400 text-xs">Can save one player each night</p>
                 </div>
@@ -354,20 +405,28 @@ export default function MafiaLobbyCard({
         </div>
       </div>
 
-      {/* Join/Leave Button */}
-      {!hasJoined ? (
+      {/* Spectate / Join Game toggle */}
+      {hasJoined ? (
+        <button
+          onClick={handleSpectate}
+          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+        >
+          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
+          Spectate
+        </button>
+      ) : isSpectating ? (
+        <button
+          onClick={handleJoinFromSpectate}
+          className="w-full bg-white hover:bg-slate-100 text-red-700 font-bold py-2 rounded-lg transition-colors"
+        >
+          Join Game
+        </button>
+      ) : (
         <button
           onClick={handleJoinLobby}
           className="w-full bg-white hover:bg-slate-100 text-red-700 font-bold py-2 rounded-lg transition-colors"
         >
           Join Lobby
-        </button>
-      ) : (
-        <button
-          onClick={handleLeaveLobby}
-          className="w-full bg-red-800 hover:bg-red-900 text-white font-semibold py-2 rounded-lg transition-colors"
-        >
-          Leave Lobby
         </button>
       )}
     </div>

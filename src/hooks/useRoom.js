@@ -20,7 +20,7 @@ import { getAvatarColor } from '../utils/avatar';
 
 const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
-const ACTIVE_ROOM_KEY = 'gamenight_active_room';
+const ACTIVE_ROOM_KEY = 'gamesnight_active_room';
 
 function setActiveRoomId(roomId) {
   if (roomId) {
@@ -297,7 +297,7 @@ export async function leaveRoom(roomId, userId) {
 }
 
 /**
- * Helper to update player's display name for just this game night
+ * Helper to update player's display name for just this games night
  */
 export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
   try {
@@ -633,6 +633,95 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
               setError('This room has expired');
               setRoom(null);
               return;
+            }
+
+            const activeActivity = updatedRoom.activeActivity;
+            const isLobbyPhase = activeActivity?.phase === 'lobby';
+            const hasLobbyPlayers = Array.isArray(activeActivity?.lobbyPlayers);
+
+            if (isLobbyPhase && hasLobbyPlayers) {
+              const roomPlayers = Array.isArray(updatedRoom.players) ? updatedRoom.players : [];
+              const roomPlayerIds = roomPlayers.map((player) => player.id).filter(Boolean);
+              const lobbyPlayers = activeActivity.lobbyPlayers;
+              const spectators = Array.isArray(activeActivity.spectators) ? activeActivity.spectators : [];
+              const activityPlayers = Array.isArray(activeActivity.players) ? activeActivity.players : [];
+              const activityPlayerIds = activityPlayers.map((player) => player.uid).filter(Boolean);
+
+              // Find players who joined the room but aren't in lobby yet
+              const missingLobbyPlayers = roomPlayerIds.filter(
+                (playerId) => !lobbyPlayers.includes(playerId) && !spectators.includes(playerId)
+              );
+              const missingActivityPlayers = roomPlayers
+                .filter((player) => !activityPlayerIds.includes(player.id))
+                .map((player) => ({
+                  uid: player.id,
+                  displayName: player.displayNameForGame || player.displayName,
+                  avatarColor: player.avatarColor || getAvatarColor(player, roomId),
+                  isAlive: true,
+                  role: null
+                }));
+
+              // Find players who left the room but are still in lobby arrays
+              const departedLobbyPlayers = lobbyPlayers.filter(
+                (playerId) => !roomPlayerIds.includes(playerId)
+              );
+              const departedActivityPlayers = activityPlayers.filter(
+                (player) => !roomPlayerIds.includes(player.uid)
+              );
+              const departedSpectators = spectators.filter(
+                (playerId) => !roomPlayerIds.includes(playerId)
+              );
+
+              const needsUpdate = missingLobbyPlayers.length > 0 || 
+                                  missingActivityPlayers.length > 0 || 
+                                  departedLobbyPlayers.length > 0 || 
+                                  departedActivityPlayers.length > 0 ||
+                                  departedSpectators.length > 0;
+
+              if (needsUpdate) {
+                const updates = {
+                  lastActivity: serverTimestamp()
+                };
+
+                if (missingLobbyPlayers.length > 0) {
+                  console.log('➕ useRoom: Auto-adding missing lobby players:', missingLobbyPlayers);
+                  updates['activeActivity.lobbyPlayers'] = arrayUnion(...missingLobbyPlayers);
+                }
+
+                if (departedLobbyPlayers.length > 0) {
+                  console.log('➖ useRoom: Removing departed lobby players:', departedLobbyPlayers);
+                  // Need to set the entire array since we can't use arrayRemove with arrayUnion in same update
+                  const updatedLobbyPlayers = [
+                    ...lobbyPlayers.filter((id) => !departedLobbyPlayers.includes(id)),
+                    ...(missingLobbyPlayers.length > 0 ? missingLobbyPlayers : [])
+                  ];
+                  updates['activeActivity.lobbyPlayers'] = updatedLobbyPlayers;
+                }
+
+                const updatedActivityPlayers = [
+                  ...activityPlayers.filter((player) => !departedActivityPlayers.some((dp) => dp.uid === player.uid)),
+                  ...missingActivityPlayers
+                ];
+
+                if (missingActivityPlayers.length > 0 || departedActivityPlayers.length > 0) {
+                  if (missingActivityPlayers.length > 0) {
+                    console.log('➕ useRoom: Auto-syncing missing activity players:', missingActivityPlayers.map((p) => p.uid));
+                  }
+                  if (departedActivityPlayers.length > 0) {
+                    console.log('➖ useRoom: Removing departed activity players:', departedActivityPlayers.map((p) => p.uid));
+                  }
+                  updates['activeActivity.players'] = updatedActivityPlayers;
+                }
+
+                if (departedSpectators.length > 0) {
+                  console.log('➖ useRoom: Removing departed spectators:', departedSpectators);
+                  updates['activeActivity.spectators'] = spectators.filter((id) => !departedSpectators.includes(id));
+                }
+
+                updateDoc(roomRef, updates).catch(error => {
+                  console.error('❌ useRoom: Failed to auto-sync lobby/activity players:', error);
+                });
+              }
             }
             
             console.log('🔄 useRoom: Room snapshot received - players count:', updatedRoom.players?.length || 0, updatedRoom.players?.map(p => p.displayName) || []);
