@@ -5,8 +5,8 @@ import { useRoom } from '../hooks/useRoom';
 import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
-import { useMafiaSound } from '../hooks/useMafiaSound';
 import { throttledUpdate } from '../utils/firestoreThrottle';
+import { MAFIA_SOUNDS, playSound } from '../mafia/sounds';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -23,7 +23,6 @@ export default function MafiaGame() {
   const [timeLeft, setTimeLeft] = useState(null);
   const phaseTimerRef = useRef(null);
   const phaseTimeoutTriggeredRef = useRef(false);
-  const { playShh, playMurder, playAngelic, playWaking } = useMafiaSound();
   const timerJumpedRef = useRef(false);
   const previousPhaseRef = useRef(null);
   const handlePhaseTimeoutRef = useRef(null);
@@ -100,6 +99,25 @@ export default function MafiaGame() {
 
           const newPhase = data.activeActivity.phase;
           if (newPhase !== previousPhaseRef.current) {
+            // Play sound for phase transition
+            switch (newPhase) {
+              case 'night-eyes-closed':
+                playSound(MAFIA_SOUNDS.NIGHT_START);
+                break;
+              case 'night-mafia':
+                playSound(MAFIA_SOUNDS.MAFIA_WAKE);
+                break;
+              case 'night-doctor':
+                playSound(MAFIA_SOUNDS.DOCTOR_WAKE);
+                break;
+              case 'night-detective':
+                playSound(MAFIA_SOUNDS.DETECTIVE_WAKE);
+                break;
+              case 'day-discussion':
+                playSound(MAFIA_SOUNDS.DAY_START);
+                break;
+            }
+            
             previousPhaseRef.current = newPhase;
             timerJumpedRef.current = false; // Reset timer jump guard on phase change
           }
