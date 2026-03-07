@@ -1,21 +1,21 @@
 // Free sound effects for Mafia game
-// All sounds sourced from Mixkit (https://mixkit.co) - royalty free
+// Local sound files (originally from Mixkit - royalty free)
 
 export const MAFIA_SOUNDS = {
   // Shushing/night ambience - soft whoosh
-  NIGHT_START: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3',
+  NIGHT_START: '/sounds/night-start.wav',
   
   // Knife unsheathing - blade sound
-  MAFIA_WAKE: 'https://assets.mixkit.co/active_storage/sfx/2733/2733-preview.mp3',
+  MAFIA_WAKE: '/sounds/mafia-wake.wav',
   
   // Heartbeat monitor - cardiac beep
-  DOCTOR_WAKE: 'https://assets.mixkit.co/active_storage/sfx/2869/2869-preview.mp3',
+  DOCTOR_WAKE: '/sounds/doctor-wake.m4a',
   
   // Detective/mystery - suspenseful tension sting
-  DETECTIVE_WAKE: 'https://assets.mixkit.co/active_storage/sfx/2359/2359-preview.mp3',
+  DETECTIVE_WAKE: '/sounds/detective-wake.wav',
   
   // Rooster crow - morning wake up
-  DAY_START: 'https://assets.mixkit.co/active_storage/sfx/1671/1671-preview.mp3'
+  DAY_START: '/sounds/day-start.wav'
 };
 
 /**
@@ -25,7 +25,10 @@ export const MAFIA_SOUNDS = {
 export function playSound(url) {
   if (!url) return;
   
+  console.log('[playSound] Attempting to play:', url);
   const audio = new Audio(url);
   audio.volume = 0.5; // Set to 50% volume to avoid being too loud
-  audio.play().catch(e => console.warn('Sound playback failed:', e));
+  audio.play()
+    .then(() => console.log('[playSound] Successfully started playback'))
+    .catch(e => console.warn('Sound playback failed:', e));
 }

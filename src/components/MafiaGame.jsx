@@ -114,6 +114,7 @@ export default function MafiaGame() {
                 playSound(MAFIA_SOUNDS.DETECTIVE_WAKE);
                 break;
               case 'day-discussion':
+                console.log('[MafiaGame] Playing rooster sound for day start');
                 playSound(MAFIA_SOUNDS.DAY_START);
                 break;
             }
@@ -370,8 +371,8 @@ export default function MafiaGame() {
     await updateDoc(roomRef, {
       'activeActivity.phase': 'night-eyes-closed',
       'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': 3000,
-      'activeActivity.phaseEndsAt': Date.now() + 3000,
+      'activeActivity.phaseDurationMs': 5000,
+      'activeActivity.phaseEndsAt': Date.now() + 5000,
       'activeActivity.nightVotes': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
@@ -1328,14 +1329,12 @@ export default function MafiaGame() {
       );
     }
 
+    // Non-detective players - no timer during detective result phase
     return (
       <div className="min-h-screen bg-black flex items-center justify-center p-6">
         <div className="text-center">
           <div className="text-8xl mb-6">😴</div>
           <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-          {timeLeft !== null && (
-            <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
-          )}
         </div>
       </div>
     );
