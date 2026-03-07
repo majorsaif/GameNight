@@ -4,7 +4,7 @@ export default function GameNightLogo() {
   return (
     <div className="flex items-center gap-0">
       <div className="flex items-center justify-center">
-        <span className="text-xs leading-none font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap -mr-0.5">ITS</span>
+        <span className="text-xl leading-none font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap -mr-1">ITS</span>
       </div>
       <h1 className="text-2xl font-black">
         <span className="text-white italic">GAME</span>
