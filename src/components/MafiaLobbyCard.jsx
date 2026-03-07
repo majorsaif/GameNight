@@ -240,9 +240,13 @@ export default function MafiaLobbyCard({
                 key={player.uid}
                 className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
               >
-                <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
+                {player.photo ? (
+                  <img src={player.photo} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                    {getInitials(player.displayName)}
+                  </div>
+                )}
                 <span className="text-white text-sm font-medium">{player.displayName}</span>
               </div>
             ))}
@@ -396,9 +400,13 @@ export default function MafiaLobbyCard({
               key={player.uid}
               className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
             >
-              <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                {getInitials(player.displayName)}
-              </div>
+              {player.photo ? (
+                <img src={player.photo} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+              ) : (
+                <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                  {getInitials(player.displayName)}
+                </div>
+              )}
               <span className="text-white text-sm font-medium">{player.displayName}</span>
             </div>
           ))}

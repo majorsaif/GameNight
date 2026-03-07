@@ -1,5 +1,6 @@
 import React from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import OnboardingScreen from './components/OnboardingScreen';
 import WelcomeScreen from './components/WelcomeScreen';
 import HomeScreen from './components/HomeScreen';
 import GamesScreen from './components/GamesScreen';
@@ -11,6 +12,7 @@ function App() {
   return (
     <Router>
       <Routes>
+        <Route path="/onboarding" element={<OnboardingScreen />} />
         <Route path="/" element={<WelcomeScreen />} />
         <Route path="/room/:roomId" element={<HomeScreen />} />
         <Route path="/room/:roomId/games" element={<GamesScreen />} />

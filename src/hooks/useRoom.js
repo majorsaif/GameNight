@@ -76,13 +76,14 @@ async function updateLastActivity(roomRef) {
 /**
  * Create a new room in Firestore
  */
-export async function createRoom(hostId, hostDisplayName) {
+export async function createRoom(hostId, hostDisplayName, hostPhoto = null) {
   const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   const now = new Date().toISOString();
   
   const hostPlayer = { 
     id: hostId, 
-    displayName: hostDisplayName, 
+    displayName: hostDisplayName,
+    photo: hostPhoto,
     isHost: true, 
     joinedAt: now,
     avatarColor: null
@@ -167,7 +168,7 @@ export async function findRoomByCode(code) {
 /**
  * Join a room
  */
-export async function joinRoom(roomId, userId, userDisplayName) {
+export async function joinRoom(roomId, userId, userDisplayName, userPhoto = null) {
   try {
     if (!roomId) {
       console.error('❌ joinRoom: No roomId provided');
@@ -208,6 +209,7 @@ export async function joinRoom(roomId, userId, userDisplayName) {
     const newPlayer = {
       id: userId,
       displayName: userDisplayName,
+      photo: userPhoto,
       isHost: false,
       joinedAt: new Date().toISOString(),
       avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
