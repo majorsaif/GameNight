@@ -14,7 +14,7 @@ import mafiaRules from '../rules/mafia';
 export default function HomeScreen() {
   const { roomId } = useParams();
   const { user, loading: userLoading } = useAuth();
-  console.log('ðŸ“ HomeScreen mounted with roomId:', roomId);
+  console.log('📍 HomeScreen mounted with roomId:', roomId);
   const { room, loading: roomLoading, error, isHost } = useRoom(
     roomId, 
     user?.id, 
@@ -136,7 +136,7 @@ export default function HomeScreen() {
   if (!room) {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col justify-center items-center text-center gap-6 px-4">
-        <div className="text-6xl">ðŸ˜•</div>
+        <div className="text-6xl">😕</div>
         <h2 className="text-3xl font-bold text-slate-300">Room unavailable</h2>
         <p className="text-slate-500">{error || "This room doesn't exist or has ended."}</p>
         <button 
@@ -373,7 +373,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
               )}
               {player.isHost && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center text-xs border-2 border-slate-900">
-                  â­
+                  ⭐
                 </div>
               )}
             </div>
@@ -400,7 +400,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                 onClick={() => setShowAllPlayers(false)}
                 className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
               >
-                âœ•
+                ✕
               </button>
             </div>
             <ul className="space-y-2">
@@ -426,7 +426,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                     <span className="text-slate-200 font-medium">{player.displayNameForGame || player.displayName}</span>
                   </div>
                   {player.isHost && (
-                    <span className="text-yellow-500 text-lg">â­</span>
+                    <span className="text-yellow-500 text-lg">⭐</span>
                   )}
                 </li>
               ))}
@@ -466,7 +466,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-red-500/30 rounded-xl flex items-center justify-center text-2xl">
-                  ðŸ”ª
+                  🔪
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-lg">Mafia Game Active</h3>
@@ -490,7 +490,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       <button type="button" onClick={() => navigate(`/room/${roomId}/games`)} className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
         <div className="relative z-10">
           <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">ðŸŽ®</span>
+            <span className="text-3xl">🎮</span>
           </div>
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">BROWSE<br/>GAMES</h2>
           <p className="text-blue-100 text-sm">150+ titles available</p>
@@ -509,7 +509,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       >
         <div className="relative z-10">
           <div className="w-12 h-12 bg-violet-500/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">ðŸ“</span>
+            <span className="text-3xl">🔮</span>
           </div>
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">VOTE</h2>
           <p className="text-violet-100 text-sm">Quick decision making</p>
@@ -528,7 +528,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       >
         <div className="relative z-10">
           <div className="w-12 h-12 bg-orange-400/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">ðŸŽ¡</span>
+            <span className="text-3xl">🎡</span>
           </div>
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">SPIN<br/>WHEEL</h2>
           <p className="text-orange-100 text-sm">Random selection</p>
@@ -641,7 +641,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
               )}
               {player.isHost && (
                 <div className="absolute -bottom-0.5 -right-0.5 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center text-xs border-2 border-slate-900">
-                  â­
+                  ⭐
                 </div>
               )}
             </div>
@@ -668,7 +668,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                 onClick={() => setShowAllPlayers(false)}
                 className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
               >
-                âœ•
+                ✕
               </button>
             </div>
             <ul className="space-y-2">
@@ -694,7 +694,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                     <span className="text-slate-200 font-medium">{player.displayNameForGame || player.displayName}</span>
                   </div>
                   {player.isHost && (
-                    <span className="text-yellow-500 text-lg">â­</span>
+                    <span className="text-yellow-500 text-lg">⭐</span>
                   )}
                 </li>
               ))}
@@ -730,7 +730,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
             >
               <div className="flex items-center gap-4">
                 <div className="w-12 h-12 bg-red-500/30 rounded-xl flex items-center justify-center text-2xl">
-                  ðŸ”ª
+                  🔪
                 </div>
                 <div>
                   <h3 className="text-white font-bold text-lg">A Mafia game is starting!</h3>
