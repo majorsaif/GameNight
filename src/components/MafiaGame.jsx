@@ -146,7 +146,7 @@ export default function MafiaGame() {
   useEffect(() => {
     if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
 
-    const livingUids = getLivingPlayers().map((player) => player.uid);
+    const livingUids = gameState.players.filter(p => p.isAlive).map(player => player.uid);
     const skipVotes = gameState.skipVotes || [];
 
     if (livingUids.length > 0 && livingUids.every((uid) => skipVotes.includes(uid))) {
@@ -165,7 +165,27 @@ export default function MafiaGame() {
 
     if (timerJumpedRef.current) return; // Prevent repeated timer jumps
 
-    const activePlayerUids = getActivePlayers().map(p => p.uid);
+    // Inline getActivePlayers logic to avoid stale closure issues
+    let activePlayerUids = [];
+    switch (phase) {
+      case 'night-mafia':
+        activePlayerUids = gameState.players.filter(p => p.role === 'mafia' && p.isAlive).map(p => p.uid);
+        break;
+      case 'night-doctor':
+        const doctor = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
+        activePlayerUids = doctor ? [doctor.uid] : [];
+        break;
+      case 'night-detective':
+        const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
+        activePlayerUids = detective ? [detective.uid] : [];
+        break;
+      case 'day-vote':
+        activePlayerUids = gameState.players.filter(p => p.isAlive === true).map(p => p.uid);
+        break;
+      default:
+        activePlayerUids = [];
+    }
+    
     const confirmed = gameState.confirmedVotes || [];
 
     if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
@@ -238,7 +258,7 @@ export default function MafiaGame() {
         clearInterval(phaseTimerRef.current);
       }
     };
-  }, [isHost]);
+  }, [isHost, gameState?.phaseEndsAt, gameState?.phase]);
 
   useEffect(() => {
     const phaseEndsAt = gameState?.phaseEndsAt?.toMillis ? gameState.phaseEndsAt.toMillis() : gameState?.phaseEndsAt;
@@ -402,7 +422,29 @@ export default function MafiaGame() {
     }
 
     const roomRef = doc(db, 'rooms', roomId);
-    const activePlayerUids = getActivePlayers().map(p => p.uid);
+    
+    // Inline getActivePlayers logic
+    let activePlayerUids = [];
+    const phase = gameState.phase;
+    switch (phase) {
+      case 'night-mafia':
+        activePlayerUids = gameState.players.filter(p => p.role === 'mafia' && p.isAlive).map(p => p.uid);
+        break;
+      case 'night-doctor':
+        const doctor = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
+        activePlayerUids = doctor ? [doctor.uid] : [];
+        break;
+      case 'night-detective':
+        const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
+        activePlayerUids = detective ? [detective.uid] : [];
+        break;
+      case 'day-vote':
+        activePlayerUids = gameState.players.filter(p => p.isAlive === true).map(p => p.uid);
+        break;
+      default:
+        activePlayerUids = [];
+    }
+    
     const confirmed = confirmedVotesOverride || gameState.confirmedVotes || [];
 
     if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
