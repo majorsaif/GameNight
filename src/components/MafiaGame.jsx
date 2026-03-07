@@ -319,7 +319,17 @@ export default function MafiaGame() {
           await advanceFromDetectivePhase(roomRef);
           break;
         case 'night-detective-result':
-          console.log('HOST advancing from night-detective-result to day');
+          console.log('HOST advancing from night-detective-result to night-eyes-closed-4');
+          await updateDoc(roomRef, {
+            'activeActivity.phase': 'night-eyes-closed-4',
+            'activeActivity.phaseStartedAt': serverTimestamp(),
+            'activeActivity.phaseDurationMs': 3000,
+            'activeActivity.phaseEndsAt': Date.now() + 3000,
+            lastActivity: serverTimestamp()
+          });
+          break;
+        case 'night-eyes-closed-4':
+          console.log('HOST advancing from night-eyes-closed-4 to day');
           await startDayPhase(roomRef);
           break;
         case 'day-discussion':
