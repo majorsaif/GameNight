@@ -1053,9 +1053,13 @@ export default function MafiaGame() {
                       className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
-                        <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                          {getInitials(player.displayName)}
-                        </div>
+                        {player.photo ? (
+                          <img src={player.photo} alt={player.displayName} className="w-10 h-10 rounded-full object-cover" />
+                        ) : (
+                          <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                            {getInitials(player.displayName)}
+                          </div>
+                        )}
                         <span className="text-white">{player.displayName}</span>
                       </div>
                       {voteCount > 0 && (

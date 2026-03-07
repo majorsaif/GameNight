@@ -19,7 +19,7 @@ export default function HomeScreen() {
     roomId, 
     user?.id, 
     user?.displayName,
-    user?.avatar || null
+    user?.photo || null
   );
   const navigate = useNavigate();
   const location = useLocation();
@@ -356,9 +356,9 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
               className="relative"
               style={{ marginLeft: index > 0 ? '-8px' : '0' }}
             >
-              {player.avatar ? (
+              {player.photo ? (
                 <img
-                  src={player.avatar}
+                  src={player.photo}
                   alt={player.displayNameForGame || player.displayName}
                   className="w-11 h-11 rounded-full object-cover border-2 border-slate-900"
                   title={player.displayNameForGame || player.displayName}
@@ -410,9 +410,9 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                   className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-700"
                 >
                   <div className="flex items-center gap-3">
-                    {player.avatar ? (
+                    {player.photo ? (
                       <img
-                        src={player.avatar}
+                        src={player.photo}
                         alt={player.displayNameForGame || player.displayName}
                         className="w-10 h-10 rounded-full object-cover"
                       />
@@ -509,7 +509,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       >
         <div className="relative z-10">
           <div className="w-12 h-12 bg-violet-500/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">📝</span>
+            <span className="text-3xl">🔮</span>
           </div>
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">VOTE</h2>
           <p className="text-violet-100 text-sm">Quick decision making</p>
@@ -624,9 +624,9 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
               className="relative"
               style={{ marginLeft: index > 0 ? '-8px' : '0' }}
             >
-              {player.avatar ? (
+              {player.photo ? (
                 <img
-                  src={player.avatar}
+                  src={player.photo}
                   alt={player.displayNameForGame || player.displayName}
                   className="w-11 h-11 rounded-full object-cover border-2 border-slate-900"
                   title={player.displayNameForGame || player.displayName}
@@ -678,9 +678,9 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                   className="flex justify-between items-center p-3 bg-slate-900/50 rounded-lg border border-slate-700"
                 >
                   <div className="flex items-center gap-3">
-                    {player.avatar ? (
+                    {player.photo ? (
                       <img
-                        src={player.avatar}
+                        src={player.photo}
                         alt={player.displayNameForGame || player.displayName}
                         className="w-10 h-10 rounded-full object-cover"
                       />
@@ -750,7 +750,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
         </div>
       ) : (
         <div className="text-center py-6">
-          <div className="text-5xl mb-3 inline-block animate-bounce">⏳</div>
+          <div className="text-5xl mb-3 inline-block animate-bounce">â³</div>
           <h2 className="text-xl font-bold text-slate-400 italic">Waiting for host...</h2>
           <p className="text-slate-600 text-sm mt-2">The host will start an activity soon</p>
         </div>
