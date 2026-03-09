@@ -1,79 +1,110 @@
-# GamesNight
+# GameNight
 
-A React web app for managing games nights, built with Vite and React Router.
+GameNight is a React + Vite party-room app powered by Firebase Auth (anonymous) and Firestore.
 
-## Project Structure
+Users set a local display name and optional profile photo, then host or join live rooms with invite codes. Rooms support interactive activities including vote flows, wheel spins, and Mafia.
 
-```
-GamesNight/
-├── src/
-│   ├── components/
-│   │   ├── WelcomeScreen.jsx    # Landing page with Host/Join options
-│   │   ├── WelcomeScreen.css
-│   │   ├── HomeScreen.jsx        # Room page with host/player views
-│   │   └── HomeScreen.css
-│   ├── hooks/
-│   │   ├── useAuth.js            # Mock auth hook (Firebase ready)
-│   │   └── useRoom.js            # Mock room data hook (Firestore ready)
-│   ├── App.jsx                   # Router setup
-│   ├── main.jsx                  # React entry point
-│   └── index.css                 # Global styles
-├── index.html
-├── vite.config.js
-└── package.json
-```
+Live and usable: https://itsgamesnight.com
 
-## Features
+## Current Stack
 
-- **WelcomeScreen** (`/`):
-  - Host a Games Night button
-  - Join with room code input
-  - My Nights section (placeholder for saved games)
+- React 19
+- React Router
+- Firebase Auth (anonymous)
+- Firestore (real-time room state)
+- Tailwind CSS
+- Vite
 
-- **HomeScreen** (`/room/:roomId`):
-  - Conditional rendering based on host status
-  - Host view: Player list, Games button, Forfeit Wheel, End Games Night
-  - Player view: Player list, Games button, Forfeit Wheel, Leave Game
-  - Settings icon in top right corner
-  - Room code display
+## What Works Today
 
-## Architecture
-
-All data-fetching logic is encapsulated in custom hooks:
-
-- **`useAuth()`** - Returns mock user object
-  - Ready to swap with Firebase anonymous auth
-  
-- **`useRoom(roomId)`** - Returns mock room data
-  - Ready to swap with Firestore real-time listener
-  - Includes `isHost` helper for conditional rendering
-
-## Getting Started
-
-```bash
-# Install dependencies
-npm install
-
-# Start development server
-npm run dev
-
-# Build for production
-npm run build
-
-# Preview production build
-npm run preview
-```
-
-## Development
-
-The app is currently running with mock data. When ready to integrate Firebase:
-
-1. Install Firebase: `npm install firebase`
-2. Update `useAuth.js` to use Firebase Authentication
-3. Update `useRoom.js` to use Firestore listeners
-4. Components will work without changes (data layer is abstracted)
+- Onboarding flow (`/onboarding`)
+  - Name is required (`gamenight_nickname`)
+  - Optional profile photo stored as base64 (`gamenight_photo`)
+- Silent auth
+  - Firebase anonymous auth starts in background via `useAuth`
+  - No provider sign-in UI
+- Room system
+  - Host a room and generate 6-character code
+  - Join a room by invite code
+  - Real-time player list and room activity updates
+- Activities
+  - Vote modal + active vote state
+  - Forfeit wheel (player or custom wheel)
+  - Mafia lobby + game route
+- Profile/settings
+  - Change display name
+  - Add/change/remove photo
+  - Log Out clears all `gamenight_*` keys and restarts anonymous auth
+- Startup cleanup
+  - On app boot (`main.jsx`), stale rooms are cleaned from Firestore once
+  - Deletes rooms older than 12 hours using `lastActivity`, or `createdAt` fallback when `lastActivity` is missing
 
 ## Routes
 
-- `/` - Welcome screen
-- `/room/:roomId` - Room screen (host or player view)
+- `/onboarding` - first-time setup (name + optional photo)
+- `/` - welcome/home hub (host or join by code)
+- `/room/:roomId` - live room screen (host/player views)
+- `/room/:roomId/games` - games browser
+- `/room/:roomId/games/mafia` - mafia game screen
+- `/wheel` - wheel component route
+- `/profile` - profile editor and logout
+
+## Environment Variables
+
+Create a `.env` file in the project root:
+
+```bash
+VITE_FIREBASE_API_KEY=...
+VITE_FIREBASE_AUTH_DOMAIN=...
+VITE_FIREBASE_PROJECT_ID=...
+VITE_FIREBASE_STORAGE_BUCKET=...
+VITE_FIREBASE_MESSAGING_SENDER_ID=...
+VITE_FIREBASE_APP_ID=...
+```
+
+Also ensure in Firebase console:
+
+- Anonymous Auth is enabled
+- Firestore is created and accessible by your rules for intended usage
+
+## Setup
+
+```bash
+npm install
+npm run dev
+```
+
+Production build:
+
+```bash
+npm run build
+npm run preview
+```
+
+## Key Files
+
+- `src/main.jsx` - app bootstrap + one-time startup room cleanup call
+- `src/utils/roomCleanup.js` - Firestore stale-room query + batch delete
+- `src/firebase.js` - Firebase app/auth/firestore initialization
+- `src/hooks/useAuth.js` - local profile state + anonymous auth lifecycle
+- `src/hooks/useRoom.js` - room CRUD, join/leave, real-time sync, activities
+- `src/components/OnboardingScreen.jsx` - local profile setup UI
+- `src/components/WelcomeScreen.jsx` - host/join entry screen
+- `src/components/HomeScreen.jsx` - room UI, host/player actions, activity launch
+- `src/components/ProfileScreen.jsx` - profile editing and logout
+
+## Data Notes
+
+- Room documents are stored in the Firestore `rooms` collection.
+- Players include identity and avatar metadata used across room/game UIs.
+- Current local/session storage keys in use include:
+  - `gamenight_nickname`
+  - `gamenight_photo`
+  - `gamesnight_active_room`
+  - `gamesnight_rooms` (used by avatar utility helpers)
+
+## NPM Scripts
+
+- `npm run dev` - start development server
+- `npm run build` - production build
+- `npm run preview` - preview production build locally
