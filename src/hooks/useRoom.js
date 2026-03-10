@@ -646,8 +646,22 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
               const roomPlayerIds = roomPlayers.map((player) => player.id).filter(Boolean);
               const lobbyPlayers = activeActivity.lobbyPlayers;
               const spectators = Array.isArray(activeActivity.spectators) ? activeActivity.spectators : [];
-              const activityPlayers = Array.isArray(activeActivity.players) ? activeActivity.players : [];
+              const isWordImposterLobby = activeActivity?.type === 'wordImposter';
+              const rawActivityPlayers = Array.isArray(activeActivity.players) ? activeActivity.players : [];
+              const activityPlayers = isWordImposterLobby
+                ? rawActivityPlayers
+                  .filter((player) => player?.uid)
+                  .map((player) => ({
+                    uid: player.uid,
+                    displayName: player.displayName,
+                    avatarColor: player.avatarColor || getAvatarColor({ id: player.uid, displayName: player.displayName }, roomId)
+                  }))
+                : rawActivityPlayers;
               const activityPlayerIds = activityPlayers.map((player) => player.uid).filter(Boolean);
+              const hasWordImposterPlayerBloat = isWordImposterLobby && rawActivityPlayers.some((player) => {
+                if (!player || typeof player !== 'object') return false;
+                return 'photoURL' in player || 'photo' in player || 'avatar' in player || 'isAlive' in player || 'role' in player;
+              });
 
               // Find players who joined the room but aren't in lobby yet
               const missingLobbyPlayers = roomPlayerIds.filter(
@@ -655,13 +669,23 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
               );
               const missingActivityPlayers = roomPlayers
                 .filter((player) => !activityPlayerIds.includes(player.id))
-                .map((player) => ({
-                  uid: player.id,
-                  displayName: player.displayNameForGame || player.displayName,
-                  avatarColor: player.avatarColor || getAvatarColor(player, roomId),
-                  isAlive: true,
-                  role: null
-                }));
+                .map((player) => {
+                  if (isWordImposterLobby) {
+                    return {
+                      uid: player.id,
+                      displayName: player.displayNameForGame || player.displayName,
+                      avatarColor: player.avatarColor || getAvatarColor(player, roomId)
+                    };
+                  }
+
+                  return {
+                    uid: player.id,
+                    displayName: player.displayNameForGame || player.displayName,
+                    avatarColor: player.avatarColor || getAvatarColor(player, roomId),
+                    isAlive: true,
+                    role: null
+                  };
+                });
 
               // Find players who left the room but are still in lobby arrays
               const departedLobbyPlayers = lobbyPlayers.filter(
@@ -678,7 +702,8 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
                                   missingActivityPlayers.length > 0 || 
                                   departedLobbyPlayers.length > 0 || 
                                   departedActivityPlayers.length > 0 ||
-                                  departedSpectators.length > 0;
+                                  departedSpectators.length > 0 ||
+                                  hasWordImposterPlayerBloat;
 
               if (needsUpdate) {
                 const updates = {
@@ -705,12 +730,15 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
                   ...missingActivityPlayers
                 ];
 
-                if (missingActivityPlayers.length > 0 || departedActivityPlayers.length > 0) {
+                if (missingActivityPlayers.length > 0 || departedActivityPlayers.length > 0 || hasWordImposterPlayerBloat) {
                   if (missingActivityPlayers.length > 0) {
                     console.log('➕ useRoom: Auto-syncing missing activity players:', missingActivityPlayers.map((p) => p.uid));
                   }
                   if (departedActivityPlayers.length > 0) {
                     console.log('➖ useRoom: Removing departed activity players:', departedActivityPlayers.map((p) => p.uid));
+                  }
+                  if (hasWordImposterPlayerBloat) {
+                    console.log('🧹 useRoom: Stripping heavy fields from Word Imposter activity players');
                   }
                   updates['activeActivity.players'] = updatedActivityPlayers;
                 }

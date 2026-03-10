@@ -71,8 +71,7 @@ export default function GamesScreen() {
     const gamePlayers = room.players.map(p => ({
       uid: p.id,
       displayName: p.displayNameForGame || p.displayName,
-      avatarColor: p.avatarColor,
-      photoURL: p.photo || null
+      avatarColor: p.avatarColor
     }));
 
     const finalRules = {

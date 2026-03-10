@@ -333,12 +333,13 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   });
 
   const hasActiveActivity = room.activeActivity != null;
-  const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
-  const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const activityType = room.activeActivity?.type;
+  const isWheel = hasActiveActivity && (activityType === 'playerWheel' || activityType === 'customWheel');
+  const isMafia = hasActiveActivity && activityType === 'mafia';
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
-  const isWordImposter = hasActiveActivity && room.activeActivity?.type === 'wordImposter';
+  const isWordImposter = hasActiveActivity && activityType === 'wordImposter';
   const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && !isWheel && !isMafia && !isWordImposter;
+  const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -632,12 +633,13 @@ function GameRulesSection({ activityType }) {
 function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity != null;
-  const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
-  const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const activityType = room.activeActivity?.type;
+  const isWheel = hasActiveActivity && (activityType === 'playerWheel' || activityType === 'customWheel');
+  const isMafia = hasActiveActivity && activityType === 'mafia';
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
-  const isWordImposter = hasActiveActivity && room.activeActivity?.type === 'wordImposter';
+  const isWordImposter = hasActiveActivity && activityType === 'wordImposter';
   const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && !isWheel && !isMafia && !isWordImposter;
+  const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;

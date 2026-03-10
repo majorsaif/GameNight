@@ -78,7 +78,13 @@ export default function WordImposterLobbyCard({
     const playersToAssign = latestLobbyPlayers
       .map((playerId) => {
         const existingActivityPlayer = latestGamePlayersById.get(playerId);
-        if (existingActivityPlayer) return existingActivityPlayer;
+        if (existingActivityPlayer) {
+          return {
+            uid: existingActivityPlayer.uid,
+            displayName: existingActivityPlayer.displayName,
+            avatarColor: existingActivityPlayer.avatarColor || getAvatarColor({ id: existingActivityPlayer.uid, displayName: existingActivityPlayer.displayName }, roomId)
+          };
+        }
 
         const roomPlayer = roomPlayersById.get(playerId);
         if (!roomPlayer) return null;
@@ -86,8 +92,7 @@ export default function WordImposterLobbyCard({
         return {
           uid: roomPlayer.id,
           displayName: roomPlayer.displayNameForGame || roomPlayer.displayName,
-          avatarColor: roomPlayer.avatarColor,
-          photoURL: roomPlayer.photo || null
+          avatarColor: roomPlayer.avatarColor || getAvatarColor(roomPlayer, roomId)
         };
       })
       .filter(Boolean);
