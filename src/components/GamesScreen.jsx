@@ -21,10 +21,89 @@ export default function GamesScreen() {
     discussionTime: 3,
     votingTime: 1
   });
+  const [showWordImposterSetup, setShowWordImposterSetup] = useState(false);
+  const [imposterCountError, setImposterCountError] = useState('');
+  const [wordImposterRules, setWordImposterRules] = useState({
+    imposterCount: '1',
+    showCategory: true
+  });
 
   const handleGameClick = () => {
     setShowComingSoon(true);
     setTimeout(() => setShowComingSoon(false), 2000);
+  };
+
+  const handleWordImposterClick = () => {
+    if (!isHost) {
+      setShowHostOnly(true);
+      setTimeout(() => setShowHostOnly(false), 3000);
+      return;
+    }
+    setShowWordImposterSetup(true);
+  };
+
+  const handleStartWordImposterLobby = async () => {
+    if (!isHost || !roomId || !user) return;
+
+    setImposterCountError('');
+
+    const imposterCountValue = wordImposterRules.imposterCount.trim();
+    if (!imposterCountValue) {
+      setImposterCountError('Number of imposters is required');
+      return;
+    }
+
+    const imposterCount = parseInt(imposterCountValue, 10);
+    if (isNaN(imposterCount) || imposterCount < 1) {
+      setImposterCountError('Number of imposters must be at least 1');
+      return;
+    }
+
+    const totalPlayers = room?.players?.length || 0;
+    const maxAllowed = Math.max(1, Math.floor(totalPlayers / 3));
+    if (imposterCount > maxAllowed) {
+      setImposterCountError(`Too many imposters! With ${totalPlayers} players you can have a maximum of ${maxAllowed} imposter(s)`);
+      return;
+    }
+
+    const roomRef = doc(db, 'rooms', roomId);
+
+    const gamePlayers = room.players.map(p => ({
+      uid: p.id,
+      displayName: p.displayNameForGame || p.displayName,
+      avatarColor: p.avatarColor,
+      photoURL: p.photo || null
+    }));
+
+    const finalRules = {
+      imposterCount: imposterCount,
+      showCategory: wordImposterRules.showCategory
+    };
+
+    await updateDoc(roomRef, {
+      activeActivity: {
+        type: 'wordImposter',
+        phase: 'lobby',
+        rules: finalRules,
+        players: gamePlayers,
+        lobbyPlayers: [user.id],
+        word: null,
+        category: null,
+        imposterIds: [],
+        startingPlayerId: null,
+        direction: null,
+        readyVotes: [],
+        votes: {},
+        eliminatedUid: null,
+        winner: null,
+        roundNumber: 1,
+        createdAt: serverTimestamp()
+      },
+      lastActivity: serverTimestamp()
+    });
+
+    setShowWordImposterSetup(false);
+    navigate(`/room/${roomId}`);
   };
 
   const handleMafiaClick = () => {
@@ -157,7 +236,7 @@ export default function GamesScreen() {
           
           {/* Word Imposter */}
           <button 
-            onClick={handleGameClick}
+            onClick={handleWordImposterClick}
             className="group relative overflow-hidden bg-gradient-to-br from-teal-600 to-cyan-700 hover:from-teal-500 hover:to-cyan-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
           >
             <div className="relative z-10">
@@ -339,6 +418,71 @@ export default function GamesScreen() {
               <button
                 onClick={handleStartLobby}
                 className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+              >
+                Start Lobby
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Word Imposter Setup Modal */}
+      {showWordImposterSetup && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-white text-2xl font-bold">🕵️ Word Imposter Setup</h2>
+              <button
+                onClick={() => setShowWordImposterSetup(false)}
+                className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Number of imposters */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <label className="text-white font-semibold block mb-2">Number of Imposters</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={wordImposterRules.imposterCount}
+                  onChange={(e) => {
+                    setWordImposterRules({ ...wordImposterRules, imposterCount: e.target.value });
+                    setImposterCountError('');
+                  }}
+                  placeholder="Enter number"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
+                />
+                {imposterCountError && (
+                  <p className="text-red-400 text-sm mt-2">{imposterCountError}</p>
+                )}
+              </div>
+
+              {/* Show category to imposter */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-white font-semibold">Show Category 📂</label>
+                    <p className="text-slate-400 text-sm">Imposters see the category but not the word</p>
+                  </div>
+                  <button
+                    onClick={() => setWordImposterRules({ ...wordImposterRules, showCategory: !wordImposterRules.showCategory })}
+                    className={`w-12 h-7 rounded-full transition-colors ${
+                      wordImposterRules.showCategory ? 'bg-teal-600' : 'bg-slate-600'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                      wordImposterRules.showCategory ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
+              <button
+                onClick={handleStartWordImposterLobby}
+                className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
               >
                 Start Lobby
               </button>

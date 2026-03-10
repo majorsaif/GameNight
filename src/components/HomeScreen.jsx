@@ -7,9 +7,11 @@ import ActiveVote from './ActiveVote';
 import WheelSpin from './ForfeitWheel';
 import WheelSetupModal from './WheelSetupModal';
 import MafiaLobbyCard from './MafiaLobbyCard';
+import WordImposterLobbyCard from './WordImposterLobbyCard';
 import GameNightLogo from './GameNightLogo';
 import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 import mafiaRules from '../rules/mafia';
+import wordImposterRulesData from '../rules/wordImposter';
 
 export default function HomeScreen() {
   const { roomId } = useParams();
@@ -43,18 +45,29 @@ export default function HomeScreen() {
 
     const activity = room.activeActivity;
 
-    if (!activity || activity.type !== 'mafia') return;
+    if (!activity) return;
 
     const newPhase = activity.phase;
     const lobbyPlayers = activity.lobbyPlayers || [];
     const isLobbyParticipant = lobbyPlayers.includes(user.id);
     const isBeyondLobby = newPhase && newPhase !== 'lobby';
-    const mafiaRoute = `/room/${roomId}/games/mafia`;
-    const alreadyOnMafiaPage = location.pathname === mafiaRoute;
 
-    if (isBeyondLobby && isLobbyParticipant && !alreadyOnMafiaPage) {
-      console.log('[HomeScreen] Auto-joining Mafia game', { phase: newPhase, userId: user.id });
-      navigate(`/room/${roomId}/games/mafia`);
+    if (activity.type === 'mafia') {
+      const mafiaRoute = `/room/${roomId}/games/mafia`;
+      const alreadyOnMafiaPage = location.pathname === mafiaRoute;
+      if (isBeyondLobby && isLobbyParticipant && !alreadyOnMafiaPage) {
+        console.log('[HomeScreen] Auto-joining Mafia game', { phase: newPhase, userId: user.id });
+        navigate(`/room/${roomId}/games/mafia`);
+      }
+    }
+
+    if (activity.type === 'wordImposter') {
+      const wiRoute = `/room/${roomId}/games/word-imposter`;
+      const alreadyOnWiPage = location.pathname === wiRoute;
+      if (isBeyondLobby && isLobbyParticipant && !alreadyOnWiPage) {
+        console.log('[HomeScreen] Auto-joining Word Imposter game', { phase: newPhase, userId: user.id });
+        navigate(wiRoute);
+      }
     }
   }, [room, roomId, user?.id, navigate, location.pathname]);
 
@@ -313,11 +326,19 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
     votingTime: 1
   });
   
+  const [showWiRulesModal, setShowWiRulesModal] = useState(false);
+  const [wiRules, setWiRules] = useState(room.activeActivity?.rules || {
+    imposterCount: 1,
+    showCategory: true
+  });
+
   const hasActiveActivity = room.activeActivity != null;
   const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
   const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && !isWheel && !isMafia;
+  const isWordImposter = hasActiveActivity && room.activeActivity?.type === 'wordImposter';
+  const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
+  const isVote = hasActiveActivity && !isWheel && !isMafia && !isWordImposter;
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -474,6 +495,33 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                 </div>
               </div>
             </button>
+          ) : isWordImposterLobby ? (
+            <WordImposterLobbyCard
+              lobbyState={room.activeActivity}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={true}
+              rules={wiRules}
+              setRules={setWiRules}
+              showRulesModal={showWiRulesModal}
+              setShowRulesModal={setShowWiRulesModal}
+            />
+          ) : isWordImposter ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/word-imposter`)}
+              className="w-full bg-gradient-to-br from-teal-600 to-cyan-700 hover:from-teal-500 hover:to-cyan-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-teal-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🕵️
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Word Imposter Active</h3>
+                  <p className="text-teal-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
           ) : (
             <WheelSpin
               activity={room.activeActivity}
@@ -547,6 +595,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
 function GameRulesSection({ activityType }) {
   let rules = null;
   if (activityType === 'mafia') rules = mafiaRules;
+  if (activityType === 'wordImposter') rules = wordImposterRulesData;
   if (!rules) return null;
 
   return (
@@ -586,7 +635,9 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
   const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && !isWheel && !isMafia;
+  const isWordImposter = hasActiveActivity && room.activeActivity?.type === 'wordImposter';
+  const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
+  const isVote = hasActiveActivity && !isWheel && !isMafia && !isWordImposter;
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -735,6 +786,29 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                 <div>
                   <h3 className="text-white font-bold text-lg">A Mafia game is starting!</h3>
                   <p className="text-red-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
+          ) : isWordImposterLobby ? (
+            <WordImposterLobbyCard
+              lobbyState={room.activeActivity}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={false}
+            />
+          ) : isWordImposter ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/word-imposter`)}
+              className="w-full bg-gradient-to-br from-teal-600 to-cyan-700 hover:from-teal-500 hover:to-cyan-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-teal-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🕵️
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">A Word Imposter game is starting!</h3>
+                  <p className="text-teal-100 text-sm">Click to join the game</p>
                 </div>
               </div>
             </button>
