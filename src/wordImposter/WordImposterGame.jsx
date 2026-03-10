@@ -123,7 +123,7 @@ export default function WordImposterGame() {
     if (!isHost || !gameState || gameState.phase !== 'describing') return;
 
     const readyVotes = gameState.readyVotes || [];
-    const allPlayerUids = gameState.players.map(p => p.uid);
+    const allPlayerUids = (gameState.players ?? []).map(p => p.uid);
 
     if (allPlayerUids.length > 0 && allPlayerUids.every(uid => readyVotes.includes(uid))) {
       const roomRef = doc(db, 'rooms', roomId);
@@ -183,7 +183,7 @@ export default function WordImposterGame() {
 
     if (!eliminated) return;
 
-    const isEliminatedImposter = gameState.imposterIds.includes(eliminated);
+    const isEliminatedImposter = (gameState.imposterIds ?? []).includes(eliminated);
 
     if (isEliminatedImposter) {
       // Go to imposter-guess phase
@@ -356,7 +356,7 @@ export default function WordImposterGame() {
     const directionText = gameState.direction === 'clockwise' ? 'Going clockwise ➡️' : 'Going anticlockwise ⬅️';
     const showCountdown = countdown !== null && countdown > 0;
     const readyVotes = gameState.readyVotes || [];
-    const allReady = gameState.players.every(p => readyVotes.includes(p.uid));
+    const allReady = (gameState.players ?? []).every(p => readyVotes.includes(p.uid));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
@@ -395,10 +395,10 @@ export default function WordImposterGame() {
                   <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
                     <p className="text-teal-400 font-semibold mb-2">You're ready! ✅</p>
                     <p className="text-slate-400 text-sm">
-                      Waiting for others... ({readyVotes.length}/{gameState.players.length})
+                      Waiting for others... ({readyVotes.length}/{(gameState.players ?? []).length})
                     </p>
                     <div className="flex items-center justify-center mt-3">
-                      {readyVotes.map((uid, index) => {
+                      {(readyVotes ?? []).map((uid, index) => {
                         const player = getPlayerByUid(uid);
                         if (!player) return null;
                         return (
