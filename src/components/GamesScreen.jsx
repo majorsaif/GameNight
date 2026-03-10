@@ -95,6 +95,7 @@ export default function GamesScreen() {
         votes: {},
         eliminatedUid: null,
         winner: null,
+        wordRevealed: null,
         roundNumber: 1,
         createdAt: serverTimestamp()
       },

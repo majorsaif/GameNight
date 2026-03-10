@@ -148,6 +148,7 @@ export default function WordImposterLobbyCard({
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,
       'activeActivity.winner': null,
+      'activeActivity.wordRevealed': null,
       'activeActivity.roundNumber': 1,
       lastActivity: serverTimestamp()
     });

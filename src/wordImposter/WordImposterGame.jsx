@@ -18,6 +18,7 @@ export default function WordImposterGame() {
   const [showWord, setShowWord] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [hasVoted, setHasVoted] = useState(false);
+  const [voteError, setVoteError] = useState('');
   const [countdown, setCountdown] = useState(null);
   const [readyClicked, setReadyClicked] = useState(false);
   const countdownRef = useRef(null);
@@ -48,6 +49,13 @@ export default function WordImposterGame() {
       setHasVoted(gameState.votes?.[user?.id] != null || false);
       setSelectedPlayer(gameState.votes?.[user?.id] || null);
       setReadyClicked(gameState.readyVotes?.includes(user?.id) || false);
+      setVoteError('');
+    }
+  }, [gameState?.phase]);
+
+  useEffect(() => {
+    if (gameState?.phase === 'word-reveal') {
+      setShowWord(false);
     }
   }, [gameState?.phase]);
 
@@ -118,6 +126,21 @@ export default function WordImposterGame() {
     });
   };
 
+  const startVotingPhase = async () => {
+    const roomRef = doc(db, 'rooms', roomId);
+    await updateDoc(roomRef, {
+      'activeActivity.phase': 'voting',
+      'activeActivity.votes': {},
+      'activeActivity.eliminatedUid': null,
+      lastActivity: serverTimestamp()
+    });
+  };
+
+  const handleStartVotingNow = async () => {
+    if (!isHost || !gameState || gameState.phase !== 'describing') return;
+    await startVotingPhase();
+  };
+
   // Host auto-advance when all players ready
   useEffect(() => {
     if (!isHost || !gameState || gameState.phase !== 'describing') return;
@@ -126,29 +149,30 @@ export default function WordImposterGame() {
     const allPlayerUids = (gameState.players ?? []).map(p => p.uid);
 
     if (allPlayerUids.length > 0 && allPlayerUids.every(uid => readyVotes.includes(uid))) {
-      const roomRef = doc(db, 'rooms', roomId);
-      updateDoc(roomRef, {
-        'activeActivity.phase': 'voting',
-        'activeActivity.votes': {},
-        'activeActivity.eliminatedUid': null,
-        lastActivity: serverTimestamp()
-      }).catch(err => console.error('Error advancing to voting:', err));
+      startVotingPhase().catch(err => console.error('Error advancing to voting:', err));
     }
   }, [isHost, gameState?.phase, gameState?.readyVotes, gameState?.players]);
 
   const handleVotePlayer = (targetUid) => {
-    if (hasVoted || targetUid === user?.id) return;
+    if (hasVoted) return;
     setSelectedPlayer(targetUid);
+    setVoteError('');
   };
 
   const handleConfirmVote = async () => {
     if (!user || !selectedPlayer || hasVoted) return;
+
+    if (selectedPlayer === user.id) {
+      setVoteError('You cannot vote for yourself');
+      return;
+    }
 
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
       [`activeActivity.votes.${user.id}`]: selectedPlayer,
       lastActivity: serverTimestamp()
     });
+    setVoteError('');
     setHasVoted(true);
   };
 
@@ -186,30 +210,43 @@ export default function WordImposterGame() {
     const isEliminatedImposter = (gameState.imposterIds ?? []).includes(eliminated);
 
     if (isEliminatedImposter) {
-      // Go to imposter-guess phase
-      await updateDoc(roomRef, {
-        'activeActivity.eliminatedUid': eliminated,
-        'activeActivity.phase': 'imposter-guess',
-        lastActivity: serverTimestamp()
-      });
-    } else {
-      // Imposter wins immediately
+      // Town wins immediately
       await updateDoc(roomRef, {
         'activeActivity.eliminatedUid': eliminated,
         'activeActivity.phase': 'ended',
+        'activeActivity.winner': 'town',
+        lastActivity: serverTimestamp()
+      });
+    } else {
+      // Imposter wins immediately, then optional guess phase for fun
+      await updateDoc(roomRef, {
+        'activeActivity.eliminatedUid': eliminated,
+        'activeActivity.phase': 'imposter-guess',
         'activeActivity.winner': 'imposter',
+        'activeActivity.wordRevealed': false,
         lastActivity: serverTimestamp()
       });
     }
   };
 
-  const handleImposterGuessResult = async (guessedCorrectly) => {
+  const handleImposterGuessResult = async () => {
     if (!isHost) return;
 
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
       'activeActivity.phase': 'ended',
-      'activeActivity.winner': guessedCorrectly ? 'imposter' : 'town',
+      'activeActivity.winner': gameState?.winner || 'imposter',
+      'activeActivity.wordRevealed': false,
+      lastActivity: serverTimestamp()
+    });
+  };
+
+  const handleRevealWord = async () => {
+    if (!isHost) return;
+
+    const roomRef = doc(db, 'rooms', roomId);
+    await updateDoc(roomRef, {
+      'activeActivity.wordRevealed': true,
       lastActivity: serverTimestamp()
     });
   };
@@ -243,6 +280,7 @@ export default function WordImposterGame() {
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,
       'activeActivity.winner': null,
+      'activeActivity.wordRevealed': null,
       'activeActivity.roundNumber': (gameState.roundNumber || 1) + 1,
       lastActivity: serverTimestamp()
     });
@@ -289,47 +327,45 @@ export default function WordImposterGame() {
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          {isImposter ? (
-            <div className="bg-gradient-to-br from-red-900 to-red-800 border-2 border-red-600/50 rounded-2xl p-8 text-center">
-              <div className="text-8xl mb-6">🕵️</div>
-              <h1 className="text-white text-3xl font-black mb-4">You are the IMPOSTER</h1>
-              {gameState.rules?.showCategory && gameState.category && (
-                <div className="bg-red-800/60 border border-red-600/40 rounded-xl p-4 mt-4">
-                  <p className="text-red-200 text-sm mb-1">Category</p>
-                  <p className="text-white text-xl font-bold">{gameState.category}</p>
-                </div>
-              )}
-              <p className="text-red-200 mt-6 text-sm">Listen carefully and try to blend in!</p>
-            </div>
-          ) : (
-            <div className="text-center">
-              {!showWord ? (
-                <div>
-                  <div className="text-6xl mb-6">🤫</div>
-                  <h1 className="text-white text-2xl font-bold mb-4">Your word is hidden</h1>
-                  <p className="text-slate-400 mb-8">Tap Reveal to see your word</p>
-                  <button
-                    onClick={() => setShowWord(true)}
-                    className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
-                  >
-                    Reveal Word
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-gradient-to-br from-teal-900 to-cyan-900 border-2 border-teal-500/30 rounded-2xl p-8">
-                  <p className="text-teal-200 text-sm mb-2">Your word is</p>
-                  <h1 className="text-white text-4xl font-black mb-2">{gameState.word}</h1>
-                  <p className="text-teal-300 text-sm mb-6">Category: {gameState.category}</p>
-                  <button
-                    onClick={() => setShowWord(false)}
-                    className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition-colors"
-                  >
-                    Hide Word
-                  </button>
-                </div>
-              )}
-            </div>
-          )}
+          <div className="text-center">
+            {!showWord ? (
+              <div>
+                <div className="text-6xl mb-6">🤫</div>
+                <h1 className="text-white text-2xl font-bold mb-4">Your word is hidden</h1>
+                <p className="text-slate-400 mb-8">Tap Reveal to see your card</p>
+                <button
+                  onClick={() => setShowWord(true)}
+                  className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
+                >
+                  Reveal
+                </button>
+              </div>
+            ) : isImposter ? (
+              <div className="bg-gradient-to-br from-red-900 to-red-800 border-2 border-red-600/50 rounded-2xl p-8 text-center">
+                <div className="text-8xl mb-6">🕵️</div>
+                <h1 className="text-white text-3xl font-black mb-4">You are the IMPOSTER 🕵️</h1>
+                {gameState.rules?.showCategory && gameState.category && (
+                  <div className="bg-red-800/60 border border-red-600/40 rounded-xl p-4 mt-4">
+                    <p className="text-red-200 text-sm mb-1">Category</p>
+                    <p className="text-white text-xl font-bold">{gameState.category}</p>
+                  </div>
+                )}
+                <p className="text-red-200 mt-6 text-sm">Listen carefully and try to blend in!</p>
+              </div>
+            ) : (
+              <div className="bg-gradient-to-br from-teal-900 to-cyan-900 border-2 border-teal-500/30 rounded-2xl p-8">
+                <p className="text-teal-200 text-sm mb-2">Your word is:</p>
+                <h1 className="text-white text-4xl font-black mb-2">{gameState.word}</h1>
+                <p className="text-teal-300 text-sm mb-6">Category: {gameState.category}</p>
+                <button
+                  onClick={() => setShowWord(false)}
+                  className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition-colors"
+                >
+                  Hide
+                </button>
+              </div>
+            )}
+          </div>
 
           <div className="mt-6">
             {isHost ? (
@@ -356,7 +392,6 @@ export default function WordImposterGame() {
     const directionText = gameState.direction === 'clockwise' ? 'Going clockwise ➡️' : 'Going anticlockwise ⬅️';
     const showCountdown = countdown !== null && countdown > 0;
     const readyVotes = gameState.readyVotes || [];
-    const allReady = (gameState.players ?? []).every(p => readyVotes.includes(p.uid));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
@@ -381,40 +416,48 @@ export default function WordImposterGame() {
                     {startingPlayer?.displayName} is going first!
                   </h2>
                   <p className="text-teal-300 text-lg mb-4">{directionText}</p>
-                  <p className="text-slate-300 text-sm">Describe the word now — in real life!</p>
+                  <p className="text-slate-300 text-sm">Describe the word now</p>
                 </div>
-
-                {!readyClicked ? (
-                  <button
-                    onClick={handleReadyToVote}
-                    className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
-                  >
-                    Ready to Vote ✋
-                  </button>
-                ) : (
-                  <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                    <p className="text-teal-400 font-semibold mb-2">You're ready! ✅</p>
-                    <p className="text-slate-400 text-sm">
-                      Waiting for others... ({readyVotes.length}/{(gameState.players ?? []).length})
-                    </p>
-                    <div className="flex items-center justify-center mt-3">
-                      {(readyVotes ?? []).map((uid, index) => {
-                        const player = getPlayerByUid(uid);
-                        if (!player) return null;
-                        return (
-                          <div
-                            key={uid}
-                            className={`w-7 h-7 ${player.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
-                            title={player.displayName}
-                          >
-                            {getInitials(player.displayName)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
               </>
+            )}
+
+            <button
+              onClick={handleReadyToVote}
+              disabled={readyClicked}
+              className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 disabled:from-slate-700 disabled:to-slate-700 text-white disabled:text-slate-300 font-bold py-4 rounded-xl transition-colors"
+            >
+              {readyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
+            </button>
+
+            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center mt-3">
+              <p className="text-slate-300 text-sm">
+                Ready: {readyVotes.length}/{(gameState.players ?? []).length}
+              </p>
+              <div className="flex items-center justify-center mt-3">
+                {(gameState.players ?? []).map((player, index) => {
+                  const isReady = readyVotes.includes(player.uid);
+                  return (
+                    <div
+                      key={player.uid}
+                      className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
+                        isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
+                      }`}
+                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                    >
+                      {getInitials(player.displayName)}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            {isHost && (
+              <button
+                onClick={handleStartVotingNow}
+                className="w-full mt-3 bg-white hover:bg-slate-200 text-slate-900 font-bold py-4 rounded-xl transition-colors"
+              >
+                Start Voting
+              </button>
             )}
           </div>
         </div>
@@ -426,7 +469,6 @@ export default function WordImposterGame() {
   if (gameState.phase === 'voting') {
     const votes = gameState.votes || {};
     const allPlayers = gameState.players || [];
-    const votablePlayers = allPlayers.filter(p => p.uid !== user?.id);
     const totalVoters = allPlayers.length;
     const votedCount = Object.keys(votes).length;
     const allVoted = votedCount >= totalVoters;
@@ -442,7 +484,7 @@ export default function WordImposterGame() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 mb-6">
-            {votablePlayers.map((player) => {
+            {allPlayers.map((player) => {
               const votersForPlayer = Object.entries(votes)
                 .filter(([, targetUid]) => targetUid === player.uid)
                 .map(([voterUid]) => getPlayerByUid(voterUid))
@@ -491,6 +533,10 @@ export default function WordImposterGame() {
             </button>
           )}
 
+          {!hasVoted && voteError && (
+            <p className="text-red-400 text-sm text-center mt-2">{voteError}</p>
+          )}
+
           {hasVoted && !isHost && (
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
               <p className="text-teal-400 font-semibold">Vote confirmed! ✅</p>
@@ -514,17 +560,15 @@ export default function WordImposterGame() {
 
   // === IMPOSTER GUESS PHASE ===
   if (gameState.phase === 'imposter-guess') {
-    const eliminatedPlayer = getPlayerByUid(gameState.eliminatedUid);
-
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="text-center mb-8">
             <div className="text-8xl mb-4">🕵️</div>
             <h1 className="text-white text-3xl font-black mb-2">
-              {eliminatedPlayer?.displayName} was the imposter!
+              The imposter wins! But can they guess the word?
             </h1>
-            <p className="text-slate-300 text-lg">Can they guess the word?</p>
+            <p className="text-slate-300 text-lg">The imposter says their guess out loud.</p>
           </div>
 
           <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-6 text-center mb-6">
@@ -536,7 +580,7 @@ export default function WordImposterGame() {
           {isHost ? (
             <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
               <p className="text-white font-semibold text-center mb-4">
-                Did {eliminatedPlayer?.displayName} guess the word correctly?
+                Did the imposter guess the word correctly?
               </p>
               <div className="flex gap-3">
                 <button
@@ -568,6 +612,7 @@ export default function WordImposterGame() {
     const winner = gameState.winner;
     const imposterPlayers = (gameState.imposterIds || []).map(uid => getPlayerByUid(uid)).filter(Boolean);
     const eliminatedPlayer = getPlayerByUid(gameState.eliminatedUid);
+    const isWordHidden = gameState.wordRevealed === false;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -577,23 +622,35 @@ export default function WordImposterGame() {
             <h1 className="text-white text-4xl font-black mb-2">
               {winner === 'town' ? 'Town wins!' : 'Imposter wins!'}
             </h1>
-            {winner === 'town' && (
-              <p className="text-green-400 text-lg">The imposter couldn't guess the word!</p>
+            {winner === 'town' && eliminatedPlayer && gameState.imposterIds?.includes(eliminatedPlayer.uid) && (
+              <p className="text-green-400 text-lg">The imposter was voted out!</p>
             )}
             {winner === 'imposter' && eliminatedPlayer && !gameState.imposterIds?.includes(eliminatedPlayer.uid) && (
               <p className="text-red-400 text-lg">An innocent player was voted out!</p>
             )}
-            {winner === 'imposter' && eliminatedPlayer && gameState.imposterIds?.includes(eliminatedPlayer.uid) && (
-              <p className="text-red-400 text-lg">The imposter guessed the word correctly!</p>
-            )}
           </div>
 
           {/* Reveal the word */}
-          <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-6 text-center mb-6">
-            <p className="text-teal-200 text-sm mb-1">The word was</p>
-            <h2 className="text-white text-3xl font-black">{gameState.word}</h2>
-            <p className="text-teal-300 text-sm mt-1">Category: {gameState.category}</p>
-          </div>
+          {isWordHidden ? (
+            <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-6 text-center mb-6">
+              <p className="text-teal-200 text-sm mb-1">Word</p>
+              <h2 className="text-white text-3xl font-black">Word hidden</h2>
+              {isHost && (
+                <button
+                  onClick={handleRevealWord}
+                  className="w-full mt-4 bg-white hover:bg-slate-200 text-slate-900 font-bold py-3 rounded-xl transition-colors"
+                >
+                  Reveal Word
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-6 text-center mb-6">
+              <p className="text-teal-200 text-sm mb-1">The word was</p>
+              <h2 className="text-white text-3xl font-black">{gameState.word}</h2>
+              <p className="text-teal-300 text-sm mt-1">Category: {gameState.category}</p>
+            </div>
+          )}
 
           {/* Reveal imposters */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 mb-6">
@@ -616,14 +673,11 @@ export default function WordImposterGame() {
                       </div>
                       <span className="text-white">{player.displayName}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-2xl">{wasImposter ? '🕵️' : '👤'}</span>
-                      <span className={`text-sm font-semibold uppercase ${
-                        wasImposter ? 'text-red-400' : 'text-slate-400'
-                      }`}>
-                        {wasImposter ? 'Imposter' : 'Town'}
+                    {wasImposter ? (
+                      <span className="text-sm font-semibold uppercase text-red-400">
+                        IMPOSTER
                       </span>
-                    </div>
+                    ) : null}
                   </div>
                 );
               })}
