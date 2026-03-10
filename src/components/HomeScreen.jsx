@@ -472,6 +472,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
           ) : isMafiaLobby ? (
             <MafiaLobbyCard
               lobbyState={room.activeActivity}
+              roomPlayers={room.players}
               userId={userId}
               roomId={roomId}
               navigate={navigate}
@@ -499,6 +500,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
           ) : isWordImposterLobby ? (
             <WordImposterLobbyCard
               lobbyState={room.activeActivity}
+              roomPlayers={room.players}
               userId={userId}
               roomId={roomId}
               navigate={navigate}
@@ -771,6 +773,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
           ) : isMafiaLobby ? (
             <MafiaLobbyCard
               lobbyState={room.activeActivity}
+              roomPlayers={room.players}
               userId={userId}
               roomId={roomId}
               navigate={navigate}
@@ -794,6 +797,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
           ) : isWordImposterLobby ? (
             <WordImposterLobbyCard
               lobbyState={room.activeActivity}
+              roomPlayers={room.players}
               userId={userId}
               roomId={roomId}
               navigate={navigate}

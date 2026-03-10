@@ -6,6 +6,7 @@ import { getRandomWord } from '../wordImposter/words';
 
 export default function WordImposterLobbyCard({
   lobbyState,
+  roomPlayers,
   userId,
   roomId,
   navigate,
@@ -17,6 +18,11 @@ export default function WordImposterLobbyCard({
 }) {
   const lobbyPlayers = lobbyState?.lobbyPlayers || [];
   const allPlayers = lobbyState?.players || [];
+  const roomPlayersByUid = new Map((roomPlayers || []).map((player) => [player.id, player]));
+  const getLobbyPlayerPhoto = (uid) => {
+    const matchingRoomPlayer = roomPlayersByUid.get(uid);
+    return matchingRoomPlayer?.photo || null;
+  };
   const gameRules = lobbyState?.rules || rules;
   const [showRulesEdit, setShowRulesEdit] = useState(showRulesModal);
   const [editRules, setEditRules] = useState({
@@ -244,21 +250,24 @@ export default function WordImposterLobbyCard({
             Players Joined ({lobbyPlayers.length})
           </h4>
           <div className="space-y-2">
-            {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => (
-              <div
-                key={player.uid}
-                className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
-              >
-                {player.photoURL ? (
-                  <img src={player.photoURL} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-                ) : (
-                  <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                    {getInitials(player.displayName)}
-                  </div>
-                )}
-                <span className="text-white text-sm font-medium">{player.displayName}</span>
-              </div>
-            ))}
+            {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
+              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photoURL || player.photo || null;
+              return (
+                <div
+                  key={player.uid}
+                  className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
+                >
+                  {playerPhoto ? (
+                    <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                      {getInitials(player.displayName)}
+                    </div>
+                  )}
+                  <span className="text-white text-sm font-medium">{player.displayName}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -370,21 +379,24 @@ export default function WordImposterLobbyCard({
           Players Joined ({lobbyPlayers.length})
         </h4>
         <div className="space-y-2">
-          {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => (
-            <div
-              key={player.uid}
-              className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
-            >
-              {player.photoURL ? (
-                <img src={player.photoURL} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-              ) : (
-                <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
-              )}
-              <span className="text-white text-sm font-medium">{player.displayName}</span>
-            </div>
-          ))}
+          {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
+            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photoURL || player.photo || null;
+            return (
+              <div
+                key={player.uid}
+                className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
+              >
+                {playerPhoto ? (
+                  <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                    {getInitials(player.displayName)}
+                  </div>
+                )}
+                <span className="text-white text-sm font-medium">{player.displayName}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 

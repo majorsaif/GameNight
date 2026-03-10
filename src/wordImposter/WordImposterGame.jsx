@@ -4,7 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useRoom } from '../hooks/useRoom';
 import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
 import { db } from '../firebase';
-import { getInitials, getAvatarColor } from '../utils/avatar';
+import { getInitials } from '../utils/avatar';
 import { getRandomWord } from './words';
 
 export default function WordImposterGame() {
@@ -97,6 +97,18 @@ export default function WordImposterGame() {
 
   const getPlayerByUid = (uid) => {
     return gameState?.players?.find(p => p.uid === uid);
+  };
+
+  const getPlayerPhoto = (playerOrUid) => {
+    const playerUid = typeof playerOrUid === 'string' ? playerOrUid : playerOrUid?.uid;
+    if (!playerUid) return null;
+
+    const activityPlayer = typeof playerOrUid === 'object'
+      ? playerOrUid
+      : getPlayerByUid(playerUid);
+
+    const matchingRoomPlayer = room?.players?.find((player) => player.id === playerUid);
+    return activityPlayer?.photoURL || activityPlayer?.photo || matchingRoomPlayer?.photo || null;
   };
 
   // === HOST ACTIONS ===
@@ -436,16 +448,27 @@ export default function WordImposterGame() {
               <div className="flex items-center justify-center mt-3">
                 {(gameState.players ?? []).map((player, index) => {
                   const isReady = readyVotes.includes(player.uid);
+                  const playerPhoto = getPlayerPhoto(player);
                   return (
-                    <div
-                      key={player.uid}
-                      className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
-                        isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
-                      }`}
-                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
-                    >
-                      {getInitials(player.displayName)}
-                    </div>
+                    playerPhoto ? (
+                      <img
+                        key={player.uid}
+                        src={playerPhoto}
+                        alt={player.displayName}
+                        className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
+                        title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                      />
+                    ) : (
+                      <div
+                        key={player.uid}
+                        className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
+                          isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
+                        }`}
+                        title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                      >
+                        {getInitials(player.displayName)}
+                      </div>
+                    )
                   );
                 })}
               </div>
@@ -489,6 +512,7 @@ export default function WordImposterGame() {
                 .filter(([, targetUid]) => targetUid === player.uid)
                 .map(([voterUid]) => getPlayerByUid(voterUid))
                 .filter(Boolean);
+              const playerPhoto = getPlayerPhoto(player);
 
               return (
                 <button
@@ -501,21 +525,36 @@ export default function WordImposterGame() {
                       : 'bg-slate-800/50 hover:bg-slate-700'
                   } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
                 >
-                  <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
-                    {getInitials(player.displayName)}
-                  </div>
+                  {playerPhoto ? (
+                    <img src={playerPhoto} alt={player.displayName} className="w-12 h-12 rounded-full object-cover" />
+                  ) : (
+                    <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
+                      {getInitials(player.displayName)}
+                    </div>
+                  )}
                   <div className="flex-1">
                     <span className="text-white font-semibold block">{player.displayName}</span>
                     <div className="flex items-center mt-2">
-                      {votersForPlayer.map((voter, index) => (
-                        <div
-                          key={voter.uid}
-                          className={`w-7 h-7 ${voter.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
-                          title={voter.displayName}
-                        >
-                          {getInitials(voter.displayName)}
-                        </div>
-                      ))}
+                      {votersForPlayer.map((voter, index) => {
+                        const voterPhoto = getPlayerPhoto(voter);
+                        return voterPhoto ? (
+                          <img
+                            key={voter.uid}
+                            src={voterPhoto}
+                            alt={voter.displayName}
+                            className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''}`}
+                            title={voter.displayName}
+                          />
+                        ) : (
+                          <div
+                            key={voter.uid}
+                            className={`w-7 h-7 ${voter.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
+                            title={voter.displayName}
+                          >
+                            {getInitials(voter.displayName)}
+                          </div>
+                        );
+                      })}
                     </div>
                   </div>
                 </button>
@@ -660,6 +699,7 @@ export default function WordImposterGame() {
             <div className="space-y-3">
               {gameState.players.map((player) => {
                 const wasImposter = gameState.imposterIds?.includes(player.uid);
+                const playerPhoto = getPlayerPhoto(player);
                 return (
                   <div
                     key={player.uid}
@@ -668,9 +708,13 @@ export default function WordImposterGame() {
                     }`}
                   >
                     <div className="flex items-center gap-3">
-                      <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                        {getInitials(player.displayName)}
-                      </div>
+                      {playerPhoto ? (
+                        <img src={playerPhoto} alt={player.displayName} className="w-10 h-10 rounded-full object-cover" />
+                      ) : (
+                        <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                          {getInitials(player.displayName)}
+                        </div>
+                      )}
                       <span className="text-white">{player.displayName}</span>
                     </div>
                     {wasImposter ? (

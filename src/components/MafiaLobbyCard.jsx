@@ -5,6 +5,7 @@ import { getInitials, getAvatarColor } from '../utils/avatar';
 
 export default function MafiaLobbyCard({ 
   lobbyState, 
+  roomPlayers,
   userId, 
   roomId, 
   navigate, 
@@ -16,6 +17,11 @@ export default function MafiaLobbyCard({
 }) {
   const lobbyPlayers = lobbyState?.lobbyPlayers || [];
   const allPlayers = lobbyState?.players || [];
+  const roomPlayersByUid = new Map((roomPlayers || []).map((player) => [player.id, player]));
+  const getLobbyPlayerPhoto = (uid) => {
+    const matchingRoomPlayer = roomPlayersByUid.get(uid);
+    return matchingRoomPlayer?.photo || null;
+  };
   const gameRules = lobbyState?.rules || rules;
   const [showRulesEdit, setShowRulesEdit] = useState(showRulesModal);
   const [editRules, setEditRules] = useState({ ...gameRules, mafiaCount: String(gameRules.mafiaCount || '1') });
@@ -72,7 +78,15 @@ export default function MafiaLobbyCard({
     const playersToAssign = latestLobbyPlayers
       .map((playerId) => {
         const existingActivityPlayer = latestGamePlayersById.get(playerId);
-        if (existingActivityPlayer) return existingActivityPlayer;
+        if (existingActivityPlayer) {
+          return {
+            uid: existingActivityPlayer.uid,
+            displayName: existingActivityPlayer.displayName,
+            avatarColor: existingActivityPlayer.avatarColor || getAvatarColor({ id: existingActivityPlayer.uid, displayName: existingActivityPlayer.displayName }, roomId),
+            isAlive: existingActivityPlayer.isAlive !== false,
+            role: existingActivityPlayer.role || null
+          };
+        }
 
         const roomPlayer = roomPlayersById.get(playerId);
         if (!roomPlayer) return null;
@@ -80,7 +94,7 @@ export default function MafiaLobbyCard({
         return {
           uid: roomPlayer.id,
           displayName: roomPlayer.displayNameForGame || roomPlayer.displayName,
-          avatarColor: roomPlayer.avatarColor,
+          avatarColor: roomPlayer.avatarColor || getAvatarColor(roomPlayer, roomId),
           isAlive: true,
           role: null
         };
@@ -235,21 +249,24 @@ export default function MafiaLobbyCard({
             Players Joined ({lobbyPlayers.length})
           </h4>
           <div className="space-y-2">
-            {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => (
-              <div
-                key={player.uid}
-                className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
-              >
-                {player.photo ? (
-                  <img src={player.photo} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-                ) : (
-                  <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                    {getInitials(player.displayName)}
-                  </div>
-                )}
-                <span className="text-white text-sm font-medium">{player.displayName}</span>
-              </div>
-            ))}
+            {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
+              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || null;
+              return (
+                <div
+                  key={player.uid}
+                  className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
+                >
+                  {playerPhoto ? (
+                    <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                      {getInitials(player.displayName)}
+                    </div>
+                  )}
+                  <span className="text-white text-sm font-medium">{player.displayName}</span>
+                </div>
+              );
+            })}
           </div>
         </div>
 
@@ -395,21 +412,24 @@ export default function MafiaLobbyCard({
           Players Joined ({lobbyPlayers.length})
         </h4>
         <div className="space-y-2">
-          {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => (
-            <div
-              key={player.uid}
-              className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
-            >
-              {player.photo ? (
-                <img src={player.photo} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-              ) : (
-                <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
-              )}
-              <span className="text-white text-sm font-medium">{player.displayName}</span>
-            </div>
-          ))}
+          {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
+            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || null;
+            return (
+              <div
+                key={player.uid}
+                className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
+              >
+                {playerPhoto ? (
+                  <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+                ) : (
+                  <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
+                    {getInitials(player.displayName)}
+                  </div>
+                )}
+                <span className="text-white text-sm font-medium">{player.displayName}</span>
+              </div>
+            );
+          })}
         </div>
       </div>
 
