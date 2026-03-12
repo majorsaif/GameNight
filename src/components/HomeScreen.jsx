@@ -7,9 +7,11 @@ import ActiveVote from './ActiveVote';
 import WheelSpin from './ForfeitWheel';
 import WheelSetupModal from './WheelSetupModal';
 import MafiaLobbyCard from './MafiaLobbyCard';
+import WordImposterLobbyCard from './WordImposterLobbyCard';
 import GameNightLogo from './GameNightLogo';
 import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 import mafiaRules from '../rules/mafia';
+import wordImposterRulesData from '../rules/wordImposter';
 
 export default function HomeScreen() {
   const { roomId } = useParams();
@@ -43,18 +45,29 @@ export default function HomeScreen() {
 
     const activity = room.activeActivity;
 
-    if (!activity || activity.type !== 'mafia') return;
+    if (!activity) return;
 
     const newPhase = activity.phase;
     const lobbyPlayers = activity.lobbyPlayers || [];
     const isLobbyParticipant = lobbyPlayers.includes(user.id);
     const isBeyondLobby = newPhase && newPhase !== 'lobby';
-    const mafiaRoute = `/room/${roomId}/games/mafia`;
-    const alreadyOnMafiaPage = location.pathname === mafiaRoute;
 
-    if (isBeyondLobby && isLobbyParticipant && !alreadyOnMafiaPage) {
-      console.log('[HomeScreen] Auto-joining Mafia game', { phase: newPhase, userId: user.id });
-      navigate(`/room/${roomId}/games/mafia`);
+    if (activity.type === 'mafia') {
+      const mafiaRoute = `/room/${roomId}/games/mafia`;
+      const alreadyOnMafiaPage = location.pathname === mafiaRoute;
+      if (isBeyondLobby && isLobbyParticipant && !alreadyOnMafiaPage) {
+        console.log('[HomeScreen] Auto-joining Mafia game', { phase: newPhase, userId: user.id });
+        navigate(`/room/${roomId}/games/mafia`);
+      }
+    }
+
+    if (activity.type === 'wordImposter') {
+      const wiRoute = `/room/${roomId}/games/word-imposter`;
+      const alreadyOnWiPage = location.pathname === wiRoute;
+      if (isBeyondLobby && isLobbyParticipant && !alreadyOnWiPage) {
+        console.log('[HomeScreen] Auto-joining Word Imposter game', { phase: newPhase, userId: user.id });
+        navigate(wiRoute);
+      }
     }
   }, [room, roomId, user?.id, navigate, location.pathname]);
 
@@ -152,7 +165,7 @@ export default function HomeScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Top Bar */}
-      <header className="relative z-40 w-full max-w-md mx-auto px-6 py-4">
+      <header className="relative z-40 w-full max-w-md mx-auto px-4 sm:px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo */}
           <GameNightLogo />
@@ -164,7 +177,7 @@ export default function HomeScreen() {
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
-                    title: 'Join my GamesNight room',
+                    title: 'Join my room on Its Games Night',
                     text: `Join room ${room.code}`,
                     url: window.location.href
                   }).catch(() => {});
@@ -220,7 +233,7 @@ export default function HomeScreen() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-6 flex flex-col gap-6 overflow-y-auto">
+      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         {isHost ? (
           <HostView 
             room={room} 
@@ -313,11 +326,20 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
     votingTime: 1
   });
   
+  const [showWiRulesModal, setShowWiRulesModal] = useState(false);
+  const [wiRules, setWiRules] = useState(room.activeActivity?.rules || {
+    imposterCount: 1,
+    showCategory: true
+  });
+
   const hasActiveActivity = room.activeActivity != null;
-  const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
-  const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const activityType = room.activeActivity?.type;
+  const isWheel = hasActiveActivity && (activityType === 'playerWheel' || activityType === 'customWheel');
+  const isMafia = hasActiveActivity && activityType === 'mafia';
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && !isWheel && !isMafia;
+  const isWordImposter = hasActiveActivity && activityType === 'wordImposter';
+  const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
+  const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -325,7 +347,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   const remainingCount = room.players.length - maxVisibleAvatars;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
@@ -450,6 +472,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
           ) : isMafiaLobby ? (
             <MafiaLobbyCard
               lobbyState={room.activeActivity}
+              roomPlayers={room.players}
               userId={userId}
               roomId={roomId}
               navigate={navigate}
@@ -471,6 +494,34 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                 <div>
                   <h3 className="text-white font-bold text-lg">Mafia Game Active</h3>
                   <p className="text-red-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
+          ) : isWordImposterLobby ? (
+            <WordImposterLobbyCard
+              lobbyState={room.activeActivity}
+              roomPlayers={room.players}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={true}
+              rules={wiRules}
+              setRules={setWiRules}
+              showRulesModal={showWiRulesModal}
+              setShowRulesModal={setShowWiRulesModal}
+            />
+          ) : isWordImposter ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/word-imposter`)}
+              className="w-full bg-gradient-to-br from-teal-600 to-cyan-700 hover:from-teal-500 hover:to-cyan-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-teal-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🕵️
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Word Imposter Active</h3>
+                  <p className="text-teal-100 text-sm">Click to join the game</p>
                 </div>
               </div>
             </button>
@@ -547,6 +598,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
 function GameRulesSection({ activityType }) {
   let rules = null;
   if (activityType === 'mafia') rules = mafiaRules;
+  if (activityType === 'wordImposter') rules = wordImposterRulesData;
   if (!rules) return null;
 
   return (
@@ -583,10 +635,13 @@ function GameRulesSection({ activityType }) {
 function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity != null;
-  const isWheel = hasActiveActivity && (room.activeActivity?.type === 'playerWheel' || room.activeActivity?.type === 'customWheel');
-  const isMafia = hasActiveActivity && room.activeActivity?.type === 'mafia';
+  const activityType = room.activeActivity?.type;
+  const isWheel = hasActiveActivity && (activityType === 'playerWheel' || activityType === 'customWheel');
+  const isMafia = hasActiveActivity && activityType === 'mafia';
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && !isWheel && !isMafia;
+  const isWordImposter = hasActiveActivity && activityType === 'wordImposter';
+  const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
+  const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -594,7 +649,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const remainingCount = room.players.length - maxVisibleAvatars;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
@@ -718,6 +773,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
           ) : isMafiaLobby ? (
             <MafiaLobbyCard
               lobbyState={room.activeActivity}
+              roomPlayers={room.players}
               userId={userId}
               roomId={roomId}
               navigate={navigate}
@@ -738,6 +794,30 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                 </div>
               </div>
             </button>
+          ) : isWordImposterLobby ? (
+            <WordImposterLobbyCard
+              lobbyState={room.activeActivity}
+              roomPlayers={room.players}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={false}
+            />
+          ) : isWordImposter ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/word-imposter`)}
+              className="w-full bg-gradient-to-br from-teal-600 to-cyan-700 hover:from-teal-500 hover:to-cyan-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-teal-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🕵️
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">A Word Imposter game is starting!</h3>
+                  <p className="text-teal-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
           ) : (
             <WheelSpin
               activity={room.activeActivity}
@@ -750,7 +830,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
         </div>
       ) : (
         <div className="text-center py-6">
-          <div className="text-5xl mb-3 inline-block animate-bounce">â³</div>
+          <div className="text-5xl mb-3 inline-block animate-bounce">⏳</div>
           <h2 className="text-xl font-bold text-slate-400 italic">Waiting for host...</h2>
           <p className="text-slate-600 text-sm mt-2">The host will start an activity soon</p>
         </div>

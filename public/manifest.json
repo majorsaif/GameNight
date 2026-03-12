@@ -1,0 +1,19 @@
+{
+  "name": "Its Games Night",
+  "short_name": "Its Games Night",
+  "description": "Its Games Night is a party game hub for hosting Mafia, Word Imposter, and other social games with friends in real time.",
+  "lang": "en",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#020617",
+  "theme_color": "#7c3aed",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}

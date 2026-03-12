@@ -12,7 +12,7 @@ export default function MafiaGame() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
+  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.photo || null);
   
   const [gameState, setGameState] = useState(null);
   const [gameStateLoaded, setGameStateLoaded] = useState(false);
@@ -60,6 +60,31 @@ export default function MafiaGame() {
 
   const getCurrentPlayer = () => gameState?.players?.find((player) => player.uid === user?.id);
 
+  const getPlayerPhoto = (player) => {
+    if (!player?.uid) return null;
+    const matchingRoomPlayer = room?.players?.find((roomPlayer) => roomPlayer.id === player.uid);
+    return player.photo || matchingRoomPlayer?.photo || null;
+  };
+
+  const renderPlayerAvatar = (player, sizeClasses, textSizeClasses = 'text-sm', extraClasses = '') => {
+    const playerPhoto = getPlayerPhoto(player);
+    if (playerPhoto) {
+      return (
+        <img
+          src={playerPhoto}
+          alt={player.displayName}
+          className={`${sizeClasses} rounded-full object-cover ${extraClasses}`.trim()}
+        />
+      );
+    }
+
+    return (
+      <div className={`${sizeClasses} ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold ${textSizeClasses} ${extraClasses}`.trim()}>
+        {getInitials(player.displayName)}
+      </div>
+    );
+  };
+
   const isCurrentUserAlive = () => {
     const currentPlayer = getCurrentPlayer();
     return Boolean(currentPlayer && currentPlayer.isAlive);
@@ -94,7 +119,19 @@ export default function MafiaGame() {
         });
 
         if (data.activeActivity && data.activeActivity.type === 'mafia') {
-          setGameState(data.activeActivity);
+          const roomPlayersByUid = new Map((Array.isArray(data.players) ? data.players : []).map((player) => [player.id, player]));
+          const normalizedActivityPlayers = Array.isArray(data.activeActivity.players)
+            ? data.activeActivity.players.map((player) => ({
+                ...player,
+                photo: player.photo || roomPlayersByUid.get(player.uid)?.photo || null
+              }))
+            : data.activeActivity.players;
+
+          const normalizedActivity = Array.isArray(data.activeActivity.players)
+            ? { ...data.activeActivity, players: normalizedActivityPlayers }
+            : data.activeActivity;
+
+          setGameState(normalizedActivity);
           setGameStateLoaded(true); // Ensure gameStateLoaded is updated when valid data is received
 
           const newPhase = data.activeActivity.phase;
@@ -1053,13 +1090,7 @@ export default function MafiaGame() {
                       className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
                     >
                       <div className="flex items-center gap-3">
-                        {player.photo ? (
-                          <img src={player.photo} alt={player.displayName} className="w-10 h-10 rounded-full object-cover" />
-                        ) : (
-                          <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                            {getInitials(player.displayName)}
-                          </div>
-                        )}
+                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
                         <span className="text-white">{player.displayName}</span>
                       </div>
                       {voteCount > 0 && (
@@ -1111,9 +1142,7 @@ export default function MafiaGame() {
                     : 'bg-slate-800/50 hover:bg-slate-700'
                 } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
+                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
                 <span className="text-white font-semibold">{player.displayName}</span>
               </button>
             ))}
@@ -1206,9 +1235,7 @@ export default function MafiaGame() {
                     : 'bg-slate-800/50 hover:bg-slate-700'
                 } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
+                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
                 <span className="text-white font-semibold">{player.displayName}</span>
               </button>
             ))}
@@ -1290,9 +1317,7 @@ export default function MafiaGame() {
                     : 'bg-slate-800/50 hover:bg-slate-700'
                 } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
+                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
                 <span className="text-white font-semibold">{player.displayName}</span>
               </button>
             ))}
@@ -1416,9 +1441,7 @@ export default function MafiaGame() {
                   key={player.uid}
                   className="flex items-center gap-3 bg-slate-700/50 rounded-lg p-3"
                 >
-                  <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                    {getInitials(player.displayName)}
-                  </div>
+                  {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
                   <span className="text-white">{player.displayName}</span>
                 </div>
               ))}
@@ -1449,10 +1472,10 @@ export default function MafiaGame() {
                 skipVotePlayers.map((player, index) => (
                   <div
                     key={player.uid}
-                    className={`w-7 h-7 ${player.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
+                    className={`${index > 0 ? '-ml-2' : ''}`}
                     title={player.displayName}
                   >
-                    {getInitials(player.displayName)}
+                    {renderPlayerAvatar(player, 'w-7 h-7', 'text-[10px]', 'border-2 border-slate-900')}
                   </div>
                 ))
               )}
@@ -1512,19 +1535,17 @@ export default function MafiaGame() {
                     : 'bg-slate-800/50 hover:bg-slate-700'
                 } ${(!canVote || hasConfirmed) ? 'opacity-50 cursor-not-allowed' : ''}`}
               >
-                <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
-                  {getInitials(player.displayName)}
-                </div>
+                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
                 <div className="flex-1">
                   <span className="text-white font-semibold block">{player.displayName}</span>
                   <div className="flex items-center mt-2">
                     {votersForPlayer.map((voter, index) => (
                       <div
                         key={`${player.uid}-${voter.uid}`}
-                        className={`w-7 h-7 ${voter.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
+                        className={`${index > 0 ? '-ml-2' : ''}`}
                         title={voter.displayName}
                       >
-                        {getInitials(voter.displayName)}
+                        {renderPlayerAvatar(voter, 'w-7 h-7', 'text-[10px]', 'border-2 border-slate-900')}
                       </div>
                     ))}
                   </div>
@@ -1575,9 +1596,7 @@ export default function MafiaGame() {
                   }`}
                 >
                   <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
-                      {getInitials(player.displayName)}
-                    </div>
+                    {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
                     <span className="text-white">{player.displayName}</span>
                   </div>
                   <div className="flex items-center gap-2">
@@ -1597,7 +1616,7 @@ export default function MafiaGame() {
             onClick={handleReturnToGamesNight}
             className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
           >
-            Return to Games Night
+            Return to Its Games Night
           </button>
         </div>
       </div>

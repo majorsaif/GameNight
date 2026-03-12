@@ -2,14 +2,15 @@ import React, { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
+import { getRandomWord } from '../wordImposter/words';
 
-export default function MafiaLobbyCard({ 
-  lobbyState, 
+export default function WordImposterLobbyCard({
+  lobbyState,
   roomPlayers,
-  userId, 
-  roomId, 
-  navigate, 
-  isHost, 
+  userId,
+  roomId,
+  navigate,
+  isHost,
   rules,
   setRules,
   showRulesModal,
@@ -24,14 +25,19 @@ export default function MafiaLobbyCard({
   };
   const gameRules = lobbyState?.rules || rules;
   const [showRulesEdit, setShowRulesEdit] = useState(showRulesModal);
-  const [editRules, setEditRules] = useState({ ...gameRules, mafiaCount: String(gameRules.mafiaCount || '1') });
-  const [mafiaCountError, setMafiaCountError] = useState('');
+  const [editRules, setEditRules] = useState({
+    imposterCount: String(gameRules.imposterCount || '1'),
+    showCategory: gameRules.showCategory !== false
+  });
+  const [imposterCountError, setImposterCountError] = useState('');
 
-  // Re-initialize editRules when modal is opened or gameRules change
   useEffect(() => {
     if (showRulesEdit) {
-      setEditRules({ ...gameRules, mafiaCount: String(gameRules.mafiaCount || '1') });
-      setMafiaCountError('');
+      setEditRules({
+        imposterCount: String(gameRules.imposterCount || '1'),
+        showCategory: gameRules.showCategory !== false
+      });
+      setImposterCountError('');
     }
   }, [showRulesEdit, gameRules]);
 
@@ -67,8 +73,8 @@ export default function MafiaLobbyCard({
     const latestLobbyPlayers = Array.isArray(currentActivity.lobbyPlayers) ? currentActivity.lobbyPlayers : [];
     const latestGamePlayers = Array.isArray(currentActivity.players) ? currentActivity.players : allPlayers;
 
-    if (latestLobbyPlayers.length < 4) {
-      alert(`Need at least 4 players to start (${latestLobbyPlayers.length})`);
+    if (latestLobbyPlayers.length < 3) {
+      alert(`Need at least 3 players to start (${latestLobbyPlayers.length})`);
       return;
     }
 
@@ -82,9 +88,7 @@ export default function MafiaLobbyCard({
           return {
             uid: existingActivityPlayer.uid,
             displayName: existingActivityPlayer.displayName,
-            avatarColor: existingActivityPlayer.avatarColor || getAvatarColor({ id: existingActivityPlayer.uid, displayName: existingActivityPlayer.displayName }, roomId),
-            isAlive: existingActivityPlayer.isAlive !== false,
-            role: existingActivityPlayer.role || null
+            avatarColor: existingActivityPlayer.avatarColor || getAvatarColor({ id: existingActivityPlayer.uid, displayName: existingActivityPlayer.displayName }, roomId)
           };
         }
 
@@ -94,103 +98,100 @@ export default function MafiaLobbyCard({
         return {
           uid: roomPlayer.id,
           displayName: roomPlayer.displayNameForGame || roomPlayer.displayName,
-          avatarColor: roomPlayer.avatarColor || getAvatarColor(roomPlayer, roomId),
-          isAlive: true,
-          role: null
+          avatarColor: roomPlayer.avatarColor || getAvatarColor(roomPlayer, roomId)
         };
       })
       .filter(Boolean);
-    
-    if (playersToAssign.length < 4) {
-      alert('Need at least 4 players to start');
+
+    if (playersToAssign.length < 3) {
+      alert('Need at least 3 players to start');
       return;
     }
 
-    // Parse mafiaCount from editRules
-    const mafiaCount = typeof editRules.mafiaCount === 'string' 
-      ? parseInt(editRules.mafiaCount, 10) 
-      : editRules.mafiaCount;
+    // Parse imposter count
+    const imposterCount = typeof editRules.imposterCount === 'string'
+      ? parseInt(editRules.imposterCount, 10)
+      : editRules.imposterCount;
 
-    if (isNaN(mafiaCount) || mafiaCount < 1) {
-      alert('Invalid number of mafias');
+    if (isNaN(imposterCount) || imposterCount < 1) {
+      alert('Invalid number of imposters');
       return;
     }
 
-    // Check 25% limit based on lobby players
-    const maxAllowed = Math.max(1, Math.floor(latestLobbyPlayers.length * 0.25));
-    if (mafiaCount > maxAllowed) {
-      alert(`Too many mafias! With ${latestLobbyPlayers.length} players, you can have a maximum of ${maxAllowed} mafia.`);
+    // Validate 1/3 limit
+    const maxAllowed = Math.max(1, Math.floor(latestLobbyPlayers.length / 3));
+    if (imposterCount > maxAllowed) {
+      alert(`Too many imposters! With ${latestLobbyPlayers.length} players you can have a maximum of ${maxAllowed} imposter(s)`);
       return;
     }
 
-    // Shuffle players
+    // Shuffle and assign imposters
     const shuffled = [...playersToAssign].sort(() => Math.random() - 0.5);
-    
-    // Assign roles
-    const withRoles = shuffled.map((player, index) => {
-      let role = 'civilian';
-      
-      if (index < mafiaCount) {
-        role = 'mafia';
-      } else if (editRules.doctor && index === mafiaCount) {
-        role = 'doctor';
-      } else if (editRules.detective && index === mafiaCount + (editRules.doctor ? 1 : 0)) {
-        role = 'detective';
-      }
-      
-      return { ...player, role };
-    });
+    const imposterIds = shuffled.slice(0, imposterCount).map(p => p.uid);
 
-    // Start game at roles phase
+    // Pick random word
+    const { word, category } = getRandomWord();
+
+    // Random starting player and direction
+    const startingPlayer = playersToAssign[Math.floor(Math.random() * playersToAssign.length)];
+    const direction = Math.random() < 0.5 ? 'clockwise' : 'anticlockwise';
+
     const finalRules = {
-      ...editRules,
-      mafiaCount: mafiaCount
+      imposterCount: imposterCount,
+      showCategory: editRules.showCategory
     };
 
     await updateDoc(roomRef, {
-      'activeActivity.phase': 'roles',
-      'activeActivity.players': withRoles,
+      'activeActivity.phase': 'word-reveal',
+      'activeActivity.word': word,
+      'activeActivity.category': category,
       'activeActivity.rules': finalRules,
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': 30000,
+      'activeActivity.imposterIds': imposterIds,
+      'activeActivity.players': playersToAssign,
+      'activeActivity.startingPlayerId': startingPlayer.uid,
+      'activeActivity.direction': direction,
+      'activeActivity.readyVotes': [],
+      'activeActivity.votes': {},
+      'activeActivity.eliminatedUid': null,
+      'activeActivity.winner': null,
+      'activeActivity.wordRevealed': null,
+      'activeActivity.roundNumber': 1,
       lastActivity: serverTimestamp()
     });
 
-    navigate(`/room/${roomId}/games/mafia`);
+    navigate(`/room/${roomId}/games/word-imposter`);
   };
 
   const handleSaveRules = async () => {
     if (!isHost) return;
 
-    setMafiaCountError('');
+    setImposterCountError('');
 
-    // Validate mafia count
-    const mafiaCountValue = editRules.mafiaCount.toString().trim();
-    if (!mafiaCountValue) {
-      setMafiaCountError('Number of mafias is required');
+    const imposterCountValue = editRules.imposterCount.toString().trim();
+    if (!imposterCountValue) {
+      setImposterCountError('Number of imposters is required');
       return;
     }
 
-    const mafiaCount = parseInt(mafiaCountValue, 10);
-    if (isNaN(mafiaCount) || mafiaCount < 1) {
-      setMafiaCountError('Number of mafias must be at least 1');
+    const imposterCount = parseInt(imposterCountValue, 10);
+    if (isNaN(imposterCount) || imposterCount < 1) {
+      setImposterCountError('Number of imposters must be at least 1');
       return;
     }
 
-    // Check 25% limit based on current lobby players
     const totalPlayers = lobbyPlayers.length;
-    const maxAllowed = Math.max(1, Math.floor(totalPlayers * 0.25));
-    if (mafiaCount > maxAllowed) {
-      setMafiaCountError(`Too many mafias! With ${totalPlayers} players, you can have a maximum of ${maxAllowed} mafia.`);
+    const maxAllowed = Math.max(1, Math.floor(totalPlayers / 3));
+    if (imposterCount > maxAllowed) {
+      setImposterCountError(`Too many imposters! With ${totalPlayers} players you can have a maximum of ${maxAllowed} imposter(s)`);
       return;
     }
 
     const roomRef = doc(db, 'rooms', roomId);
     const finalRules = {
-      ...editRules,
-      mafiaCount: mafiaCount
+      imposterCount: imposterCount,
+      showCategory: editRules.showCategory
     };
-    
+
     await updateDoc(roomRef, {
       'activeActivity.rules': finalRules,
       lastActivity: serverTimestamp()
@@ -210,7 +211,7 @@ export default function MafiaLobbyCard({
   const spectators = lobbyState?.spectators || [];
   const isSpectating = spectators.includes(userId);
   const hasJoined = lobbyPlayers.includes(userId);
-  const canStart = lobbyPlayers.length >= 4;
+  const canStart = lobbyPlayers.length >= 3;
 
   const handleSpectate = async () => {
     const roomRef = doc(db, 'rooms', roomId);
@@ -232,29 +233,29 @@ export default function MafiaLobbyCard({
 
   if (isHost) {
     return (
-      <div className="bg-gradient-to-br from-red-600 to-rose-700 rounded-2xl p-6 text-left shadow-xl">
+      <div className="bg-gradient-to-br from-teal-600 to-cyan-700 rounded-2xl p-6 text-left shadow-xl">
         <div className="mb-4">
           <div className="flex items-center gap-3 mb-4">
-            <div className="text-3xl">🔪</div>
+            <div className="text-3xl">🕵️</div>
             <div>
-              <h3 className="text-white font-bold text-lg">Mafia Lobby</h3>
-              <p className="text-red-100 text-sm">Configure & wait for players</p>
+              <h3 className="text-white font-bold text-lg">Word Imposter Lobby</h3>
+              <p className="text-teal-100 text-sm">Configure & wait for players</p>
             </div>
           </div>
         </div>
 
         {/* Players Joined */}
-        <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-4">
+        <div className="bg-teal-900/50 border border-teal-700 rounded-lg p-4 mb-4">
           <h4 className="text-white font-semibold mb-3 text-sm">
             Players Joined ({lobbyPlayers.length})
           </h4>
           <div className="space-y-2">
             {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
-              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || null;
+              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photoURL || player.photo || null;
               return (
                 <div
                   key={player.uid}
-                  className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
+                  className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
                 >
                   {playerPhoto ? (
                     <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
@@ -274,20 +275,20 @@ export default function MafiaLobbyCard({
         <div className="space-y-3">
           <button
             onClick={() => setShowRulesEdit(true)}
-            className="w-full bg-red-700 hover:bg-red-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
+            className="w-full bg-teal-700 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
           >
             Edit Rules
           </button>
           <button
             onClick={handleStartGame}
             disabled={!canStart}
-            className="w-full bg-gradient-to-r from-white to-slate-200 hover:from-slate-100 hover:to-slate-300 disabled:from-slate-600 disabled:to-slate-600 text-red-700 disabled:text-slate-400 font-bold py-2 rounded-lg transition-colors"
+            className="w-full bg-gradient-to-r from-white to-slate-200 hover:from-slate-100 hover:to-slate-300 disabled:from-slate-600 disabled:to-slate-600 text-teal-700 disabled:text-slate-400 font-bold py-2 rounded-lg transition-colors"
           >
-            {canStart ? `Start Game (${lobbyPlayers.length})` : `Need 4+ (${lobbyPlayers.length})`}
+            {canStart ? `Start Game (${lobbyPlayers.length})` : `Need 3+ (${lobbyPlayers.length})`}
           </button>
           <button
             onClick={handleCancelGame}
-            className="w-full bg-red-800 hover:bg-red-900 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
+            className="w-full bg-teal-800 hover:bg-teal-900 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
           >
             Cancel
           </button>
@@ -301,74 +302,40 @@ export default function MafiaLobbyCard({
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Number of Mafias</label>
+                  <label className="text-white font-semibold block mb-2 text-sm">Number of Imposters</label>
                   <input
                     type="text"
                     inputMode="numeric"
-                    value={editRules.mafiaCount}
+                    value={editRules.imposterCount}
                     onChange={(e) => {
-                      setEditRules({ ...editRules, mafiaCount: e.target.value });
-                      setMafiaCountError('');
+                      setEditRules({ ...editRules, imposterCount: e.target.value });
+                      setImposterCountError('');
                     }}
                     placeholder="Enter number"
                     className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                   />
-                  {mafiaCountError && (
-                    <p className="text-red-400 text-sm mt-2">{mafiaCountError}</p>
+                  {imposterCountError && (
+                    <p className="text-red-400 text-sm mt-2">{imposterCountError}</p>
                   )}
                 </div>
 
                 <div>
-                  <label className="text-white font-semibold flex items-center gap-3 mb-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={editRules.doctor}
-                      onChange={(e) => setEditRules({ ...editRules, doctor: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                    Doctor 🩺
-                  </label>
-                  <p className="text-slate-400 text-xs">Can save one player each night</p>
-                </div>
-
-                <div>
-                  <label className="text-white font-semibold flex items-center gap-3 mb-2 text-sm">
-                    <input
-                      type="checkbox"
-                      checked={editRules.detective}
-                      onChange={(e) => setEditRules({ ...editRules, detective: e.target.checked })}
-                      className="w-4 h-4"
-                    />
-                    Detective 🔍
-                  </label>
-                  <p className="text-slate-400 text-xs">Can investigate one player each night</p>
-                </div>
-
-                <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Discussion Time</label>
-                  <select
-                    value={editRules.discussionTime}
-                    onChange={(e) => setEditRules({ ...editRules, discussionTime: parseInt(e.target.value) })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                  >
-                    <option value={1}>1 minute</option>
-                    <option value={2}>2 minutes</option>
-                    <option value={3}>3 minutes</option>
-                    <option value={5}>5 minutes</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Voting Time</label>
-                  <select
-                    value={editRules.votingTime}
-                    onChange={(e) => setEditRules({ ...editRules, votingTime: parseFloat(e.target.value) })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                  >
-                    <option value={0.5}>30 seconds</option>
-                    <option value={1}>1 minute</option>
-                    <option value={2}>2 minutes</option>
-                  </select>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-white font-semibold text-sm">Show Category to Imposter</label>
+                      <p className="text-slate-400 text-xs">Imposters see the category but not the word</p>
+                    </div>
+                    <button
+                      onClick={() => setEditRules({ ...editRules, showCategory: !editRules.showCategory })}
+                      className={`w-12 h-7 rounded-full transition-colors ${
+                        editRules.showCategory ? 'bg-teal-600' : 'bg-slate-600'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                        editRules.showCategory ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -381,7 +348,7 @@ export default function MafiaLobbyCard({
                 </button>
                 <button
                   onClick={handleSaveRules}
-                  className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 text-white rounded-lg font-bold transition-colors"
+                  className="flex-1 px-4 py-2 bg-teal-600 hover:bg-teal-500 text-white rounded-lg font-bold transition-colors"
                 >
                   Save
                 </button>
@@ -395,29 +362,29 @@ export default function MafiaLobbyCard({
 
   // Player view
   return (
-    <div className="bg-gradient-to-br from-red-600 to-rose-700 rounded-2xl p-6 text-left shadow-xl">
+    <div className="bg-gradient-to-br from-teal-600 to-cyan-700 rounded-2xl p-6 text-left shadow-xl">
       <div className="mb-4">
         <div className="flex items-center gap-3 mb-4">
-          <div className="text-3xl">🔪</div>
+          <div className="text-3xl">🕵️</div>
           <div>
-            <h3 className="text-white font-bold text-lg">Mafia Lobby</h3>
-            <p className="text-red-100 text-sm">{hasJoined ? 'You\'ve joined!' : 'Ready to join?'}</p>
+            <h3 className="text-white font-bold text-lg">Word Imposter Lobby</h3>
+            <p className="text-teal-100 text-sm">{hasJoined ? "You've joined!" : 'Ready to join?'}</p>
           </div>
         </div>
       </div>
 
       {/* Players Joined */}
-      <div className="bg-red-900/50 border border-red-700 rounded-lg p-4 mb-4">
+      <div className="bg-teal-900/50 border border-teal-700 rounded-lg p-4 mb-4">
         <h4 className="text-white font-semibold mb-3 text-sm">
           Players Joined ({lobbyPlayers.length})
         </h4>
         <div className="space-y-2">
           {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
-            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || null;
+            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photoURL || player.photo || null;
             return (
               <div
                 key={player.uid}
-                className="flex items-center gap-3 bg-red-800/50 rounded-lg px-3 py-2"
+                className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
               >
                 {playerPhoto ? (
                   <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
@@ -445,14 +412,14 @@ export default function MafiaLobbyCard({
       ) : isSpectating ? (
         <button
           onClick={handleJoinFromSpectate}
-          className="w-full bg-white hover:bg-slate-100 text-red-700 font-bold py-2 rounded-lg transition-colors"
+          className="w-full bg-white hover:bg-slate-100 text-teal-700 font-bold py-2 rounded-lg transition-colors"
         >
           Join Game
         </button>
       ) : (
         <button
           onClick={handleJoinLobby}
-          className="w-full bg-white hover:bg-slate-100 text-red-700 font-bold py-2 rounded-lg transition-colors"
+          className="w-full bg-white hover:bg-slate-100 text-teal-700 font-bold py-2 rounded-lg transition-colors"
         >
           Join Lobby
         </button>

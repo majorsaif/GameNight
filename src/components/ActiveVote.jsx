@@ -2,11 +2,15 @@ import React from 'react';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 
 export default function ActiveVote({ activity, room, userId, isHost, onVote, onEndVote }) {
-  const userVote = activity.votes?.[userId];
+  const options = Array.isArray(activity?.options) ? activity.options : [];
+  const votes = activity?.votes && typeof activity.votes === 'object' ? activity.votes : {};
+  const userVote = votes[userId];
+  const roomPlayers = Array.isArray(room?.players) ? room.players : [];
+  const playerCount = roomPlayers.length;
 
   // Calculate results
   const results = {};
-  activity.options.forEach(option => {
+  options.forEach(option => {
     results[option.id] = {
       count: 0,
       percentage: 0,
@@ -14,9 +18,9 @@ export default function ActiveVote({ activity, room, userId, isHost, onVote, onE
     };
   });
 
-  if (activity.votes) {
-    const totalVotes = Object.keys(activity.votes).length;
-    Object.entries(activity.votes).forEach(([voterId, optionId]) => {
+  if (Object.keys(votes).length > 0) {
+    const totalVotes = Object.keys(votes).length;
+    Object.entries(votes).forEach(([voterId, optionId]) => {
       if (results[optionId]) {
         results[optionId].count++;
         results[optionId].voters.push(voterId);
@@ -34,10 +38,10 @@ export default function ActiveVote({ activity, room, userId, isHost, onVote, onE
       {/* Header */}
       <div className="flex items-center justify-between gap-4 mb-4">
         <div className="flex-1">
-          <p className="text-white text-lg font-semibold">{activity.question}</p>
+          <p className="text-white text-lg font-semibold">{activity?.question || 'Vote in progress'}</p>
           {totalVotes > 0 && (
             <p className="text-slate-400 text-sm mt-1">
-              {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'} • {room.players.length - totalVotes} pending
+              {totalVotes} {totalVotes === 1 ? 'vote' : 'votes'} • {Math.max(0, playerCount - totalVotes)} pending
             </p>
           )}
         </div>
@@ -53,13 +57,13 @@ export default function ActiveVote({ activity, room, userId, isHost, onVote, onE
 
       {/* Options */}
       <div className="space-y-3">
-        {activity.options.map(option => {
+        {options.map(option => {
           const result = results[option.id];
           const isSelected = userVote === option.id;
           
           // Get voter player objects
           const voters = result.voters.map(voterId => 
-            room.players.find(p => p.id === voterId)
+            roomPlayers.find(p => p.id === voterId)
           ).filter(Boolean);
           
           // Always show clickable results with bars - allow vote changing
