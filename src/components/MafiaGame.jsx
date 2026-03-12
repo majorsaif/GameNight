@@ -12,7 +12,7 @@ export default function MafiaGame() {
   const { roomId } = useParams();
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
-  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
+  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.photo || null);
   
   const [gameState, setGameState] = useState(null);
   const [gameStateLoaded, setGameStateLoaded] = useState(false);

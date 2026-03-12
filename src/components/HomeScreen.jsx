@@ -165,7 +165,7 @@ export default function HomeScreen() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       {/* Top Bar */}
-      <header className="relative z-40 w-full max-w-md mx-auto px-6 py-4">
+      <header className="relative z-40 w-full max-w-md mx-auto px-4 sm:px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo */}
           <GameNightLogo />
@@ -233,7 +233,7 @@ export default function HomeScreen() {
       </header>
 
       {/* Main Content */}
-      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-6 flex flex-col gap-6 overflow-y-auto">
+      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         {isHost ? (
           <HostView 
             room={room} 
@@ -347,7 +347,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   const remainingCount = room.players.length - maxVisibleAvatars;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
@@ -649,7 +649,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const remainingCount = room.players.length - maxVisibleAvatars;
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-6 w-full">
       
       {/* Hero Section */}
       <div className="text-center pt-2 pb-4">
@@ -830,7 +830,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
         </div>
       ) : (
         <div className="text-center py-6">
-          <div className="text-5xl mb-3 inline-block animate-bounce">â³</div>
+          <div className="text-5xl mb-3 inline-block animate-bounce">⏳</div>
           <h2 className="text-xl font-bold text-slate-400 italic">Waiting for host...</h2>
           <p className="text-slate-600 text-sm mt-2">The host will start an activity soon</p>
         </div>

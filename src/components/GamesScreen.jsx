@@ -9,7 +9,7 @@ export default function GamesScreen() {
   const navigate = useNavigate();
   const { roomId } = useParams();
   const { user } = useAuth();
-  const { isHost, room } = useRoom(roomId, user?.id, user?.displayName, user?.avatar || null);
+  const { isHost, room } = useRoom(roomId, user?.id, user?.displayName, user?.photo || null);
   const [showComingSoon, setShowComingSoon] = useState(false);
   const [showHostOnly, setShowHostOnly] = useState(false);
   const [showMafiaSetup, setShowMafiaSetup] = useState(false);

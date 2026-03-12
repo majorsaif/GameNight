@@ -22,6 +22,68 @@ const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
 const ACTIVE_ROOM_KEY = 'gamesnight_active_room';
 
+function isPlainObject(value) {
+  if (value === null || typeof value !== 'object') return false;
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function stripUndefinedDeep(value, seen = new WeakSet()) {
+  if (value === undefined) return undefined;
+  if (value === null) return null;
+
+  if (Array.isArray(value)) {
+    return value
+      .map((item) => stripUndefinedDeep(item, seen))
+      .filter((item) => item !== undefined);
+  }
+
+  if (typeof value === 'object') {
+    if (!isPlainObject(value)) {
+      return value;
+    }
+
+    if (seen.has(value)) {
+      return undefined;
+    }
+
+    seen.add(value);
+    const sanitizedObject = {};
+
+    Object.entries(value).forEach(([key, nestedValue]) => {
+      const sanitizedValue = stripUndefinedDeep(nestedValue, seen);
+      if (sanitizedValue !== undefined) {
+        sanitizedObject[key] = sanitizedValue;
+      }
+    });
+
+    seen.delete(value);
+    return sanitizedObject;
+  }
+
+  return value;
+}
+
+function buildSerializablePlayer({
+  id,
+  displayName,
+  photo = null,
+  isHost = false,
+  joinedAt,
+  avatarColor = null,
+  displayNameForGame
+}) {
+  return stripUndefinedDeep({
+    id: id ?? null,
+    displayName: displayName ?? null,
+    photo: photo ?? null,
+    isHost: Boolean(isHost),
+    joinedAt: joinedAt ?? new Date().toISOString(),
+    avatarColor: avatarColor ?? null,
+    displayNameForGame: displayNameForGame ?? undefined
+  });
+}
+
 function setActiveRoomId(roomId) {
   if (roomId) {
     sessionStorage.setItem(ACTIVE_ROOM_KEY, roomId);
@@ -80,32 +142,37 @@ export async function createRoom(hostId, hostDisplayName, hostPhoto = null) {
   const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   const now = new Date().toISOString();
   
-  const hostPlayer = { 
+  const hostPlayer = buildSerializablePlayer({ 
     id: hostId, 
     displayName: hostDisplayName,
-    photo: hostPhoto,
+    photo: hostPhoto ?? null,
     isHost: true, 
     joinedAt: now,
     avatarColor: null
-  };
+  });
   
-  const roomData = {
+  const roomData = stripUndefinedDeep({
     code: code,
     hostId: hostId,
     players: [hostPlayer],
     createdAt: serverTimestamp(),
     lastActivity: serverTimestamp(),
     activeActivity: null
-  };
+  });
   
   try {
+    console.log('[createRoom] hostPlayer payload:', hostPlayer);
     const docRef = await addDoc(collection(db, ROOMS_COLLECTION), roomData);
     const createdRoomId = docRef.id;
     console.log('✅ Room created successfully:', { docId: createdRoomId, code: code });
     
     // Generate avatar color after room is created (we need the room ID)
-    hostPlayer.avatarColor = getAvatarColor(hostPlayer, createdRoomId);
-    await updateDoc(docRef, { players: [hostPlayer] });
+    const updatedHostPlayer = buildSerializablePlayer({
+      ...hostPlayer,
+      avatarColor: getAvatarColor(hostPlayer, createdRoomId)
+    });
+    console.log('[createRoom] updatedHostPlayer payload:', updatedHostPlayer);
+    await updateDoc(docRef, { players: [updatedHostPlayer] });
     
     setActiveRoomId(createdRoomId);
     
@@ -206,17 +273,17 @@ export async function joinRoom(roomId, userId, userDisplayName, userPhoto = null
     }
     
     // Create new player
-    const newPlayer = {
+    const newPlayer = buildSerializablePlayer({
       id: userId,
       displayName: userDisplayName,
-      photo: userPhoto,
+      photo: userPhoto ?? null,
       isHost: false,
       joinedAt: new Date().toISOString(),
       avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
-    };
+    });
     
     // Add player to room
-    console.log('👤 joinRoom: Adding new player to Firestore:', { userId, displayName: userDisplayName });
+    console.log('👤 joinRoom: Adding new player to Firestore:', newPlayer);
     await updateDoc(roomRef, {
       players: arrayUnion(newPlayer)
     });
@@ -557,7 +624,7 @@ export function useActiveRoom(userId) {
 /**
  * Hook for loading a specific room with real-time updates
  */
-export function useRoom(roomId, userId = null, userDisplayName = null, userAvatar = null) {
+export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto = null) {
   const [room, setRoom] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -604,14 +671,15 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userAvata
         if (userId && userDisplayName) {
           const existingPlayer = room.players?.find(p => p.id === userId);
           if (!existingPlayer) {
-            const newPlayer = {
+            const newPlayer = buildSerializablePlayer({
               id: userId,
               displayName: userDisplayName,
-              avatar: userAvatar,
+              photo: userPhoto ?? null,
               isHost: false,
               joinedAt: new Date().toISOString(),
               avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
-            };
+            });
+            console.log('[useRoom] auto-adding player payload:', newPlayer);
             
             await updateDoc(roomRef, {
               players: arrayUnion(newPlayer)
