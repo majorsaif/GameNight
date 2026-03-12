@@ -22,46 +22,15 @@ const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
 const ACTIVE_ROOM_KEY = 'gamesnight_active_room';
 
-function isPlainObject(value) {
-  if (value === null || typeof value !== 'object') return false;
-  const prototype = Object.getPrototypeOf(value);
-  return prototype === Object.prototype || prototype === null;
+function sanitize(obj) {
+  return JSON.parse(JSON.stringify(obj));
 }
 
-function stripUndefinedDeep(value, seen = new WeakSet()) {
-  if (value === undefined) return undefined;
-  if (value === null) return null;
-
-  if (Array.isArray(value)) {
-    return value
-      .map((item) => stripUndefinedDeep(item, seen))
-      .filter((item) => item !== undefined);
-  }
-
-  if (typeof value === 'object') {
-    if (!isPlainObject(value)) {
-      return value;
-    }
-
-    if (seen.has(value)) {
-      return undefined;
-    }
-
-    seen.add(value);
-    const sanitizedObject = {};
-
-    Object.entries(value).forEach(([key, nestedValue]) => {
-      const sanitizedValue = stripUndefinedDeep(nestedValue, seen);
-      if (sanitizedValue !== undefined) {
-        sanitizedObject[key] = sanitizedValue;
-      }
-    });
-
-    seen.delete(value);
-    return sanitizedObject;
-  }
-
-  return value;
+function buildSanitizedWritePayload(data = {}, fieldValueData = {}) {
+  return {
+    ...sanitize(data),
+    ...fieldValueData
+  };
 }
 
 function buildSerializablePlayer({
@@ -73,14 +42,14 @@ function buildSerializablePlayer({
   avatarColor = null,
   displayNameForGame
 }) {
-  return stripUndefinedDeep({
+  return sanitize({
     id: id ?? null,
     displayName: displayName ?? null,
     photo: photo ?? null,
     isHost: Boolean(isHost),
     joinedAt: joinedAt ?? new Date().toISOString(),
     avatarColor: avatarColor ?? null,
-    displayNameForGame: displayNameForGame ?? undefined
+    displayNameForGame: displayNameForGame ?? null
   });
 }
 
@@ -127,9 +96,11 @@ function getJoinedAtValue(player, fallback) {
  */
 async function updateLastActivity(roomRef) {
   try {
-    await updateDoc(roomRef, {
+    const payload = buildSanitizedWritePayload({}, {
       lastActivity: serverTimestamp()
     });
+    console.error('[updateLastActivity] Firestore write payload:', payload);
+    await updateDoc(roomRef, payload);
   } catch (error) {
     console.error('Error updating lastActivity:', error);
   }
@@ -151,18 +122,24 @@ export async function createRoom(hostId, hostDisplayName, hostPhoto = null) {
     avatarColor: null
   });
   
-  const roomData = stripUndefinedDeep({
-    code: code,
-    hostId: hostId,
+  const roomData = sanitize({
+    code: code ?? null,
+    hostId: hostId ?? null,
     players: [hostPlayer],
-    createdAt: serverTimestamp(),
-    lastActivity: serverTimestamp(),
+    createdAt: null,
+    lastActivity: null,
     activeActivity: null
+  });
+
+  const roomWritePayload = buildSanitizedWritePayload(roomData, {
+    createdAt: serverTimestamp(),
+    lastActivity: serverTimestamp()
   });
   
   try {
     console.log('[createRoom] hostPlayer payload:', hostPlayer);
-    const docRef = await addDoc(collection(db, ROOMS_COLLECTION), roomData);
+    console.error('[createRoom] Firestore write payload (addDoc room):', roomWritePayload);
+    const docRef = await addDoc(collection(db, ROOMS_COLLECTION), roomWritePayload);
     const createdRoomId = docRef.id;
     console.log('✅ Room created successfully:', { docId: createdRoomId, code: code });
     
@@ -172,11 +149,15 @@ export async function createRoom(hostId, hostDisplayName, hostPhoto = null) {
       avatarColor: getAvatarColor(hostPlayer, createdRoomId)
     });
     console.log('[createRoom] updatedHostPlayer payload:', updatedHostPlayer);
-    await updateDoc(docRef, { players: [updatedHostPlayer] });
+    const updateHostPayload = buildSanitizedWritePayload({
+      players: [updatedHostPlayer]
+    });
+    console.error('[createRoom] Firestore write payload (update host player):', updateHostPayload);
+    await updateDoc(docRef, updateHostPayload);
     
     setActiveRoomId(createdRoomId);
     
-    const result = { id: createdRoomId, code, ...roomData };
+    const result = { id: createdRoomId, code, ...roomWritePayload };
     console.log('🌐 Room object for navigation:', result);
     return result;
   } catch (error) {
@@ -279,14 +260,18 @@ export async function joinRoom(roomId, userId, userDisplayName, userPhoto = null
       photo: userPhoto ?? null,
       isHost: false,
       joinedAt: new Date().toISOString(),
-      avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
+      avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId) || null,
+      displayNameForGame: null
     });
+    const sanitizedNewPlayer = sanitize(newPlayer);
     
     // Add player to room
     console.log('👤 joinRoom: Adding new player to Firestore:', newPlayer);
-    await updateDoc(roomRef, {
-      players: arrayUnion(newPlayer)
+    const joinPayload = buildSanitizedWritePayload({}, {
+      players: arrayUnion(sanitizedNewPlayer)
     });
+    console.error('[joinRoom] Firestore write payload (arrayUnion player):', joinPayload);
+    await updateDoc(roomRef, joinPayload);
     console.log('✅ joinRoom: Player successfully added to Firestore');
     
     // Update lastActivity
@@ -333,28 +318,35 @@ export async function leaveRoom(roomId, userId) {
       )[0];
       
       // Update all players to mark the new host
-      const updatedPlayers = remainingPlayers.map((player) => ({
-        ...player,
-        isHost: player.id === nextHost.id
+      const updatedPlayers = remainingPlayers.map((player) => buildSerializablePlayer({
+        id: player?.id ?? null,
+        displayName: player?.displayName ?? null,
+        photo: player?.photo ?? player?.photoURL ?? null,
+        isHost: player?.id === nextHost.id,
+        joinedAt: player?.joinedAt ?? new Date().toISOString(),
+        avatarColor: player?.avatarColor ?? null,
+        displayNameForGame: player?.displayNameForGame ?? null
       }));
       
-      updates.hostId = nextHost.id;
+      updates.hostId = nextHost.id ?? null;
       updates.players = updatedPlayers;
-      updates.lastActivity = serverTimestamp();
-    } else {
-      updates.lastActivity = serverTimestamp();
     }
     
     // Remove the leaving player
     const playerToRemove = room.players.find(p => p.id === userId);
     if (playerToRemove) {
-      if (Object.keys(updates).length > 0) {
-        await updateDoc(roomRef, updates);
-      }
-      await updateDoc(roomRef, {
-        players: arrayRemove(playerToRemove),
+      const preRemovePayload = buildSanitizedWritePayload(updates, {
         lastActivity: serverTimestamp()
       });
+      console.error('[leaveRoom] Firestore write payload (pre-remove update):', preRemovePayload);
+      await updateDoc(roomRef, preRemovePayload);
+
+      const removePayload = buildSanitizedWritePayload({}, {
+        players: arrayRemove(sanitize(playerToRemove)),
+        lastActivity: serverTimestamp()
+      });
+      console.error('[leaveRoom] Firestore write payload (remove player):', removePayload);
+      await updateDoc(roomRef, removePayload);
     }
     
     clearActiveRoomId();
@@ -379,15 +371,18 @@ export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
       
       if (playerIndex !== undefined && playerIndex >= 0) {
         const updatedPlayers = [...room.players];
-        updatedPlayers[playerIndex] = {
+        updatedPlayers[playerIndex] = buildSerializablePlayer({
           ...updatedPlayers[playerIndex],
-          displayNameForGame: gameDisplayName
-        };
+          displayNameForGame: gameDisplayName ?? null
+        });
         
-        await updateDoc(roomRef, {
-          players: updatedPlayers,
+        const updateNamePayload = buildSanitizedWritePayload({
+          players: updatedPlayers
+        }, {
           lastActivity: serverTimestamp()
         });
+        console.error('[updatePlayerNameForGame] Firestore write payload:', updateNamePayload);
+        await updateDoc(roomRef, updateNamePayload);
       }
     }
   } catch (error) {
@@ -402,15 +397,19 @@ export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
 export async function startVote(roomId, voteData) {
   try {
     const roomRef = doc(db, ROOMS_COLLECTION, roomId);
-    const activity = {
-      ...voteData,
-      createdAt: serverTimestamp()
-    };
+    const activity = sanitize({
+      ...(voteData || {}),
+      createdAt: null
+    });
     
-    await updateDoc(roomRef, {
-      activeActivity: activity,
+    const startVotePayload = buildSanitizedWritePayload({
+      activeActivity: activity
+    }, {
+      'activeActivity.createdAt': serverTimestamp(),
       lastActivity: serverTimestamp()
     });
+    console.error('[startVote] Firestore write payload:', startVotePayload);
+    await updateDoc(roomRef, startVotePayload);
   } catch (error) {
     console.error('Error starting vote:', error);
     throw error;
@@ -429,12 +428,15 @@ export async function castVote(roomId, userId, optionId) {
       const room = roomDoc.data();
       if (room.activeActivity) {
         const votes = room.activeActivity.votes || {};
-        votes[userId] = optionId;
+        votes[userId] = optionId ?? null;
         
-        await updateDoc(roomRef, {
-          'activeActivity.votes': votes,
+        const castVotePayload = buildSanitizedWritePayload({
+          'activeActivity.votes': sanitize(votes)
+        }, {
           lastActivity: serverTimestamp()
         });
+        console.error('[castVote] Firestore write payload:', castVotePayload);
+        await updateDoc(roomRef, castVotePayload);
       }
     }
   } catch (error) {
@@ -449,10 +451,13 @@ export async function castVote(roomId, userId, optionId) {
 export async function endActivity(roomId) {
   try {
     const roomRef = doc(db, ROOMS_COLLECTION, roomId);
-    await updateDoc(roomRef, {
-      activeActivity: null,
+    const endActivityPayload = buildSanitizedWritePayload({
+      activeActivity: null
+    }, {
       lastActivity: serverTimestamp()
     });
+    console.error('[endActivity] Firestore write payload:', endActivityPayload);
+    await updateDoc(roomRef, endActivityPayload);
   } catch (error) {
     console.error('Error ending activity:', error);
     throw error;
@@ -465,20 +470,24 @@ export async function endActivity(roomId) {
 export async function startWheel(roomId, wheelData) {
   try {
     const roomRef = doc(db, ROOMS_COLLECTION, roomId);
-    const activity = {
-      type: wheelData.type,
-      options: wheelData.options,
+    const activity = sanitize({
+      type: wheelData?.type ?? null,
+      options: Array.isArray(wheelData?.options) ? wheelData.options : [],
       state: 'idle',
       resultId: null,
       spinStartTime: null,
       spinDuration: null,
-      createdAt: serverTimestamp()
-    };
+      createdAt: null
+    });
     
-    await updateDoc(roomRef, {
-      activeActivity: activity,
+    const startWheelPayload = buildSanitizedWritePayload({
+      activeActivity: activity
+    }, {
+      'activeActivity.createdAt': serverTimestamp(),
       lastActivity: serverTimestamp()
     });
+    console.error('[startWheel] Firestore write payload:', startWheelPayload);
+    await updateDoc(roomRef, startWheelPayload);
   } catch (error) {
     console.error('Error starting wheel:', error);
     throw error;
@@ -512,20 +521,26 @@ export async function spinWheel(roomId) {
       
       const now = Date.now();
       
-      await updateDoc(roomRef, {
+      const spinStartPayload = buildSanitizedWritePayload({
         'activeActivity.state': 'spinning',
-        'activeActivity.resultId': resultId,
-        'activeActivity.spinStartTime': now,
-        'activeActivity.spinDuration': duration,
+        'activeActivity.resultId': resultId ?? null,
+        'activeActivity.spinStartTime': now ?? null,
+        'activeActivity.spinDuration': duration ?? null
+      }, {
         lastActivity: serverTimestamp()
       });
+      console.error('[spinWheel] Firestore write payload (spin start):', spinStartPayload);
+      await updateDoc(roomRef, spinStartPayload);
       
       // Schedule state change to 'result' after spin completes
       setTimeout(() => {
-        updateDoc(roomRef, {
-          'activeActivity.state': 'result',
+        const spinResultPayload = buildSanitizedWritePayload({
+          'activeActivity.state': 'result'
+        }, {
           lastActivity: serverTimestamp()
-        }).catch(error => console.error('Error updating wheel state:', error));
+        });
+        console.error('[spinWheel] Firestore write payload (spin result):', spinResultPayload);
+        updateDoc(roomRef, spinResultPayload).catch(error => console.error('Error updating wheel state:', error));
       }, duration + 100);
     }
   } catch (error) {
@@ -677,13 +692,16 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
               photo: userPhoto ?? null,
               isHost: false,
               joinedAt: new Date().toISOString(),
-              avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId)
+              avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId) || null,
+              displayNameForGame: null
             });
             console.log('[useRoom] auto-adding player payload:', newPlayer);
-            
-            await updateDoc(roomRef, {
-              players: arrayUnion(newPlayer)
+            const autoAddPayload = buildSanitizedWritePayload({}, {
+              players: arrayUnion(sanitize(newPlayer))
             });
+            console.error('[useRoom] Firestore write payload (auto-add player):', autoAddPayload);
+            
+            await updateDoc(roomRef, autoAddPayload);
           }
         }
 
@@ -720,9 +738,9 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
                 ? rawActivityPlayers
                   .filter((player) => player?.uid)
                   .map((player) => ({
-                    uid: player.uid,
-                    displayName: player.displayName,
-                    avatarColor: player.avatarColor || getAvatarColor({ id: player.uid, displayName: player.displayName }, roomId)
+                    uid: player.uid ?? null,
+                    displayName: player.displayName ?? null,
+                    avatarColor: player.avatarColor || getAvatarColor({ id: player.uid, displayName: player.displayName }, roomId) || null
                   }))
                 : rawActivityPlayers;
               const activityPlayerIds = activityPlayers.map((player) => player.uid).filter(Boolean);
@@ -740,16 +758,16 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
                 .map((player) => {
                   if (isWordImposterLobby) {
                     return {
-                      uid: player.id,
-                      displayName: player.displayNameForGame || player.displayName,
-                      avatarColor: player.avatarColor || getAvatarColor(player, roomId)
+                      uid: player.id ?? null,
+                      displayName: player.displayNameForGame || player.displayName || null,
+                      avatarColor: player.avatarColor || getAvatarColor(player, roomId) || null
                     };
                   }
 
                   return {
-                    uid: player.id,
-                    displayName: player.displayNameForGame || player.displayName,
-                    avatarColor: player.avatarColor || getAvatarColor(player, roomId),
+                    uid: player.id ?? null,
+                    displayName: player.displayNameForGame || player.displayName || null,
+                    avatarColor: player.avatarColor || getAvatarColor(player, roomId) || null,
                     isAlive: true,
                     role: null
                   };
@@ -774,13 +792,14 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
                                   hasWordImposterPlayerBloat;
 
               if (needsUpdate) {
-                const updates = {
+                const updates = {};
+                const fieldValueUpdates = {
                   lastActivity: serverTimestamp()
                 };
 
                 if (missingLobbyPlayers.length > 0) {
                   console.log('➕ useRoom: Auto-adding missing lobby players:', missingLobbyPlayers);
-                  updates['activeActivity.lobbyPlayers'] = arrayUnion(...missingLobbyPlayers);
+                  fieldValueUpdates['activeActivity.lobbyPlayers'] = arrayUnion(...sanitize(missingLobbyPlayers));
                 }
 
                 if (departedLobbyPlayers.length > 0) {
@@ -791,6 +810,7 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
                     ...(missingLobbyPlayers.length > 0 ? missingLobbyPlayers : [])
                   ];
                   updates['activeActivity.lobbyPlayers'] = updatedLobbyPlayers;
+                  delete fieldValueUpdates['activeActivity.lobbyPlayers'];
                 }
 
                 const updatedActivityPlayers = [
@@ -816,7 +836,9 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
                   updates['activeActivity.spectators'] = spectators.filter((id) => !departedSpectators.includes(id));
                 }
 
-                updateDoc(roomRef, updates).catch(error => {
+                const autoSyncPayload = buildSanitizedWritePayload(updates, fieldValueUpdates);
+                console.error('[useRoom] Firestore write payload (auto-sync lobby/activity):', autoSyncPayload);
+                updateDoc(roomRef, autoSyncPayload).catch(error => {
                   console.error('❌ useRoom: Failed to auto-sync lobby/activity players:', error);
                 });
               }
