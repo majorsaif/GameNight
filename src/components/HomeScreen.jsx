@@ -177,7 +177,7 @@ export default function HomeScreen() {
               onClick={() => {
                 if (navigator.share) {
                   navigator.share({
-                    title: 'Join my GamesNight room',
+                    title: 'Join my room on Its Games Night',
                     text: `Join room ${room.code}`,
                     url: window.location.href
                   }).catch(() => {});

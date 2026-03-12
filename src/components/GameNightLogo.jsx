@@ -5,9 +5,9 @@ export default function GameNightLogo({ size = 'compact', className = '' }) {
   const wrapperClasses = isHero
     ? 'inline-flex items-center justify-center'
     : 'inline-flex items-center';
-  const paddingLeftClasses = isHero ? 'pl-5 sm:pl-6' : 'pl-3 sm:pl-4';
+  const paddingLeftClasses = isHero ? 'pl-8 sm:pl-10' : 'pl-3 sm:pl-4';
   const itsClasses = isHero
-    ? 'text-xs sm:text-sm'
+    ? 'text-xl sm:text-2xl'
     : 'text-[9px] sm:text-[10px]';
   const wordClasses = isHero
     ? 'text-5xl sm:text-6xl'

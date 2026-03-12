@@ -1616,7 +1616,7 @@ export default function MafiaGame() {
             onClick={handleReturnToGamesNight}
             className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
           >
-            Return to Games Night
+            Return to Its Games Night
           </button>
         </div>
       </div>
