@@ -7,6 +7,7 @@ import GamesScreen from './components/GamesScreen';
 import WheelSpin from './components/ForfeitWheel';
 import MafiaGame from './components/MafiaGame';
 import WordImposterGame from './wordImposter/WordImposterGame';
+import SpyfallGame from './spyfall/SpyfallGame';
 
 function App() {
   return (
@@ -18,6 +19,7 @@ function App() {
         <Route path="/room/:roomId/games" element={<GamesScreen />} />
         <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />
         <Route path="/room/:roomId/games/word-imposter" element={<WordImposterGame />} />
+        <Route path="/room/:roomId/games/spyfall" element={<SpyfallGame />} />
         <Route path="/wheel" element={<WheelSpin />} />
       </Routes>
     </Router>
