@@ -3,9 +3,11 @@ import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { createRoom, findRoomByCode, joinRoom } from '../hooks/useRoom';
 import GameNightLogo from './GameNightLogo';
+import ProfileModal from './ProfileModal';
 
 export default function WelcomeScreen() {
   const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
+  const [showProfileModal, setShowProfileModal] = useState(false);
   const navigate = useNavigate();
   const { user, loading } = useAuth();
   const inputRefs = useRef([]);
@@ -162,7 +164,7 @@ export default function WelcomeScreen() {
       <header className="py-8">
         <div className="max-w-md mx-auto px-6 flex justify-end items-center">
           <button
-            onClick={() => navigate('/profile')}
+            onClick={() => setShowProfileModal(true)}
             className="flex items-center justify-center"
             title="Profile"
           >
@@ -248,6 +250,8 @@ export default function WelcomeScreen() {
 
         </div>
       </div>
+
+      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </div>
   );
 }

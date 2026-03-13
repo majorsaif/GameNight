@@ -5,7 +5,6 @@ import WelcomeScreen from './components/WelcomeScreen';
 import HomeScreen from './components/HomeScreen';
 import GamesScreen from './components/GamesScreen';
 import WheelSpin from './components/ForfeitWheel';
-import ProfileScreen from './components/ProfileScreen';
 import MafiaGame from './components/MafiaGame';
 import WordImposterGame from './wordImposter/WordImposterGame';
 
@@ -20,7 +19,6 @@ function App() {
         <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />
         <Route path="/room/:roomId/games/word-imposter" element={<WordImposterGame />} />
         <Route path="/wheel" element={<WheelSpin />} />
-        <Route path="/profile" element={<ProfileScreen />} />
       </Routes>
     </Router>
   );

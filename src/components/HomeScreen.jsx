@@ -1,6 +1,6 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useRoom, updatePlayerNameForGame, leaveRoom, startVote, castVote, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
+import { useRoom, leaveRoom, startVote, castVote, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
 import VoteModal from './VoteModal';
 import ActiveVote from './ActiveVote';
@@ -25,12 +25,8 @@ export default function HomeScreen() {
   );
   const navigate = useNavigate();
   const location = useLocation();
-  const [showSettings, setShowSettings] = useState(false);
-  const [showRenameModal, setShowRenameModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showWheelSetup, setShowWheelSetup] = useState(false);
-  const [gameDisplayName, setGameDisplayName] = useState(room?.players.find(p => p.id === user?.id)?.displayNameForGame || user?.displayName || '');
-  const settingsRef = useRef(null);
 
   // Backfill avatar colors for existing players
   useEffect(() => {
@@ -71,35 +67,11 @@ export default function HomeScreen() {
     }
   }, [room, roomId, user?.id, navigate, location.pathname]);
 
-  // Close settings menu when clicking outside
-  useEffect(() => {
-    function handleClickOutside(event) {
-      if (settingsRef.current && !settingsRef.current.contains(event.target)) {
-        setShowSettings(false);
-      }
-    }
-
-    if (showSettings) {
-      document.addEventListener('mousedown', handleClickOutside);
-      return () => {
-        document.removeEventListener('mousedown', handleClickOutside);
-      };
-    }
-  }, [showSettings]);
-
   const handleLeaveRoom = () => {
     if (roomId && user?.id) {
       leaveRoom(roomId, user.id);
     }
-    setShowSettings(false);
     navigate('/');
-  };
-
-  const handleSaveGameName = () => {
-    if (gameDisplayName.trim()) {
-      updatePlayerNameForGame(roomId, user?.id, gameDisplayName.trim());
-      setShowRenameModal(false);
-    }
   };
 
   const handleStartVote = (voteData) => {
@@ -168,7 +140,7 @@ export default function HomeScreen() {
       <header className="relative z-40 w-full max-w-md mx-auto px-4 sm:px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo */}
-          <GameNightLogo />
+          <GameNightLogo className="translate-y-0.5" />
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">
@@ -193,41 +165,16 @@ export default function HomeScreen() {
               </svg>
             </button>
 
-            {/* Settings Button */}
-            <div className="relative" ref={settingsRef}>
-              <button
-                onClick={() => setShowSettings(!showSettings)}
-                className="flex items-center justify-center w-11 h-11 bg-slate-800 border border-slate-700 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
-                title="Settings"
-              >
-                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-              
-              {showSettings && (
-                <div className="absolute right-0 mt-2 w-56 bg-slate-800 border border-slate-700 rounded-xl shadow-xl shadow-black/50 overflow-hidden z-50">
-                  <div className="divide-y divide-slate-700/60">
-                    <button
-                      onClick={() => {
-                        setShowRenameModal(true);
-                        setShowSettings(false);
-                      }}
-                      className="relative z-10 flex w-full items-center px-4 py-3 text-left text-slate-300 hover:bg-slate-700 transition-colors font-medium first:rounded-t-xl"
-                    >
-                      Change nickname
-                    </button>
-                    <button
-                      onClick={handleLeaveRoom}
-                      className="relative z-10 flex w-full items-center px-4 py-3 text-left text-red-400 hover:bg-slate-700 transition-colors font-medium last:rounded-b-xl"
-                    >
-                      Leave Room
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
+            {/* Leave Room Button */}
+            <button
+              onClick={handleLeaveRoom}
+              className="flex items-center justify-center w-11 h-11 bg-slate-800 border border-slate-700 rounded-full text-slate-300 hover:text-red-400 hover:bg-slate-700 transition-colors"
+              title="Leave room"
+            >
+              <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+              </svg>
+            </button>
           </div>
         </div>
       </header>
@@ -280,37 +227,6 @@ export default function HomeScreen() {
         />
       )}
 
-      {/* Change Nickname Modal */}
-      {showRenameModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-sm w-full">
-            <h3 className="text-white text-lg font-bold mb-4">Change nickname</h3>
-            <input
-              type="text"
-              value={gameDisplayName}
-              onChange={(e) => setGameDisplayName(e.target.value)}
-              placeholder="Enter your game name..."
-              className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent mb-4"
-              autoFocus
-            />
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowRenameModal(false)}
-                className="flex-1 px-4 py-2 bg-slate-700 hover:bg-slate-600 text-slate-300 rounded-lg font-medium transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleSaveGameName}
-                disabled={!gameDisplayName.trim()}
-                className="flex-1 px-4 py-2 bg-violet-600 hover:bg-violet-500 disabled:bg-slate-600 disabled:text-slate-500 text-white rounded-lg font-bold transition-colors disabled:cursor-not-allowed"
-              >
-                Save
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
