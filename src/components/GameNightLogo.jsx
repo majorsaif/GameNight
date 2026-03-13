@@ -16,7 +16,7 @@ export default function GameNightLogo({ size = 'compact', className = '' }) {
   return (
     <div className={`${wrapperClasses} ${className}`.trim()}>
       <div className={`relative flex items-center ${paddingLeftClasses}`}>
-        <span className={`absolute left-0 top-1/2 -translate-y-1/2 rotate-[-17deg] origin-left whitespace-nowrap leading-none font-black italic tracking-tight text-violet-400 ${itsClasses}`}>
+        <span className={`absolute left-0 top-1/2 -translate-y-1/2 rotate-[17deg] origin-left whitespace-nowrap leading-none font-black italic tracking-tight text-violet-400 ${itsClasses}`}>
           ITS
         </span>
         <div className={`flex items-baseline leading-none ${wordClasses} font-black tracking-tight`}>
