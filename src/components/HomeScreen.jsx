@@ -140,7 +140,7 @@ export default function HomeScreen() {
       <header className="relative z-40 w-full max-w-md mx-auto px-4 sm:px-6 py-4">
         <div className="flex justify-between items-center">
           {/* Logo */}
-          <GameNightLogo />
+          <GameNightLogo className="translate-y-0.5" />
 
           {/* Action Buttons */}
           <div className="flex items-center gap-2">

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getInitials } from '../utils/avatar';
+import GameNightLogo from './GameNightLogo';
 
 export default function OnboardingScreen() {
   const [name, setName] = useState('');
@@ -70,16 +71,8 @@ export default function OnboardingScreen() {
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4 py-12">
       <div className="w-full max-w-md">
         {/* Logo */}
-        <div className="text-center mb-8">
-          <div className="flex items-center justify-center gap-0 mb-2">
-            <div className="flex items-center justify-center">
-              <span className="text-xl leading-none font-black italic text-violet-400 -rotate-90 origin-center whitespace-nowrap -mr-1">ITS</span>
-            </div>
-            <h1 className="text-5xl font-black leading-tight">
-              <span className="text-white italic">GAME</span>
-              <span className="text-violet-400 italic">NIGHT</span>
-            </h1>
-          </div>
+        <div className="text-center mb-8 flex justify-center">
+          <GameNightLogo size="hero" />
         </div>
 
         {/* Onboarding Card */}
@@ -138,7 +131,7 @@ export default function OnboardingScreen() {
             {/* Name Input */}
             <div className="space-y-2">
               <label htmlFor="name" className="block text-slate-300 text-sm font-medium text-center">
-                What do you want to be called?
+                What should we call you?
               </label>
               <input
                 id="name"

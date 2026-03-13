@@ -5,13 +5,13 @@ export default function GameNightLogo({ size = 'compact', className = '' }) {
   const wrapperClasses = isHero
     ? 'inline-flex items-center justify-center'
     : 'inline-flex items-center';
-  const paddingLeftClasses = isHero ? 'pl-6 sm:pl-8' : 'pl-2 sm:pl-3';
+  const paddingLeftClasses = isHero ? 'pl-5 sm:pl-6' : 'pl-2 sm:pl-3';
   const itsClasses = isHero
     ? 'text-xl sm:text-2xl'
     : 'text-[9px] sm:text-[10px]';
   const itsPositionClasses = isHero
-    ? 'left-2 bottom-1 sm:left-3 sm:bottom-1'
-    : 'left-1 bottom-0';
+    ? 'left-5 bottom-2 sm:left-6 sm:bottom-2'
+    : 'left-2.5 bottom-1.5';
   const wordClasses = isHero
     ? 'text-5xl sm:text-6xl'
     : 'text-xl sm:text-2xl';
