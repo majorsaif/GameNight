@@ -77,24 +77,19 @@ export default function ProfileModal({ isOpen, onClose }) {
 
   return (
     <div
-      className={`fixed inset-0 z-50 transition-opacity duration-300 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
+      className={`fixed inset-0 z-50 flex items-center justify-center px-4 transition-opacity duration-200 ${isOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
       aria-modal="true"
       role="dialog"
     >
       {/* Backdrop */}
       <div className="absolute inset-0 bg-black/60" onClick={onClose} />
 
-      {/* Panel — slides up from bottom */}
+      {/* Centred card */}
       <div
-        className={`absolute bottom-0 left-0 right-0 max-w-md mx-auto bg-slate-900 rounded-t-3xl border-t border-slate-700/50 shadow-2xl shadow-black/80 transition-transform duration-300 ease-out ${isOpen ? 'translate-y-0' : 'translate-y-full'}`}
+        className={`relative w-full max-w-sm bg-slate-900 rounded-2xl border border-slate-700/50 shadow-2xl shadow-black/80 transition-transform duration-200 ease-out ${isOpen ? 'scale-100' : 'scale-95'}`}
       >
-        {/* Drag handle */}
-        <div className="flex justify-center pt-3 pb-1">
-          <div className="w-10 h-1 bg-slate-700 rounded-full" />
-        </div>
-
         {/* Header row */}
-        <div className="flex items-center justify-between px-6 py-3">
+        <div className="flex items-center justify-between px-6 pt-5 pb-3">
           <h2 className="text-white font-bold text-lg">Profile</h2>
           <button
             onClick={onClose}
@@ -106,7 +101,7 @@ export default function ProfileModal({ isOpen, onClose }) {
         </div>
 
         {/* Content */}
-        <div className="px-6 pb-10 space-y-6">
+        <div className="px-6 pb-6 space-y-6">
 
           {/* Avatar + name section */}
           <div className="flex flex-col items-center gap-4 pt-2">

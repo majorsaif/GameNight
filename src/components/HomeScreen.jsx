@@ -9,7 +9,6 @@ import WheelSetupModal from './WheelSetupModal';
 import MafiaLobbyCard from './MafiaLobbyCard';
 import WordImposterLobbyCard from './WordImposterLobbyCard';
 import GameNightLogo from './GameNightLogo';
-import ProfileModal from './ProfileModal';
 import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 import mafiaRules from '../rules/mafia';
 import wordImposterRulesData from '../rules/wordImposter';
@@ -26,7 +25,6 @@ export default function HomeScreen() {
   );
   const navigate = useNavigate();
   const location = useLocation();
-  const [showProfileModal, setShowProfileModal] = useState(false);
   const [showVoteModal, setShowVoteModal] = useState(false);
   const [showWheelSetup, setShowWheelSetup] = useState(false);
 
@@ -177,25 +175,6 @@ export default function HomeScreen() {
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
               </svg>
             </button>
-
-            {/* Profile / Avatar Button */}
-            <button
-              onClick={() => setShowProfileModal(true)}
-              className="flex items-center justify-center w-11 h-11 rounded-full"
-              title="Profile"
-            >
-              {user?.photo ? (
-                <img
-                  src={user.photo}
-                  alt={user?.displayName}
-                  className="w-10 h-10 rounded-full object-cover"
-                />
-              ) : (
-                <div className={`w-10 h-10 rounded-full ${getAvatarColor(user?.displayName)} flex items-center justify-center text-white font-bold text-sm`}>
-                  {getInitials(user?.displayName)}
-                </div>
-              )}
-            </button>
           </div>
         </div>
       </header>
@@ -248,7 +227,6 @@ export default function HomeScreen() {
         />
       )}
 
-      <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </div>
   );
 }
