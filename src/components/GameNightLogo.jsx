@@ -9,6 +9,9 @@ export default function GameNightLogo({ size = 'compact', className = '' }) {
   const itsClasses = isHero
     ? 'text-xl sm:text-2xl'
     : 'text-[9px] sm:text-[10px]';
+  const itsPositionClasses = isHero
+    ? 'left-2 bottom-1 sm:left-3 sm:bottom-1'
+    : 'left-1 bottom-0';
   const wordClasses = isHero
     ? 'text-5xl sm:text-6xl'
     : 'text-xl sm:text-2xl';
@@ -16,7 +19,7 @@ export default function GameNightLogo({ size = 'compact', className = '' }) {
   return (
     <div className={`${wrapperClasses} ${className}`.trim()}>
       <div className={`relative flex items-center ${paddingLeftClasses}`}>
-        <span className={`absolute left-1 bottom-0 rotate-[-78deg] origin-bottom-left whitespace-nowrap leading-none font-black italic tracking-tight text-violet-400 ${itsClasses}`}>
+        <span className={`absolute ${itsPositionClasses} rotate-[-78deg] origin-bottom-left whitespace-nowrap leading-none font-black italic tracking-tight text-violet-400 ${itsClasses}`}>
           ITS
         </span>
         <div className={`flex items-baseline leading-none ${wordClasses} font-black tracking-tight`}>
