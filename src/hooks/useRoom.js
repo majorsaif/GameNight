@@ -17,6 +17,7 @@ import {
 } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getAvatarColor } from '../utils/avatar';
+import { estimatePhotoByteSize, PROFILE_PHOTO_MAX_BYTES } from '../utils/photoCompression';
 
 const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
@@ -41,11 +42,15 @@ function normalizePhotoForRoom(photo) {
   const trimmedPhoto = photo.trim();
   if (!trimmedPhoto) return null;
 
-  // Base64 payloads can easily exceed Firestore document size limits when embedded in players[]
-  if (trimmedPhoto.startsWith('data:')) return null;
-
   // Blob URLs are device-local and not useful to persist in shared room state
   if (trimmedPhoto.startsWith('blob:')) return null;
+
+  // Allow compressed base64 photos, but reject oversized payloads
+  if (trimmedPhoto.startsWith('data:')) {
+    const photoByteSize = estimatePhotoByteSize(trimmedPhoto);
+    if (photoByteSize === 0 || photoByteSize > PROFILE_PHOTO_MAX_BYTES) return null;
+    return trimmedPhoto;
+  }
 
   // Guardrail for unexpectedly large URL-like payloads
   if (trimmedPhoto.length > MAX_ROOM_PHOTO_URL_LENGTH) return null;
