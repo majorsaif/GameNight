@@ -79,6 +79,7 @@ export default function ProfileModal({ isOpen, onClose }) {
       });
 
       localStorage.setItem(PHOTO_KEY, dataUrl);
+      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', dataUrl.length);
       updateProfile({ photo: dataUrl });
     } catch (error) {
       console.error('Error compressing profile modal photo:', error);

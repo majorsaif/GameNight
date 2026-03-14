@@ -83,6 +83,13 @@ function buildSerializablePlayer({
   avatarColor = null,
   displayNameForGame
 }) {
+  try {
+    console.log('[useRoom] All localStorage keys:', Object.keys(localStorage));
+    console.log('[useRoom] gamenight_photo value:', localStorage.getItem('gamenight_photo') ? 'EXISTS length=' + localStorage.getItem('gamenight_photo').length : 'NULL OR MISSING');
+  } catch (error) {
+    console.warn('[useRoom] localStorage debug check failed:', error);
+  }
+
   return sanitize({
     id: id ?? null,
     displayName: displayName ?? null,

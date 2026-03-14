@@ -28,6 +28,10 @@ export default function OnboardingScreen() {
       const { dataUrl } = await compressProfilePhotoFile(file, {
         maxBytes: PROFILE_PHOTO_MAX_BYTES
       });
+
+      localStorage.setItem('gamenight_photo', dataUrl);
+      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', dataUrl.length);
+
       setPhotoPreview(dataUrl);
       setPhotoBase64(dataUrl);
     } catch (error) {
@@ -43,6 +47,7 @@ export default function OnboardingScreen() {
   const handleRemovePhoto = () => {
     setPhotoPreview(null);
     setPhotoBase64(null);
+    localStorage.removeItem('gamenight_photo');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -56,6 +61,7 @@ export default function OnboardingScreen() {
     localStorage.setItem('gamenight_nickname', name.trim());
     if (photoBase64) {
       localStorage.setItem('gamenight_photo', photoBase64);
+      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', photoBase64.length);
     }
 
     // Navigate to welcome screen
