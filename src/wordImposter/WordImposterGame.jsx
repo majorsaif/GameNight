@@ -108,7 +108,7 @@ export default function WordImposterGame() {
       : getPlayerByUid(playerUid);
 
     const matchingRoomPlayer = room?.players?.find((player) => player.id === playerUid);
-    return activityPlayer?.photoURL || activityPlayer?.photo || matchingRoomPlayer?.photo || null;
+    return activityPlayer?.photo || activityPlayer?.photoURL || matchingRoomPlayer?.photo || null;
   };
 
   // === HOST ACTIONS ===

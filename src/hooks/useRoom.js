@@ -36,6 +36,22 @@ function buildSanitizedWritePayload(data = {}, fieldValueData = {}) {
   };
 }
 
+function getPhotoFromLocalStorage() {
+  try {
+    const photo = localStorage.getItem('gamenight_photo');
+    console.log('[useRoom] photo from localStorage:', photo ? 'present, length: ' + photo.length : 'NULL');
+    return photo || null;
+  } catch (error) {
+    console.warn('[useRoom] Unable to read photo from localStorage:', error);
+    return null;
+  }
+}
+
+function resolveCurrentUserPhoto(photo) {
+  if (typeof photo === 'string' && photo.trim()) return photo;
+  return getPhotoFromLocalStorage();
+}
+
 function normalizePhotoForRoom(photo) {
   if (typeof photo !== 'string') return null;
 
@@ -154,11 +170,12 @@ async function updateLastActivity(roomRef) {
 export async function createRoom(hostId, hostDisplayName, hostPhoto = null) {
   const code = Math.random().toString(36).substring(2, 8).toUpperCase();
   const now = new Date().toISOString();
+  const resolvedHostPhoto = resolveCurrentUserPhoto(hostPhoto);
   
   const hostPlayer = buildSerializablePlayer({ 
     id: hostId, 
     displayName: hostDisplayName,
-    photo: hostPhoto ?? null,
+    photo: resolvedHostPhoto,
     isHost: true, 
     joinedAt: now,
     avatarColor: null
@@ -324,10 +341,11 @@ export async function joinRoom(roomId, userId, userDisplayName, userPhoto = null
     }
     
     // Create new player
+    const resolvedUserPhoto = resolveCurrentUserPhoto(userPhoto);
     const newPlayer = buildSerializablePlayer({
       id: userId,
       displayName: userDisplayName,
-      photo: userPhoto ?? null,
+      photo: resolvedUserPhoto,
       isHost: false,
       joinedAt: new Date().toISOString(),
       avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId) || null,
@@ -756,10 +774,11 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
         if (userId && userDisplayName) {
           const existingPlayer = room.players?.find(p => p.id === userId);
           if (!existingPlayer) {
+            const resolvedUserPhoto = resolveCurrentUserPhoto(userPhoto);
             const newPlayer = buildSerializablePlayer({
               id: userId,
               displayName: userDisplayName,
-              photo: userPhoto ?? null,
+              photo: resolvedUserPhoto,
               isHost: false,
               joinedAt: new Date().toISOString(),
               avatarColor: getAvatarColor({ id: userId, displayName: userDisplayName }, roomId) || null,

@@ -134,7 +134,7 @@ export default function SpyfallGame() {
     if (!uid) return null;
     const activityPlayer = typeof playerOrUid === 'object' ? playerOrUid : getPlayerByUid(uid);
     const roomPlayer = room?.players?.find((p) => p.id === uid);
-    return activityPlayer?.photoURL || activityPlayer?.photo || roomPlayer?.photo || null;
+    return activityPlayer?.photo || activityPlayer?.photoURL || roomPlayer?.photo || null;
   };
 
   const renderAvatar = (player, sizeClass = 'w-10 h-10', textClass = 'text-sm', extra = '') => {

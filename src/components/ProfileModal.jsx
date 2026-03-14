@@ -1,6 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import {
+  compressProfilePhotoFile,
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_MAX_UPLOAD_BYTES
+} from '../utils/photoCompression';
+
+const PHOTO_KEY = 'gamenight_photo';
 
 export default function ProfileModal({ isOpen, onClose }) {
   const navigate = useNavigate();
@@ -57,16 +64,27 @@ export default function ProfileModal({ isOpen, onClose }) {
     setIsEditingName(false);
   };
 
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (file.size > 5 * 1024 * 1024) {
-      alert('Photo must be under 5MB');
+
+    if (file.size > PROFILE_PHOTO_MAX_UPLOAD_BYTES) {
+      alert('Photo size must be less than 15MB');
       return;
     }
-    const reader = new FileReader();
-    reader.onloadend = () => updateProfile({ photo: reader.result });
-    reader.readAsDataURL(file);
+
+    try {
+      const { dataUrl } = await compressProfilePhotoFile(file, {
+        maxBytes: PROFILE_PHOTO_MAX_BYTES
+      });
+
+      localStorage.setItem(PHOTO_KEY, dataUrl);
+      updateProfile({ photo: dataUrl });
+    } catch (error) {
+      console.error('Error compressing profile modal photo:', error);
+      alert('Failed to process photo. Please choose a different image.');
+    }
+
     // Clear the input so the same file can be re-selected
     e.target.value = '';
   };
