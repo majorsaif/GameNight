@@ -21,6 +21,8 @@ import { getAvatarColor } from '../utils/avatar';
 const ROOMS_COLLECTION = 'rooms';
 const ROOM_EXPIRY_MS = 12 * 60 * 60 * 1000; // 12 hours
 const ACTIVE_ROOM_KEY = 'gamesnight_active_room';
+const MAX_ROOM_PHOTO_URL_LENGTH = 2048;
+let inMemoryActiveRoomId = null;
 
 function sanitize(obj) {
   return JSON.parse(JSON.stringify(obj));
@@ -31,6 +33,24 @@ function buildSanitizedWritePayload(data = {}, fieldValueData = {}) {
     ...sanitize(data),
     ...fieldValueData
   };
+}
+
+function normalizePhotoForRoom(photo) {
+  if (typeof photo !== 'string') return null;
+
+  const trimmedPhoto = photo.trim();
+  if (!trimmedPhoto) return null;
+
+  // Base64 payloads can easily exceed Firestore document size limits when embedded in players[]
+  if (trimmedPhoto.startsWith('data:')) return null;
+
+  // Blob URLs are device-local and not useful to persist in shared room state
+  if (trimmedPhoto.startsWith('blob:')) return null;
+
+  // Guardrail for unexpectedly large URL-like payloads
+  if (trimmedPhoto.length > MAX_ROOM_PHOTO_URL_LENGTH) return null;
+
+  return trimmedPhoto;
 }
 
 function buildSerializablePlayer({
@@ -45,7 +65,7 @@ function buildSerializablePlayer({
   return sanitize({
     id: id ?? null,
     displayName: displayName ?? null,
-    photo: photo ?? null,
+    photo: normalizePhotoForRoom(photo),
     isHost: Boolean(isHost),
     joinedAt: joinedAt ?? new Date().toISOString(),
     avatarColor: avatarColor ?? null,
@@ -54,17 +74,34 @@ function buildSerializablePlayer({
 }
 
 function setActiveRoomId(roomId) {
-  if (roomId) {
+  if (!roomId) return;
+
+  inMemoryActiveRoomId = roomId;
+
+  try {
     sessionStorage.setItem(ACTIVE_ROOM_KEY, roomId);
+  } catch (error) {
+    console.warn('Unable to persist active room in sessionStorage:', error);
   }
 }
 
 function getActiveRoomId() {
-  return sessionStorage.getItem(ACTIVE_ROOM_KEY);
+  try {
+    return sessionStorage.getItem(ACTIVE_ROOM_KEY) || inMemoryActiveRoomId;
+  } catch (error) {
+    console.warn('Unable to read active room from sessionStorage:', error);
+    return inMemoryActiveRoomId;
+  }
 }
 
 function clearActiveRoomId() {
-  sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+  inMemoryActiveRoomId = null;
+
+  try {
+    sessionStorage.removeItem(ACTIVE_ROOM_KEY);
+  } catch (error) {
+    console.warn('Unable to clear active room from sessionStorage:', error);
+  }
 }
 
 function isRoomExpired(room) {
@@ -243,6 +280,34 @@ export async function joinRoom(roomId, userId, userDisplayName, userPhoto = null
     
     const room = { id: roomDoc.id, ...roomDoc.data() };
     console.log('✅ joinRoom: Room document found:', { roomId, playerCount: room.players?.length || 0 });
+
+    const roomPlayers = Array.isArray(room.players) ? room.players : [];
+    const hasLegacyPlayerPhotoPayload = roomPlayers.some((player) => {
+      const originalPhoto = player?.photo ?? player?.photoURL ?? null;
+      const normalizedPhoto = normalizePhotoForRoom(originalPhoto);
+      return (originalPhoto ?? null) !== normalizedPhoto;
+    });
+
+    if (hasLegacyPlayerPhotoPayload) {
+      const normalizedPlayers = roomPlayers.map((player) => buildSerializablePlayer({
+        id: player?.id ?? null,
+        displayName: player?.displayName ?? null,
+        photo: player?.photo ?? player?.photoURL ?? null,
+        isHost: player?.id === room.hostId,
+        joinedAt: player?.joinedAt ?? new Date().toISOString(),
+        avatarColor: player?.avatarColor ?? null,
+        displayNameForGame: player?.displayNameForGame ?? null
+      }));
+
+      const normalizePlayersPayload = buildSanitizedWritePayload({
+        players: normalizedPlayers
+      }, {
+        lastActivity: serverTimestamp()
+      });
+      console.error('[joinRoom] Firestore write payload (normalize legacy players):', normalizePlayersPayload);
+      await updateDoc(roomRef, normalizePlayersPayload);
+      room.players = normalizedPlayers;
+    }
     
     // Check if user is already in the room
     const existingPlayer = room.players?.find(p => p.id === userId);
