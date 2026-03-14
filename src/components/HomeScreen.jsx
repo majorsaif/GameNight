@@ -8,10 +8,12 @@ import WheelSpin from './ForfeitWheel';
 import WheelSetupModal from './WheelSetupModal';
 import MafiaLobbyCard from './MafiaLobbyCard';
 import WordImposterLobbyCard from './WordImposterLobbyCard';
+import SpyfallLobbyCard from './SpyfallLobbyCard';
 import GameNightLogo from './GameNightLogo';
 import { getInitials, getAvatarColor, backfillAvatarColors } from '../utils/avatar';
 import mafiaRules from '../rules/mafia';
 import wordImposterRulesData from '../rules/wordImposter';
+import spyfallRulesData from '../rules/spyfall';
 
 export default function HomeScreen() {
   const { roomId } = useParams();
@@ -63,6 +65,15 @@ export default function HomeScreen() {
       if (isBeyondLobby && isLobbyParticipant && !alreadyOnWiPage) {
         console.log('[HomeScreen] Auto-joining Word Imposter game', { phase: newPhase, userId: user.id });
         navigate(wiRoute);
+      }
+    }
+
+    if (activity.type === 'spyfall') {
+      const sfRoute = `/room/${roomId}/games/spyfall`;
+      const alreadyOnSfPage = location.pathname === sfRoute;
+      if (isBeyondLobby && isLobbyParticipant && !alreadyOnSfPage) {
+        console.log('[HomeScreen] Auto-joining Spyfall game', { phase: newPhase, userId: user.id });
+        navigate(sfRoute);
       }
     }
   }, [room, roomId, user?.id, navigate, location.pathname]);
@@ -248,6 +259,13 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
     showCategory: true
   });
 
+  const [showSfRulesModal, setShowSfRulesModal] = useState(false);
+  const [sfRules, setSfRules] = useState(room.activeActivity?.rules || {
+    spyCount: 1,
+    showRoles: true,
+    discussionTime: 8
+  });
+
   const hasActiveActivity = room.activeActivity != null;
   const activityType = room.activeActivity?.type;
   const isWheel = hasActiveActivity && (activityType === 'playerWheel' || activityType === 'customWheel');
@@ -255,6 +273,8 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
   const isWordImposter = hasActiveActivity && activityType === 'wordImposter';
   const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
+  const isSpyfall = hasActiveActivity && activityType === 'spyfall';
+  const isSpyfallLobby = isSpyfall && room.activeActivity?.phase === 'lobby';
   const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
@@ -441,6 +461,34 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                 </div>
               </div>
             </button>
+          ) : isSpyfallLobby ? (
+            <SpyfallLobbyCard
+              lobbyState={room.activeActivity}
+              roomPlayers={room.players}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={true}
+              rules={sfRules}
+              setRules={setSfRules}
+              showRulesModal={showSfRulesModal}
+              setShowRulesModal={setShowSfRulesModal}
+            />
+          ) : isSpyfall ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/spyfall`)}
+              className="w-full bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🕵️
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">Spyfall Game Active</h3>
+                  <p className="text-indigo-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
           ) : (
             <WheelSpin
               activity={room.activeActivity}
@@ -515,6 +563,7 @@ function GameRulesSection({ activityType }) {
   let rules = null;
   if (activityType === 'mafia') rules = mafiaRules;
   if (activityType === 'wordImposter') rules = wordImposterRulesData;
+  if (activityType === 'spyfall') rules = spyfallRulesData;
   if (!rules) return null;
 
   return (
@@ -557,6 +606,8 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const isMafiaLobby = isMafia && room.activeActivity?.phase === 'lobby';
   const isWordImposter = hasActiveActivity && activityType === 'wordImposter';
   const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
+  const isSpyfall = hasActiveActivity && activityType === 'spyfall';
+  const isSpyfallLobby = isSpyfall && room.activeActivity?.phase === 'lobby';
   const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
@@ -731,6 +782,30 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                 <div>
                   <h3 className="text-white font-bold text-lg">A Word Imposter game is starting!</h3>
                   <p className="text-teal-100 text-sm">Click to join the game</p>
+                </div>
+              </div>
+            </button>
+          ) : isSpyfallLobby ? (
+            <SpyfallLobbyCard
+              lobbyState={room.activeActivity}
+              roomPlayers={room.players}
+              userId={userId}
+              roomId={roomId}
+              navigate={navigate}
+              isHost={false}
+            />
+          ) : isSpyfall ? (
+            <button
+              onClick={() => navigate(`/room/${roomId}/games/spyfall`)}
+              className="w-full bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 rounded-2xl p-6 text-left shadow-xl transition-all"
+            >
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 bg-indigo-500/30 rounded-xl flex items-center justify-center text-2xl">
+                  🕵️
+                </div>
+                <div>
+                  <h3 className="text-white font-bold text-lg">A Spyfall game is starting!</h3>
+                  <p className="text-indigo-100 text-sm">Click to join the game</p>
                 </div>
               </div>
             </button>

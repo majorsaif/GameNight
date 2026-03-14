@@ -4,6 +4,7 @@ import { useAuth } from '../hooks/useAuth';
 import { useRoom } from '../hooks/useRoom';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
+import LOCATIONS from '../spyfall/locations';
 
 export default function GamesScreen() {
   const navigate = useNavigate();
@@ -27,10 +28,86 @@ export default function GamesScreen() {
     imposterCount: '1',
     showCategory: true
   });
+  const [showSpyfallSetup, setShowSpyfallSetup] = useState(false);
+  const [spyCountError, setSpyCountError] = useState('');
+  const [spyfallRules, setSpyfallRules] = useState({
+    spyCount: '1',
+    showRoles: true,
+    discussionTime: 8
+  });
 
-  const handleGameClick = () => {
-    setShowComingSoon(true);
-    setTimeout(() => setShowComingSoon(false), 2000);
+  const handleSpyfallClick = () => {
+    if (!isHost) {
+      setShowHostOnly(true);
+      setTimeout(() => setShowHostOnly(false), 3000);
+      return;
+    }
+    setShowSpyfallSetup(true);
+  };
+
+  const handleStartSpyfallLobby = async () => {
+    if (!isHost || !roomId || !user) return;
+
+    setSpyCountError('');
+
+    const spyCountValue = spyfallRules.spyCount.trim();
+    if (!spyCountValue) {
+      setSpyCountError('Number of spies is required');
+      return;
+    }
+
+    const spyCount = parseInt(spyCountValue, 10);
+    if (isNaN(spyCount) || spyCount < 1) {
+      setSpyCountError('Number of spies must be at least 1');
+      return;
+    }
+
+    const totalPlayers = room?.players?.length || 0;
+    const maxAllowed = Math.max(1, Math.floor(totalPlayers * 0.25));
+    if (spyCount > maxAllowed) {
+      setSpyCountError(`Too many spies! With ${totalPlayers} players you can have a maximum of ${maxAllowed} spy(s)`);
+      return;
+    }
+
+    const roomRef = doc(db, 'rooms', roomId);
+
+    const gamePlayers = room.players.map(p => ({
+      uid: p.id,
+      displayName: p.displayNameForGame || p.displayName,
+      avatarColor: p.avatarColor,
+      role: null
+    }));
+
+    const finalRules = {
+      spyCount,
+      showRoles: spyfallRules.showRoles,
+      discussionTime: spyfallRules.discussionTime
+    };
+
+    await updateDoc(roomRef, {
+      activeActivity: {
+        type: 'spyfall',
+        phase: 'lobby',
+        location: null,
+        rules: finalRules,
+        spyIds: [],
+        eliminatedSpyIds: [],
+        players: gamePlayers,
+        lobbyPlayers: [user.id],
+        currentAskerId: null,
+        readyVotes: [],
+        votes: {},
+        eliminatedUid: null,
+        spyGuessing: null,
+        winner: null,
+        roundNumber: 1,
+        createdAt: serverTimestamp()
+      },
+      lastActivity: serverTimestamp()
+    });
+
+    setShowSpyfallSetup(false);
+    navigate(`/room/${roomId}`);
   };
 
   const handleWordImposterClick = () => {
@@ -255,7 +332,7 @@ export default function GamesScreen() {
 
           {/* Spyfall */}
           <button 
-            onClick={handleGameClick}
+            onClick={handleSpyfallClick}
             className="group relative overflow-hidden bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
           >
             <div className="relative z-10">
@@ -418,6 +495,85 @@ export default function GamesScreen() {
               <button
                 onClick={handleStartLobby}
                 className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+              >
+                Start Lobby
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Spyfall Setup Modal */}
+      {showSpyfallSetup && (
+        <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
+          <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="text-white text-2xl font-bold">🕵️ Spyfall Setup</h2>
+              <button
+                onClick={() => setShowSpyfallSetup(false)}
+                className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* Number of spies */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <label className="text-white font-semibold block mb-2">Number of Spies</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  value={spyfallRules.spyCount}
+                  onChange={(e) => {
+                    setSpyfallRules({ ...spyfallRules, spyCount: e.target.value });
+                    setSpyCountError('');
+                  }}
+                  placeholder="Enter number"
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
+                />
+                {spyCountError && (
+                  <p className="text-red-400 text-sm mt-2">{spyCountError}</p>
+                )}
+              </div>
+
+              {/* Show roles */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-white font-semibold">Show Roles 🎭</label>
+                    <p className="text-slate-400 text-sm">Each non-spy player sees their role at the location</p>
+                  </div>
+                  <button
+                    onClick={() => setSpyfallRules({ ...spyfallRules, showRoles: !spyfallRules.showRoles })}
+                    className={`w-12 h-7 rounded-full transition-colors ${
+                      spyfallRules.showRoles ? 'bg-indigo-600' : 'bg-slate-600'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                      spyfallRules.showRoles ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Discussion time */}
+              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+                <label className="text-white font-semibold block mb-2">Discussion Time</label>
+                <select
+                  value={spyfallRules.discussionTime}
+                  onChange={(e) => setSpyfallRules({ ...spyfallRules, discussionTime: parseInt(e.target.value) })}
+                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
+                >
+                  <option value={5}>5 minutes</option>
+                  <option value={8}>8 minutes</option>
+                  <option value={10}>10 minutes</option>
+                </select>
+              </div>
+
+              <button
+                onClick={handleStartSpyfallLobby}
+                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-colors"
               >
                 Start Lobby
               </button>
