@@ -151,9 +151,6 @@ export default function SpyfallLobbyCard({
       return { ...player, role };
     });
 
-    // Random first asker
-    const firstAsker = playersToAssign[Math.floor(Math.random() * playersToAssign.length)];
-
     await updateDoc(roomRef, {
       'activeActivity.phase': 'location-reveal',
       'activeActivity.location': locationName,
@@ -161,7 +158,7 @@ export default function SpyfallLobbyCard({
       'activeActivity.spyIds': spyIds,
       'activeActivity.eliminatedSpyIds': [],
       'activeActivity.players': playersWithRoles,
-      'activeActivity.currentAskerId': firstAsker.uid,
+      'activeActivity.currentAskerId': null,
       'activeActivity.readyVotes': [],
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,

@@ -23,6 +23,7 @@ export default function SpyfallGame() {
   const [timerDisplay, setTimerDisplay] = useState(null);
   const timerRef = useRef(null);
   const timerExpiredRef = useRef(false);
+  const QUESTIONING_INTRO_MS = 4000;
 
   // Subscribe to game state via onSnapshot
   useEffect(() => {
@@ -95,17 +96,34 @@ export default function SpyfallGame() {
     };
   }, [gameState?.phase, gameState?.phaseStartedAt, isHost]);
 
-  // Auto-advance to voting when all living town players are ready
+  // Auto-advance to voting when all active players are ready
   useEffect(() => {
     if (!isHost || !gameState || gameState.phase !== 'questioning') return;
-    const activeTownPlayers = getActiveTownPlayers();
-    if (activeTownPlayers.length === 0) return;
+    const activePlayers = getActivePlayers();
+    if (activePlayers.length === 0) return;
     const readyVotes = gameState.readyVotes || [];
-    const allReady = activeTownPlayers.every((p) => readyVotes.includes(p.uid));
+    const allReady = activePlayers.every((p) => readyVotes.includes(p.uid));
     if (allReady) {
       handleStartVoting().catch(console.error);
     }
   }, [isHost, gameState?.phase, gameState?.readyVotes]);
+
+  // Host auto-transition from intro screen to questioning after a short delay
+  useEffect(() => {
+    if (!isHost || !gameState || gameState.phase !== 'questioning-intro') return;
+
+    const startedAt = gameState.phaseStartedAt;
+    if (!startedAt) return;
+
+    const elapsed = Date.now() - startedAt;
+    const remainingMs = Math.max(0, QUESTIONING_INTRO_MS - elapsed);
+
+    const timeoutId = setTimeout(() => {
+      handleEnterQuestioningPhase().catch((err) => console.error('Error entering questioning phase:', err));
+    }, remainingMs);
+
+    return () => clearTimeout(timeoutId);
+  }, [isHost, gameState?.phase, gameState?.phaseStartedAt]);
 
   // ── Helpers ──────────────────────────────────────────────────────────────
 
@@ -139,12 +157,6 @@ export default function SpyfallGame() {
     return (gameState?.spyIds || []).filter((uid) => !eliminatedSpyIds.includes(uid));
   };
 
-  // Active town players (never in spyIds)
-  const getActiveTownPlayers = () => {
-    const spyIds = gameState?.spyIds || [];
-    return (gameState?.players || []).filter((p) => !spyIds.includes(p.uid));
-  };
-
   // All active (non-eliminated) players
   const getActivePlayers = () => {
     const eliminatedSpyIds = gameState?.eliminatedSpyIds || [];
@@ -164,6 +176,24 @@ export default function SpyfallGame() {
 
   const handleStartQuestioning = async () => {
     if (!isHost) return;
+    const activePlayers = getActivePlayers();
+    if (activePlayers.length === 0) return;
+
+    const firstAsker = activePlayers[Math.floor(Math.random() * activePlayers.length)];
+
+    const roomRef = doc(db, 'rooms', roomId);
+    await updateDoc(roomRef, {
+      'activeActivity.phase': 'questioning-intro',
+      'activeActivity.phaseStartedAt': Date.now(),
+      'activeActivity.currentAskerId': firstAsker.uid,
+      'activeActivity.readyVotes': [],
+      lastActivity: serverTimestamp(),
+    });
+  };
+
+  const handleEnterQuestioningPhase = async () => {
+    if (!isHost || !gameState || gameState.phase !== 'questioning-intro') return;
+
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
       'activeActivity.phase': 'questioning',
@@ -180,15 +210,6 @@ export default function SpyfallGame() {
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,
       'activeActivity.spyGuessing': null,
-      lastActivity: serverTimestamp(),
-    });
-  };
-
-  const handleSetCurrentAsker = async (targetUid) => {
-    if (!isHost) return;
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      'activeActivity.currentAskerId': targetUid,
       lastActivity: serverTimestamp(),
     });
   };
@@ -361,7 +382,6 @@ export default function SpyfallGame() {
       return { ...player, role };
     });
 
-    const firstAsker = players[Math.floor(Math.random() * players.length)];
     const roomRef = doc(db, 'rooms', roomId);
 
     await updateDoc(roomRef, {
@@ -370,7 +390,7 @@ export default function SpyfallGame() {
       'activeActivity.spyIds': spyIds,
       'activeActivity.eliminatedSpyIds': [],
       'activeActivity.players': playersWithRoles,
-      'activeActivity.currentAskerId': firstAsker.uid,
+      'activeActivity.currentAskerId': null,
       'activeActivity.readyVotes': [],
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,
@@ -444,21 +464,9 @@ export default function SpyfallGame() {
                   <h1 className="text-white text-3xl font-black mb-2">You are the SPY</h1>
                   <p className="text-slate-300 mt-3 text-sm">Try to figure out where everyone is!</p>
                 </div>
-
-                <div className="bg-slate-800/80 border border-slate-700 rounded-xl p-4">
-                  <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">Possible Locations</p>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    {allLocations.map((loc) => (
-                      <div key={loc} className="bg-slate-700/60 rounded-lg px-3 py-2 text-slate-300 text-sm text-center">
-                        {loc}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-
                 <button
                   onClick={() => setShowCard(false)}
-                  className="w-full mt-4 bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-colors"
+                  className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-colors"
                 >
                   Hide Card
                 </button>
@@ -506,12 +514,37 @@ export default function SpyfallGame() {
     );
   }
 
+  // ── QUESTIONING INTRO PHASE ───────────────────────────────────────────────
+
+  if (gameState.phase === 'questioning-intro') {
+    const firstPlayer = getPlayerByUid(gameState.currentAskerId);
+
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
+        <div className="w-full max-w-md">
+          <div className="bg-indigo-900/50 border border-indigo-700 rounded-2xl p-8 text-center">
+            <div className="text-4xl mb-4">🗣️</div>
+            {firstPlayer ? (
+              <>
+                <div className="flex items-center justify-center mb-4">
+                  {renderAvatar(firstPlayer, 'w-16 h-16', 'text-xl')}
+                </div>
+                <h2 className="text-white text-3xl font-black mb-2">{firstPlayer.displayName} goes first!</h2>
+              </>
+            ) : (
+              <h2 className="text-white text-3xl font-black mb-2">A random player goes first!</h2>
+            )}
+            <p className="text-indigo-200 text-sm">Get ready to start questioning...</p>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ── QUESTIONING PHASE ─────────────────────────────────────────────────────
 
   if (gameState.phase === 'questioning') {
-    const currentAsker = getPlayerByUid(gameState.currentAskerId);
     const activePlayers = getActivePlayers();
-    const activeSpyUids = getActiveSpies();
     const spyGuessingData = gameState.spyGuessing;
     const guessingPlayer = spyGuessingData ? getPlayerByUid(spyGuessingData.spyUid) : null;
     const myReadyClicked = readyClicked || (gameState.readyVotes || []).includes(user?.id);
@@ -527,20 +560,6 @@ export default function SpyfallGame() {
             <span className={`text-2xl font-black tabular-nums ${timerDisplay != null && timerDisplay <= 30 ? 'text-red-400' : 'text-white'}`}>
               {timerDisplay != null ? formatTimer(timerDisplay) : '--:--'}
             </span>
-          </div>
-        </div>
-
-        {/* Current asker */}
-        <div className="w-full max-w-md mx-auto px-4 pt-3">
-          <div className="bg-indigo-900/60 border border-indigo-700 rounded-xl px-4 py-3 text-center">
-            {currentAsker ? (
-              <>
-                <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mb-1">Current Asker</p>
-                <p className="text-white text-lg font-bold">{currentAsker.displayName}'s turn to ask</p>
-              </>
-            ) : (
-              <p className="text-slate-400 text-sm">No asker set</p>
-            )}
           </div>
         </div>
 
@@ -562,29 +581,6 @@ export default function SpyfallGame() {
             ))}
           </div>
         </div>
-
-        {/* Host: select next asker */}
-        {isHost && (
-          <div className="w-full max-w-md mx-auto px-4 pt-3">
-            <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">Select Next Asker (who was just asked)</p>
-            <div className="flex flex-wrap gap-2">
-              {activePlayers.map((player) => (
-                <button
-                  key={player.uid}
-                  onClick={() => handleSetCurrentAsker(player.uid)}
-                  className={`flex items-center gap-2 px-3 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                    gameState.currentAskerId === player.uid
-                      ? 'bg-indigo-600 text-white ring-2 ring-white'
-                      : 'bg-slate-700 hover:bg-slate-600 text-slate-200'
-                  }`}
-                >
-                  {renderAvatar(player, 'w-6 h-6', 'text-xs')}
-                  {player.displayName}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
 
         {/* Action buttons */}
         <div className="w-full max-w-md mx-auto px-4 py-4 space-y-2">
@@ -620,7 +616,7 @@ export default function SpyfallGame() {
           {/* Ready count */}
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 text-center">
             <p className="text-slate-300 text-sm">
-              Ready to vote: {(gameState.readyVotes || []).length}/{getActiveTownPlayers().length} town players
+              Ready to vote: {(gameState.readyVotes || []).length}/{activePlayers.length} players ready
             </p>
           </div>
         </div>
