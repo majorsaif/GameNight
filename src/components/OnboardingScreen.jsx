@@ -2,6 +2,11 @@ import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { getInitials } from '../utils/avatar';
 import GameNightLogo from './GameNightLogo';
+import {
+  compressProfilePhotoFile,
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_MAX_UPLOAD_BYTES
+} from '../utils/photoCompression';
 
 export default function OnboardingScreen() {
   const [name, setName] = useState('');
@@ -10,28 +15,39 @@ export default function OnboardingScreen() {
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
 
-  const handlePhotoChange = (e) => {
+  const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Photo size must be less than 5MB');
-        return;
-      }
+    if (!file) return;
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        const base64String = reader.result;
-        setPhotoPreview(base64String);
-        setPhotoBase64(base64String);
-      };
-      reader.readAsDataURL(file);
+    if (file.size > PROFILE_PHOTO_MAX_UPLOAD_BYTES) {
+      alert('Photo size must be less than 15MB');
+      return;
+    }
+
+    try {
+      const { dataUrl } = await compressProfilePhotoFile(file, {
+        maxBytes: PROFILE_PHOTO_MAX_BYTES
+      });
+
+      localStorage.setItem('gamenight_photo', dataUrl);
+      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', dataUrl.length);
+
+      setPhotoPreview(dataUrl);
+      setPhotoBase64(dataUrl);
+    } catch (error) {
+      console.error('Error compressing onboarding photo:', error);
+      alert('Failed to process photo. Please choose a different image.');
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 
   const handleRemovePhoto = () => {
     setPhotoPreview(null);
     setPhotoBase64(null);
+    localStorage.removeItem('gamenight_photo');
     if (fileInputRef.current) {
       fileInputRef.current.value = '';
     }
@@ -45,6 +61,7 @@ export default function OnboardingScreen() {
     localStorage.setItem('gamenight_nickname', name.trim());
     if (photoBase64) {
       localStorage.setItem('gamenight_photo', photoBase64);
+      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', photoBase64.length);
     }
 
     // Navigate to welcome screen

@@ -1,6 +1,11 @@
 import React, { useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import {
+  compressProfilePhotoFile,
+  PROFILE_PHOTO_MAX_BYTES,
+  PROFILE_PHOTO_MAX_UPLOAD_BYTES
+} from '../utils/photoCompression';
 
 function ProfileScreen() {
   const navigate = useNavigate();
@@ -56,20 +61,27 @@ function ProfileScreen() {
   };
 
   // Handle avatar change
-  const handleAvatarChange = (e) => {
+  const handleAvatarChange = async (e) => {
     const file = e.target.files?.[0];
-    if (file) {
-      // Check file size (max 5MB)
-      if (file.size > 5 * 1024 * 1024) {
-        alert('Photo size must be less than 5MB');
-        return;
-      }
+    if (!file) return;
 
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        updateProfile({ photo: reader.result });
-      };
-      reader.readAsDataURL(file);
+    if (file.size > PROFILE_PHOTO_MAX_UPLOAD_BYTES) {
+      alert('Photo size must be less than 15MB');
+      return;
+    }
+
+    try {
+      const { dataUrl } = await compressProfilePhotoFile(file, {
+        maxBytes: PROFILE_PHOTO_MAX_BYTES
+      });
+      updateProfile({ photo: dataUrl });
+    } catch (error) {
+      console.error('Error compressing profile photo:', error);
+      alert('Failed to process photo. Please choose a different image.');
+    } finally {
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
     }
   };
 

@@ -251,7 +251,7 @@ export default function WordImposterLobbyCard({
           </h4>
           <div className="space-y-2">
             {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
-              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photoURL || player.photo || null;
+              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || player.photoURL || null;
               return (
                 <div
                   key={player.uid}
@@ -380,7 +380,7 @@ export default function WordImposterLobbyCard({
         </h4>
         <div className="space-y-2">
           {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
-            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photoURL || player.photo || null;
+            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || player.photoURL || null;
             return (
               <div
                 key={player.uid}
