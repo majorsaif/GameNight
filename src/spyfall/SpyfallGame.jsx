@@ -6,6 +6,7 @@ import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase';
 import { getInitials } from '../utils/avatar';
 import LOCATIONS from './locations';
+import VotingPanel from '../components/VotingPanel';
 
 export default function SpyfallGame() {
   const { roomId } = useParams();
@@ -16,9 +17,6 @@ export default function SpyfallGame() {
   const [gameState, setGameState] = useState(null);
   const [gameStateLoaded, setGameStateLoaded] = useState(false);
   const [showCard, setShowCard] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [hasVoted, setHasVoted] = useState(false);
-  const [voteError, setVoteError] = useState('');
   const [readyClicked, setReadyClicked] = useState(false);
   const [timerDisplay, setTimerDisplay] = useState(null);
   const timerRef = useRef(null);
@@ -46,10 +44,7 @@ export default function SpyfallGame() {
   // Reset vote/ready state on phase change
   useEffect(() => {
     if (gameState) {
-      setHasVoted(gameState.votes?.[user?.id] != null || false);
-      setSelectedPlayer(gameState.votes?.[user?.id] || null);
       setReadyClicked(gameState.readyVotes?.includes(user?.id) || false);
-      setVoteError('');
     }
   }, [gameState?.phase]);
 
@@ -347,21 +342,19 @@ export default function SpyfallGame() {
   };
 
   // Voting
-  const handleVotePlayer = (uid) => {
-    if (hasVoted) return;
-    setSelectedPlayer(uid);
-    setVoteError('');
-  };
+  const handleConfirmVote = async (targetUid) => {
+    if (!user || !targetUid) {
+      throw new Error('Vote unavailable');
+    }
+    if (targetUid === user.id) {
+      throw new Error('You cannot vote for yourself');
+    }
 
-  const handleConfirmVote = async () => {
-    if (!user || !selectedPlayer || hasVoted) return;
-    if (selectedPlayer === user.id) { setVoteError('You cannot vote for yourself'); return; }
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
-      [`activeActivity.votes.${user.id}`]: selectedPlayer,
+      [`activeActivity.votes.${user.id}`]: targetUid,
       lastActivity: serverTimestamp(),
     });
-    setHasVoted(true);
   };
 
   const handlePlayAgain = async () => {
@@ -670,7 +663,6 @@ export default function SpyfallGame() {
     const activePlayers = getActivePlayers();
     const totalVoters = activePlayers.length;
     const votedCount = Object.keys(votes).length;
-    const allVoted = votedCount >= totalVoters;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -681,79 +673,14 @@ export default function SpyfallGame() {
             <p className="text-slate-400 text-sm">Votes: {votedCount}/{totalVoters}</p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 mb-6">
-            {activePlayers.map((player) => {
-              const votersForPlayer = Object.entries(votes)
-                .filter(([, t]) => t === player.uid)
-                .map(([vUid]) => getPlayerByUid(vUid))
-                .filter(Boolean);
-              const isSelf = player.uid === user?.id;
-
-              return (
-                <button
-                  key={player.uid}
-                  onClick={() => !isSelf && handleVotePlayer(player.uid)}
-                  disabled={hasVoted || isSelf}
-                  className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                    isSelf ? 'opacity-40 cursor-not-allowed bg-slate-800/30' :
-                    selectedPlayer === player.uid ? 'bg-indigo-600 ring-2 ring-white' :
-                    'bg-slate-800/50 hover:bg-slate-700'
-                  } ${hasVoted && !isSelf ? 'cursor-not-allowed' : ''}`}
-                >
-                  {renderAvatar(player, 'w-12 h-12', 'text-base')}
-                  <div className="flex-1">
-                    <span className="text-white font-semibold block">
-                      {player.displayName} {isSelf ? '(You)' : ''}
-                    </span>
-                    <div className="flex items-center mt-2">
-                      {votersForPlayer.map((voter, idx) => {
-                        const vPhoto = getPlayerPhoto(voter);
-                        return vPhoto ? (
-                          <img key={voter.uid} src={vPhoto} alt={voter.displayName}
-                            className={`w-6 h-6 rounded-full border-2 border-slate-900 object-cover ${idx > 0 ? '-ml-1.5' : ''}`}
-                            title={voter.displayName} />
-                        ) : (
-                          <div key={voter.uid}
-                            className={`w-6 h-6 ${voter.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[9px] text-white font-bold ${idx > 0 ? '-ml-1.5' : ''}`}
-                            title={voter.displayName}>
-                            {getInitials(voter.displayName)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {!hasVoted && (
-            <button
-              onClick={handleConfirmVote}
-              disabled={!selectedPlayer}
-              className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-slate-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
-            >
-              Confirm Vote
-            </button>
-          )}
-
-          {voteError && <p className="text-red-400 text-sm text-center mt-2">{voteError}</p>}
-
-          {hasVoted && !isHost && (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center mt-3">
-              <p className="text-indigo-400 font-semibold">Vote confirmed! ✅</p>
-              <p className="text-slate-400 text-sm mt-1">Waiting for others...</p>
-            </div>
-          )}
-
-          {isHost && (
-            <button
-              onClick={handleEndVoting}
-              className="w-full mt-3 bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-colors"
-            >
-              {allVoted ? 'End Voting' : `End Voting (${votedCount}/${totalVoters})`}
-            </button>
-          )}
+          <VotingPanel
+            players={activePlayers}
+            votes={votes}
+            currentUid={user?.id}
+            isHost={isHost}
+            onVote={handleConfirmVote}
+            onEndVoting={handleEndVoting}
+          />
         </div>
       </div>
     );

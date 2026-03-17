@@ -284,7 +284,7 @@ export default function GamesScreen() {
       {/* Header */}
       <header className="relative z-0 w-full max-w-md mx-auto px-6 -mt-[68px] pt-4 pb-4">
         <div className="flex items-center justify-center">
-          <h1 className="text-white text-xl font-black uppercase tracking-tight">Browse Games</h1>
+          <h1 className="text-white text-xl font-black uppercase tracking-tight">Social Deduction</h1>
         </div>
       </header>
 

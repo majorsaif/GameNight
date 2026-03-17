@@ -7,6 +7,7 @@ import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 import { throttledUpdate } from '../utils/firestoreThrottle';
 import { MAFIA_SOUNDS, playSound } from '../mafia/sounds';
+import VotingPanel from './VotingPanel';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -460,6 +461,40 @@ export default function MafiaGame() {
     if (isHost) {
       await checkAllConfirmed(confirmedVotes);
     }
+  };
+
+  const handleSubmitDayVote = async (targetUid) => {
+    if (!user || !targetUid || hasConfirmed || !gameState) {
+      throw new Error('Vote unavailable');
+    }
+    if (!isCurrentUserAlive()) {
+      throw new Error('Only alive players can vote');
+    }
+    if (myRole === 'narrator') {
+      throw new Error('Narrator cannot vote');
+    }
+
+    const roomRef = doc(db, 'rooms', roomId);
+    const confirmedVotes = Array.from(new Set([...(gameState.confirmedVotes || []), user.id]));
+
+    await updateDoc(roomRef, {
+      [`activeActivity.dayVotes.${user.id}`]: targetUid,
+      'activeActivity.confirmedVotes': confirmedVotes,
+      lastActivity: serverTimestamp()
+    });
+
+    setSelectedPlayer(targetUid);
+    setHasConfirmed(true);
+
+    if (isHost) {
+      await checkAllConfirmed(confirmedVotes);
+    }
+  };
+
+  const handleEndDayVoting = async () => {
+    if (!isHost || !gameState || gameState.phase !== 'day-vote') return;
+    const roomRef = doc(db, 'rooms', roomId);
+    await processVoteAndCheckWin(roomRef);
   };
 
   const checkAllConfirmed = async (confirmedVotesOverride) => {
@@ -1489,10 +1524,8 @@ export default function MafiaGame() {
   // Day phase - Voting
   if (gameState?.phase === 'day-vote') {
     const spectator = isSpectator();
-    const canVote = !spectator && isCurrentUserAlive();
-    const selectablePlayers = getSelectablePlayers();
+    const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true);
     const dayVotes = gameState.dayVotes || {};
-    const livingVoterUids = new Set(gameState.players.filter((p) => p.isAlive && p.role !== 'narrator').map((p) => p.uid));
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -1517,53 +1550,14 @@ export default function MafiaGame() {
             )}
           </div>
 
-          <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.filter((player) => player.isAlive === true).map((player) => {
-              const votersForPlayer = Object.entries(dayVotes)
-                .filter(([voterUid, targetUid]) => targetUid === player.uid && livingVoterUids.has(voterUid))
-                .map(([voterUid]) => gameState.players.find((p) => p.uid === voterUid))
-                .filter(Boolean);
-
-              return (
-              <button
-                key={player.uid}
-                onClick={() => canVote && handleVotePlayer(player.uid)}
-                disabled={!canVote || hasConfirmed}
-                className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                  selectedPlayer === player.uid && canVote
-                    ? 'bg-violet-600 ring-2 ring-white'
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                } ${(!canVote || hasConfirmed) ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
-                <div className="flex-1">
-                  <span className="text-white font-semibold block">{player.displayName}</span>
-                  <div className="flex items-center mt-2">
-                    {votersForPlayer.map((voter, index) => (
-                      <div
-                        key={`${player.uid}-${voter.uid}`}
-                        className={`${index > 0 ? '-ml-2' : ''}`}
-                        title={voter.displayName}
-                      >
-                        {renderPlayerAvatar(voter, 'w-7 h-7', 'text-[10px]', 'border-2 border-slate-900')}
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              </button>
-              );
-            })}
-          </div>
-
-          {canVote && (
-            <button
-              onClick={handleConfirmVote}
-              disabled={!selectedPlayer || hasConfirmed}
-              className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-slate-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
-            >
-              {hasConfirmed ? 'Vote Confirmed' : 'Confirm Vote'}
-            </button>
-          )}
+          <VotingPanel
+            players={selectablePlayers}
+            votes={dayVotes}
+            currentUid={user?.id}
+            isHost={isHost}
+            onVote={handleSubmitDayVote}
+            onEndVoting={handleEndDayVoting}
+          />
         </div>
       </div>
     );

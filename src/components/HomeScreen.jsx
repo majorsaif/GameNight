@@ -1,9 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
-import { useRoom, leaveRoom, startVote, castVote, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
+import { useRoom, leaveRoom, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
-import VoteModal from './VoteModal';
-import ActiveVote from './ActiveVote';
 import WheelSpin from './ForfeitWheel';
 import WheelSetupModal from './WheelSetupModal';
 import MafiaLobbyCard from './MafiaLobbyCard';
@@ -27,7 +25,6 @@ export default function HomeScreen() {
   );
   const navigate = useNavigate();
   const location = useLocation();
-  const [showVoteModal, setShowVoteModal] = useState(false);
   const [showWheelSetup, setShowWheelSetup] = useState(false);
 
   // Backfill avatar colors for existing players
@@ -83,18 +80,6 @@ export default function HomeScreen() {
       leaveRoom(roomId, user.id);
     }
     navigate('/');
-  };
-
-  const handleStartVote = (voteData) => {
-    startVote(roomId, voteData);
-  };
-
-  const handleCastVote = (optionId) => {
-    castVote(roomId, user?.id, optionId);
-  };
-
-  const handleEndVote = () => {
-    endActivity(roomId);
   };
 
   const handleLaunchWheel = (wheelData) => {
@@ -196,10 +181,7 @@ export default function HomeScreen() {
           <HostView 
             room={room} 
             getCurrentPlayerName={getCurrentPlayerName}
-            onOpenVoteModal={() => setShowVoteModal(true)}
             onOpenWheelSetup={() => setShowWheelSetup(true)}
-            onCastVote={handleCastVote}
-            onEndVote={handleEndVote}
             onSpinWheel={handleSpinWheel}
             onEndWheel={handleEndWheel}
             userId={user?.id}
@@ -210,7 +192,6 @@ export default function HomeScreen() {
           <PlayerView 
             room={room} 
             getCurrentPlayerName={getCurrentPlayerName}
-            onCastVote={handleCastVote}
             onSpinWheel={handleSpinWheel}
             onEndWheel={handleEndWheel}
             userId={user?.id}
@@ -219,15 +200,6 @@ export default function HomeScreen() {
           />
         )}
       </main>
-
-      {/* Vote Modal */}
-      {showVoteModal && (
-        <VoteModal
-          room={room}
-          onClose={() => setShowVoteModal(false)}
-          onStartVote={handleStartVote}
-        />
-      )}
 
       {/* Wheel Setup Modal */}
       {showWheelSetup && (
@@ -242,7 +214,7 @@ export default function HomeScreen() {
   );
 }
 
-function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetup, onCastVote, onEndVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
+function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const [showRulesModal, setShowRulesModal] = useState(false);
   const [mafiaRules, setMafiaRules] = useState(room.activeActivity?.rules || {
@@ -275,7 +247,6 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
   const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
   const isSpyfall = hasActiveActivity && activityType === 'spyfall';
   const isSpyfallLobby = isSpyfall && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -396,16 +367,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
       {/* Active Activity Section */}
       {hasActiveActivity && (
         <div>
-          {isVote ? (
-            <ActiveVote
-              activity={room.activeActivity}
-              room={room}
-              userId={userId}
-              isHost={true}
-              onVote={onCastVote}
-              onEndVote={onEndVote}
-            />
-          ) : isMafiaLobby ? (
+          {isMafiaLobby ? (
             <MafiaLobbyCard
               lobbyState={room.activeActivity}
               roomPlayers={room.players}
@@ -489,7 +451,7 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
                 </div>
               </div>
             </button>
-          ) : (
+          ) : isWheel ? (
             <WheelSpin
               activity={room.activeActivity}
               room={room}
@@ -497,41 +459,22 @@ function HostView({ room, getCurrentPlayerName, onOpenVoteModal, onOpenWheelSetu
               onEndActivity={onEndWheel}
               onSpin={onSpinWheel}
             />
-          )}
+          ) : null}
         </div>
       )}
 
-      {/* Browse Games - Large Full Width Card */}
-      <button type="button" onClick={() => navigate(`/room/${roomId}/games`)} className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
+      {/* Social Deduction - Large Full Width Card */}
+      <button type="button" aria-label="Social Deduction" onClick={() => navigate(`/room/${roomId}/games`)} className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
         <div className="relative z-10">
           <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center mb-4">
             <span className="text-3xl">🎮</span>
           </div>
-          <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">BROWSE<br/>GAMES</h2>
+          <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">SOCIAL<br/>DEDUCTION</h2>
           <p className="text-blue-100 text-sm">150+ titles available</p>
         </div>
         <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-8">
           <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
             <path d="M7 6v2h10V6H7zm0 6v-2h10v2H7zm0 4v-2h10v2H7zm0 4v-2h7v2H7z"/>
-          </svg>
-        </div>
-      </button>
-
-      {/* Vote Card */}
-      <button 
-        onClick={onOpenVoteModal}
-        className="group relative overflow-hidden bg-gradient-to-br from-violet-600 to-purple-700 hover:from-violet-500 hover:to-purple-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
-      >
-        <div className="relative z-10">
-          <div className="w-12 h-12 bg-violet-500/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">🔮</span>
-          </div>
-          <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">VOTE</h2>
-          <p className="text-violet-100 text-sm">Quick decision making</p>
-        </div>
-        <div className="absolute bottom-0 right-0 text-violet-400/10 transform translate-x-8 translate-y-8">
-          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
           </svg>
         </div>
       </button>
@@ -597,7 +540,7 @@ function GameRulesSection({ activityType }) {
   );
 }
 
-function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
+function PlayerView({ room, getCurrentPlayerName, onSpinWheel, onEndWheel, userId, roomId, navigate }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const hasActiveActivity = room.activeActivity != null;
   const activityType = room.activeActivity?.type;
@@ -608,7 +551,6 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
   const isWordImposterLobby = isWordImposter && room.activeActivity?.phase === 'lobby';
   const isSpyfall = hasActiveActivity && activityType === 'spyfall';
   const isSpyfallLobby = isSpyfall && room.activeActivity?.phase === 'lobby';
-  const isVote = hasActiveActivity && (activityType === 'playerVote' || activityType === 'customPoll' || activityType === 'vote');
   
   const hostPlayer = room.players.find(p => p.isHost);
   const maxVisibleAvatars = 6;
@@ -728,16 +670,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
       {/* Active Activity Section or Waiting Message */}
       {hasActiveActivity ? (
         <div>
-          {isVote ? (
-            <ActiveVote
-              activity={room.activeActivity}
-              room={room}
-              userId={userId}
-              isHost={false}
-              onVote={onCastVote}
-              onEndVote={() => {}}
-            />
-          ) : isMafiaLobby ? (
+          {isMafiaLobby ? (
             <MafiaLobbyCard
               lobbyState={room.activeActivity}
               roomPlayers={room.players}
@@ -809,7 +742,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
                 </div>
               </div>
             </button>
-          ) : (
+          ) : isWheel ? (
             <WheelSpin
               activity={room.activeActivity}
               room={room}
@@ -817,7 +750,7 @@ function PlayerView({ room, getCurrentPlayerName, onCastVote, onSpinWheel, onEnd
               onEndActivity={() => {}}
               onSpin={() => {}}
             />
-          )}
+          ) : null}
         </div>
       ) : (
         <div className="text-center py-6">
