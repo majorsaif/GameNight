@@ -300,8 +300,8 @@ export default function GamesScreen() {
             aria-label="Word Imposter"
             style={{
               backgroundImage: 'url("/images/cards/word-imposter.png")',
-              backgroundSize: '112%',
-              backgroundPosition: 'center'
+              backgroundSize: '108%',
+              backgroundPosition: 'center bottom'
             }}
             className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
@@ -314,8 +314,8 @@ export default function GamesScreen() {
             aria-label="Spyfall"
             style={{
               backgroundImage: 'url("/images/cards/spyfall.png")',
-              backgroundSize: '112%',
-              backgroundPosition: 'center'
+              backgroundSize: '108%',
+              backgroundPosition: 'center bottom'
             }}
             className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
@@ -328,8 +328,8 @@ export default function GamesScreen() {
             aria-label="Mafia"
             style={{
               backgroundImage: 'url("/images/cards/mafia.png")',
-              backgroundSize: '112%',
-              backgroundPosition: 'center'
+              backgroundSize: '108%',
+              backgroundPosition: 'center bottom'
             }}
             className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
