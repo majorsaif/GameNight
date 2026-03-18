@@ -6,6 +6,7 @@ import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore'
 import { db } from '../firebase';
 import { getInitials } from '../utils/avatar';
 import { getRandomWord } from './words';
+import VotingPanel from '../components/VotingPanel';
 
 export default function WordImposterGame() {
   const { roomId } = useParams();
@@ -16,9 +17,6 @@ export default function WordImposterGame() {
   const [gameState, setGameState] = useState(null);
   const [gameStateLoaded, setGameStateLoaded] = useState(false);
   const [showWord, setShowWord] = useState(false);
-  const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [hasVoted, setHasVoted] = useState(false);
-  const [voteError, setVoteError] = useState('');
   const [countdown, setCountdown] = useState(null);
   const [readyClicked, setReadyClicked] = useState(false);
   const countdownRef = useRef(null);
@@ -46,10 +44,7 @@ export default function WordImposterGame() {
   // Reset vote state on phase change
   useEffect(() => {
     if (gameState) {
-      setHasVoted(gameState.votes?.[user?.id] != null || false);
-      setSelectedPlayer(gameState.votes?.[user?.id] || null);
       setReadyClicked(gameState.readyVotes?.includes(user?.id) || false);
-      setVoteError('');
     }
   }, [gameState?.phase]);
 
@@ -89,11 +84,6 @@ export default function WordImposterGame() {
   }, [gameState?.phase, gameState?.phaseStartedAt]);
 
   const isImposter = gameState?.imposterIds?.includes(user?.id);
-
-  const getPlayerName = (uid) => {
-    const player = gameState?.players?.find(p => p.uid === uid);
-    return player?.displayName || 'Unknown';
-  };
 
   const getPlayerByUid = (uid) => {
     return gameState?.players?.find(p => p.uid === uid);
@@ -165,27 +155,20 @@ export default function WordImposterGame() {
     }
   }, [isHost, gameState?.phase, gameState?.readyVotes, gameState?.players]);
 
-  const handleVotePlayer = (targetUid) => {
-    if (hasVoted) return;
-    setSelectedPlayer(targetUid);
-    setVoteError('');
-  };
+  const handleConfirmVote = async (targetUid) => {
+    if (!user || !targetUid) {
+      throw new Error('Vote unavailable');
+    }
 
-  const handleConfirmVote = async () => {
-    if (!user || !selectedPlayer || hasVoted) return;
-
-    if (selectedPlayer === user.id) {
-      setVoteError('You cannot vote for yourself');
-      return;
+    if (targetUid === user.id) {
+      throw new Error('You cannot vote for yourself');
     }
 
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
-      [`activeActivity.votes.${user.id}`]: selectedPlayer,
+      [`activeActivity.votes.${user.id}`]: targetUid,
       lastActivity: serverTimestamp()
     });
-    setVoteError('');
-    setHasVoted(true);
   };
 
   const handleEndVoting = async () => {
@@ -494,7 +477,6 @@ export default function WordImposterGame() {
     const allPlayers = gameState.players || [];
     const totalVoters = allPlayers.length;
     const votedCount = Object.keys(votes).length;
-    const allVoted = votedCount >= totalVoters;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -506,92 +488,14 @@ export default function WordImposterGame() {
             </p>
           </div>
 
-          <div className="grid grid-cols-1 gap-3 mb-6">
-            {allPlayers.map((player) => {
-              const votersForPlayer = Object.entries(votes)
-                .filter(([, targetUid]) => targetUid === player.uid)
-                .map(([voterUid]) => getPlayerByUid(voterUid))
-                .filter(Boolean);
-              const playerPhoto = getPlayerPhoto(player);
-
-              return (
-                <button
-                  key={player.uid}
-                  onClick={() => handleVotePlayer(player.uid)}
-                  disabled={hasVoted}
-                  className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                    selectedPlayer === player.uid
-                      ? 'bg-teal-600 ring-2 ring-white'
-                      : 'bg-slate-800/50 hover:bg-slate-700'
-                  } ${hasVoted ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {playerPhoto ? (
-                    <img src={playerPhoto} alt={player.displayName} className="w-12 h-12 rounded-full object-cover" />
-                  ) : (
-                    <div className={`w-12 h-12 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold`}>
-                      {getInitials(player.displayName)}
-                    </div>
-                  )}
-                  <div className="flex-1">
-                    <span className="text-white font-semibold block">{player.displayName}</span>
-                    <div className="flex items-center mt-2">
-                      {votersForPlayer.map((voter, index) => {
-                        const voterPhoto = getPlayerPhoto(voter);
-                        return voterPhoto ? (
-                          <img
-                            key={voter.uid}
-                            src={voterPhoto}
-                            alt={voter.displayName}
-                            className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''}`}
-                            title={voter.displayName}
-                          />
-                        ) : (
-                          <div
-                            key={voter.uid}
-                            className={`w-7 h-7 ${voter.avatarColor} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${index > 0 ? '-ml-2' : ''}`}
-                            title={voter.displayName}
-                          >
-                            {getInitials(voter.displayName)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {!hasVoted && (
-            <button
-              onClick={handleConfirmVote}
-              disabled={!selectedPlayer}
-              className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-slate-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
-            >
-              Confirm Vote
-            </button>
-          )}
-
-          {!hasVoted && voteError && (
-            <p className="text-red-400 text-sm text-center mt-2">{voteError}</p>
-          )}
-
-          {hasVoted && !isHost && (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-teal-400 font-semibold">Vote confirmed! ✅</p>
-              <p className="text-slate-400 text-sm mt-1">Waiting for others...</p>
-            </div>
-          )}
-
-          {isHost && (
-            <button
-              onClick={handleEndVoting}
-              disabled={!allVoted && votedCount === 0}
-              className="w-full mt-3 bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 disabled:from-slate-600 disabled:to-slate-600 text-white disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
-            >
-              {allVoted ? 'End Voting' : `End Voting (${votedCount}/${totalVoters})`}
-            </button>
-          )}
+          <VotingPanel
+            players={allPlayers}
+            votes={votes}
+            currentUid={user?.id}
+            isHost={isHost}
+            onVote={handleConfirmVote}
+            onEndVoting={handleEndVoting}
+          />
         </div>
       </div>
     );
@@ -745,7 +649,7 @@ export default function WordImposterGame() {
             </div>
           ) : (
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-slate-300">Thanks for playing! 🎮</p>
+              <p className="text-slate-300">Thanks for playing!</p>
             </div>
           )}
         </div>

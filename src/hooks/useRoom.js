@@ -487,60 +487,6 @@ export async function updatePlayerNameForGame(roomId, userId, gameDisplayName) {
 }
 
 /**
- * Start a vote activity
- */
-export async function startVote(roomId, voteData) {
-  try {
-    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
-    const activity = sanitize({
-      ...(voteData || {}),
-      createdAt: null
-    });
-    
-    const startVotePayload = buildSanitizedWritePayload({
-      activeActivity: activity
-    }, {
-      'activeActivity.createdAt': serverTimestamp(),
-      lastActivity: serverTimestamp()
-    });
-    console.error('[startVote] Firestore write payload:', startVotePayload);
-    await updateDoc(roomRef, startVotePayload);
-  } catch (error) {
-    console.error('Error starting vote:', error);
-    throw error;
-  }
-}
-
-/**
- * Cast a vote
- */
-export async function castVote(roomId, userId, optionId) {
-  try {
-    const roomRef = doc(db, ROOMS_COLLECTION, roomId);
-    const roomDoc = await getDoc(roomRef);
-    
-    if (roomDoc.exists()) {
-      const room = roomDoc.data();
-      if (room.activeActivity) {
-        const votes = room.activeActivity.votes || {};
-        votes[userId] = optionId ?? null;
-        
-        const castVotePayload = buildSanitizedWritePayload({
-          'activeActivity.votes': sanitize(votes)
-        }, {
-          lastActivity: serverTimestamp()
-        });
-        console.error('[castVote] Firestore write payload:', castVotePayload);
-        await updateDoc(roomRef, castVotePayload);
-      }
-    }
-  } catch (error) {
-    console.error('Error casting vote:', error);
-    throw error;
-  }
-}
-
-/**
  * End current activity
  */
 export async function endActivity(roomId) {

@@ -14,7 +14,7 @@ const spyfallRules = {
     },
     {
       heading: 'Ready to Vote',
-      text: 'Any player can click "Ready to Vote" at any time. When all non-spy players have clicked Ready to Vote, voting starts automatically. The host can also click "Skip to Vote" to force voting.',
+      text: 'Any active player can click "Ready to Vote" at any time. When all active players have clicked Ready to Vote, voting starts automatically. The host can also click "Start Voting" to begin immediately.',
     },
     {
       heading: 'Spy Guess',

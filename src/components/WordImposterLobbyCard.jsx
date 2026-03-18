@@ -231,66 +231,75 @@ export default function WordImposterLobbyCard({
     });
   };
 
+  const joinedPlayers = allPlayers.filter((player) => lobbyPlayers.includes(player.uid));
+  const dossierCardClass = 'relative overflow-hidden bg-[#d4b483] border border-[#8b6b3f] rounded-2xl p-5 text-left shadow-xl';
+  const stampButtonClass = 'w-full bg-[#efe4cc]/90 hover:bg-[#f5ecd9] text-[#3a2a1a] border-2 border-dashed border-[#4a3622] font-mono uppercase tracking-widest font-semibold py-2.5 rounded-md transition-colors text-xs';
+  const startEnabledClass = 'w-full bg-[#f7ecd8] hover:bg-[#fbf3e4] text-red-700 border-2 border-red-700 font-mono uppercase tracking-widest font-black py-3 rounded-md transition-colors text-xs';
+  const startDisabledClass = 'w-full bg-[#d8cbb2] text-[#8f8676] border-2 border-[#a79a85] font-mono uppercase tracking-widest font-bold py-3 rounded-md cursor-not-allowed text-xs';
+
+  const renderDossierHeader = () => (
+    <div className="relative z-10 mb-4">
+      <div className="inline-block -rotate-3 border-2 border-red-700 text-red-700 font-serif font-black uppercase tracking-[0.22em] text-[11px] px-3 py-1 mb-3">
+        Case File
+      </div>
+      <p className="text-[#2f2418] font-mono font-bold uppercase tracking-widest text-sm">CASE: WORD IMPOSTER</p>
+      <div className="mt-3 h-px bg-[#4a3622]/45" />
+    </div>
+  );
+
+  const renderPlayerList = () => (
+    <div className="relative z-10 bg-[#eadfca]/85 border border-[#8b6b3f]/45 rounded-xl p-4 mb-4">
+      <p className="text-[#3a2a1a] text-[11px] font-mono uppercase tracking-widest mb-3">
+        Agents Assigned: ({lobbyPlayers.length})
+      </p>
+      <div className="space-y-2">
+        {joinedPlayers.map((player) => {
+          const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || player.photoURL || null;
+          return (
+            <div
+              key={player.uid}
+              className="flex items-center gap-3 border border-[#8b6b3f]/35 bg-[#f3ead8]/80 rounded-md px-3 py-2"
+            >
+              {playerPhoto ? (
+                <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover border border-[#4a3622]" />
+              ) : (
+                <div className={`w-8 h-8 ${player.avatarColor} rounded-full border border-[#4a3622] flex items-center justify-center text-white text-xs font-bold`}>
+                  {getInitials(player.displayName)}
+                </div>
+              )}
+              <span className="text-[#2f2418] text-sm font-mono uppercase tracking-wide font-bold">{player.displayName}</span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+
   if (isHost) {
     return (
-      <div className="bg-gradient-to-br from-teal-600 to-cyan-700 rounded-2xl p-6 text-left shadow-xl">
-        <div className="mb-4">
-          <div className="flex items-center gap-3 mb-4">
-            <div className="text-3xl">🕵️</div>
-            <div>
-              <h3 className="text-white font-bold text-lg">Word Imposter Lobby</h3>
-              <p className="text-teal-100 text-sm">Configure & wait for players</p>
-            </div>
-          </div>
+      <div className={dossierCardClass}>
+        <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+          <span className="-rotate-[20deg] text-[#3a2a1a]/10 text-5xl font-black uppercase tracking-[0.28em] whitespace-nowrap select-none">
+            Classified
+          </span>
         </div>
 
-        {/* Players Joined */}
-        <div className="bg-teal-900/50 border border-teal-700 rounded-lg p-4 mb-4">
-          <h4 className="text-white font-semibold mb-3 text-sm">
-            Players Joined ({lobbyPlayers.length})
-          </h4>
-          <div className="space-y-2">
-            {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
-              const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || player.photoURL || null;
-              return (
-                <div
-                  key={player.uid}
-                  className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
-                >
-                  {playerPhoto ? (
-                    <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-                  ) : (
-                    <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                      {getInitials(player.displayName)}
-                    </div>
-                  )}
-                  <span className="text-white text-sm font-medium">{player.displayName}</span>
-                </div>
-              );
-            })}
-          </div>
-        </div>
+        {renderDossierHeader()}
+        {renderPlayerList()}
 
-        {/* Rules and Buttons */}
-        <div className="space-y-3">
+        <div className="relative z-10 space-y-3">
           <button
             onClick={() => setShowRulesEdit(true)}
-            className="w-full bg-teal-700 hover:bg-teal-600 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
+            className={stampButtonClass}
           >
             Edit Rules
           </button>
           <button
             onClick={handleStartGame}
             disabled={!canStart}
-            className="w-full bg-gradient-to-r from-white to-slate-200 hover:from-slate-100 hover:to-slate-300 disabled:from-slate-600 disabled:to-slate-600 text-teal-700 disabled:text-slate-400 font-bold py-2 rounded-lg transition-colors"
+            className={canStart ? startEnabledClass : startDisabledClass}
           >
             {canStart ? `Start Game (${lobbyPlayers.length})` : `Need 3+ (${lobbyPlayers.length})`}
-          </button>
-          <button
-            onClick={handleCancelGame}
-            className="w-full bg-teal-800 hover:bg-teal-900 text-white font-semibold py-2 rounded-lg transition-colors text-sm"
-          >
-            Cancel
           </button>
         </div>
 
@@ -362,64 +371,35 @@ export default function WordImposterLobbyCard({
 
   // Player view
   return (
-    <div className="bg-gradient-to-br from-teal-600 to-cyan-700 rounded-2xl p-6 text-left shadow-xl">
-      <div className="mb-4">
-        <div className="flex items-center gap-3 mb-4">
-          <div className="text-3xl">🕵️</div>
-          <div>
-            <h3 className="text-white font-bold text-lg">Word Imposter Lobby</h3>
-            <p className="text-teal-100 text-sm">{hasJoined ? "You've joined!" : 'Ready to join?'}</p>
-          </div>
-        </div>
+    <div className={dossierCardClass}>
+      <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+        <span className="-rotate-[20deg] text-[#3a2a1a]/10 text-5xl font-black uppercase tracking-[0.28em] whitespace-nowrap select-none">
+          Classified
+        </span>
       </div>
 
-      {/* Players Joined */}
-      <div className="bg-teal-900/50 border border-teal-700 rounded-lg p-4 mb-4">
-        <h4 className="text-white font-semibold mb-3 text-sm">
-          Players Joined ({lobbyPlayers.length})
-        </h4>
-        <div className="space-y-2">
-          {allPlayers.filter(p => lobbyPlayers.includes(p.uid)).map(player => {
-            const playerPhoto = getLobbyPlayerPhoto(player.uid) || player.photo || player.photoURL || null;
-            return (
-              <div
-                key={player.uid}
-                className="flex items-center gap-3 bg-teal-800/50 rounded-lg px-3 py-2"
-              >
-                {playerPhoto ? (
-                  <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-                ) : (
-                  <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white text-xs font-bold`}>
-                    {getInitials(player.displayName)}
-                  </div>
-                )}
-                <span className="text-white text-sm font-medium">{player.displayName}</span>
-              </div>
-            );
-          })}
-        </div>
-      </div>
+      {renderDossierHeader()}
+      {renderPlayerList()}
 
       {/* Spectate / Join Game toggle */}
       {hasJoined ? (
         <button
           onClick={handleSpectate}
-          className="w-full bg-slate-700 hover:bg-slate-600 text-white font-semibold py-2 rounded-lg transition-colors flex items-center justify-center gap-2"
+          className={`relative z-10 ${stampButtonClass}`}
         >
-          <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg>
           Spectate
         </button>
       ) : isSpectating ? (
         <button
           onClick={handleJoinFromSpectate}
-          className="w-full bg-white hover:bg-slate-100 text-teal-700 font-bold py-2 rounded-lg transition-colors"
+          className={`relative z-10 ${stampButtonClass}`}
         >
           Join Game
         </button>
       ) : (
         <button
           onClick={handleJoinLobby}
-          className="w-full bg-white hover:bg-slate-100 text-teal-700 font-bold py-2 rounded-lg transition-colors"
+          className={`relative z-10 ${stampButtonClass}`}
         >
           Join Lobby
         </button>
