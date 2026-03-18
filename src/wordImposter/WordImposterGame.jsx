@@ -649,7 +649,7 @@ export default function WordImposterGame() {
             </div>
           ) : (
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-slate-300">Thanks for playing! 🎮</p>
+              <p className="text-slate-300">Thanks for playing!</p>
             </div>
           )}
         </div>

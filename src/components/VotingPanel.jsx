@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getInitials } from '../utils/avatar';
 
 const getPlayerUid = (player) => player?.uid || player?.id || null;
@@ -31,9 +31,24 @@ export default function VotingPanel({
   const [voteError, setVoteError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localConfirmed, setLocalConfirmed] = useState(Boolean(confirmedTarget));
+  const [autoEndSeconds, setAutoEndSeconds] = useState(null);
+  const autoEndTriggeredRef = useRef(false);
+  const onEndVotingRef = useRef(onEndVoting);
 
   const canVote = allPlayers.some((player) => getPlayerUid(player) === currentUid);
   const hasConfirmed = localConfirmed || confirmedTarget != null;
+  const votableUids = useMemo(
+    () => allPlayers.map((player) => getPlayerUid(player)).filter(Boolean),
+    [allPlayers]
+  );
+  const allVotesConfirmed = useMemo(() => {
+    if (votableUids.length === 0) return false;
+    return votableUids.every((uid) => votesByVoter[uid] != null);
+  }, [votableUids, votesByVoter]);
+
+  useEffect(() => {
+    onEndVotingRef.current = onEndVoting;
+  }, [onEndVoting]);
 
   useEffect(() => {
     if (confirmedTarget != null) {
@@ -44,6 +59,38 @@ export default function VotingPanel({
 
     setLocalConfirmed(false);
   }, [confirmedTarget]);
+
+  useEffect(() => {
+    if (!allVotesConfirmed) {
+      setAutoEndSeconds(null);
+      autoEndTriggeredRef.current = false;
+      return;
+    }
+
+    setAutoEndSeconds(5);
+    autoEndTriggeredRef.current = false;
+  }, [allVotesConfirmed]);
+
+  useEffect(() => {
+    if (!allVotesConfirmed || autoEndSeconds == null || autoEndSeconds <= 0) return;
+
+    const timeoutId = setTimeout(() => {
+      setAutoEndSeconds((seconds) => {
+        if (seconds == null) return null;
+        return Math.max(0, seconds - 1);
+      });
+    }, 1000);
+
+    return () => clearTimeout(timeoutId);
+  }, [allVotesConfirmed, autoEndSeconds]);
+
+  useEffect(() => {
+    if (!isHost || !allVotesConfirmed || autoEndSeconds !== 0) return;
+    if (autoEndTriggeredRef.current) return;
+
+    autoEndTriggeredRef.current = true;
+    Promise.resolve(onEndVotingRef.current?.()).catch(() => {});
+  }, [isHost, allVotesConfirmed, autoEndSeconds]);
 
   const handleSelectTarget = (targetUid) => {
     if (!canVote || hasConfirmed) return;
@@ -86,6 +133,14 @@ export default function VotingPanel({
           </button>
         )}
       </div>
+
+      {allVotesConfirmed && autoEndSeconds != null && (
+        <div className="bg-slate-700/40 border border-slate-600 rounded-xl p-3 text-center mb-4">
+          <p className="text-slate-200 text-sm font-semibold">
+            All votes confirmed. Ending in {autoEndSeconds}s...
+          </p>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 gap-3 mb-4">
         {allPlayers.map((player) => {
@@ -185,7 +240,7 @@ export default function VotingPanel({
 
       {hasConfirmed && (
         <div className="bg-slate-700/40 border border-slate-600 rounded-xl p-4 text-center mt-3">
-          <p className="text-violet-300 font-semibold">Vote confirmed ✅ Waiting for others</p>
+          <p className="text-violet-300 font-semibold">Vote confirmed. Waiting for others...</p>
         </div>
       )}
     </div>

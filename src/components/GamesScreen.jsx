@@ -247,7 +247,7 @@ export default function GamesScreen() {
         detectiveResult: null,
         nightVotes: {},
         dayVotes: {},
-        skipVotes: [],
+        readyVotes: [],
         confirmedVotes: [],
         lastEliminated: null,
         lastSaved: null,
@@ -290,23 +290,6 @@ export default function GamesScreen() {
 
       {/* Main Content */}
       <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-6 py-6 flex flex-col gap-6">
-        
-        {/* Search/Filter Bar */}
-        <div className="relative">
-          <input
-            type="text"
-            placeholder="Search games..."
-            className="w-full bg-slate-800/50 border border-slate-700 rounded-xl px-4 py-3 pl-11 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
-          />
-          <svg 
-            className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-500"
-            fill="none" 
-            stroke="currentColor" 
-            viewBox="0 0 24 24"
-          >
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-          </svg>
-        </div>
 
         {/* Game Tiles */}
         <div className="flex flex-col gap-4">

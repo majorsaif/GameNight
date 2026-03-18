@@ -94,14 +94,13 @@ export default function SpyfallGame() {
   // Auto-advance to voting when all active players are ready
   useEffect(() => {
     if (!isHost || !gameState || gameState.phase !== 'questioning') return;
-    const activePlayers = getActivePlayers();
-    if (activePlayers.length === 0) return;
     const readyVotes = gameState.readyVotes || [];
-    const allReady = activePlayers.every((p) => readyVotes.includes(p.uid));
-    if (allReady) {
+    const allPlayerUids = getActivePlayers().map((player) => player.uid);
+
+    if (allPlayerUids.length > 0 && allPlayerUids.every((uid) => readyVotes.includes(uid))) {
       handleStartVoting().catch(console.error);
     }
-  }, [isHost, gameState?.phase, gameState?.readyVotes]);
+  }, [isHost, gameState?.phase, gameState?.readyVotes, gameState?.players, gameState?.eliminatedSpyIds]);
 
   // Host auto-transition from intro screen to questioning after a short delay
   useEffect(() => {
@@ -593,7 +592,7 @@ export default function SpyfallGame() {
               disabled={myReadyClicked}
               className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 disabled:from-slate-700 disabled:to-slate-700 text-white disabled:text-slate-400 font-bold py-3 rounded-xl transition-colors"
             >
-              {myReadyClicked ? "You're ready to vote ✅" : 'Ready to Vote ✋'}
+              {myReadyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
             </button>
           )}
 
@@ -602,15 +601,42 @@ export default function SpyfallGame() {
               onClick={handleStartVoting}
               className="w-full bg-white hover:bg-slate-200 text-slate-900 font-bold py-3 rounded-xl transition-colors"
             >
-              Skip to Vote
+              Start Voting
             </button>
           )}
 
           {/* Ready count */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-3 text-center">
+          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
             <p className="text-slate-300 text-sm">
-              Ready to vote: {(gameState.readyVotes || []).length}/{activePlayers.length} players ready
+              Ready: {(gameState.readyVotes || []).length}/{activePlayers.length}
             </p>
+            <div className="flex items-center justify-center mt-3">
+              {activePlayers.map((player, index) => {
+                const isReady = (gameState.readyVotes || []).includes(player.uid);
+                const playerPhoto = getPlayerPhoto(player);
+                return (
+                  playerPhoto ? (
+                    <img
+                      key={player.uid}
+                      src={playerPhoto}
+                      alt={player.displayName}
+                      className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
+                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                    />
+                  ) : (
+                    <div
+                      key={player.uid}
+                      className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
+                        isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
+                      }`}
+                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                    >
+                      {getInitials(player.displayName)}
+                    </div>
+                  )
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -727,7 +753,7 @@ export default function SpyfallGame() {
                       <span className="text-white">{player.displayName}</span>
                     </div>
                     {wasSpy && (
-                      <span className="text-sm font-bold uppercase text-amber-400">SPY 🕵️</span>
+                      <span className="text-sm font-bold uppercase text-amber-400">SPY</span>
                     )}
                   </div>
                 );
@@ -752,7 +778,7 @@ export default function SpyfallGame() {
             </div>
           ) : (
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-slate-300">Thanks for playing! 🎮</p>
+              <p className="text-slate-300">Thanks for playing!</p>
             </div>
           )}
         </div>

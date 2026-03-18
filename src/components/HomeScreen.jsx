@@ -470,7 +470,6 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
             <span className="text-3xl">🎮</span>
           </div>
           <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">SOCIAL<br/>DEDUCTION</h2>
-          <p className="text-blue-100 text-sm">150+ titles available</p>
         </div>
         <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-8">
           <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">

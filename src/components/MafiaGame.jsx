@@ -21,6 +21,7 @@ export default function MafiaGame() {
   const [showRole, setShowRole] = useState(false);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
+  const [readyClicked, setReadyClicked] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const phaseTimerRef = useRef(null);
   const phaseTimeoutTriggeredRef = useRef(false);
@@ -30,7 +31,7 @@ export default function MafiaGame() {
 
   // DIAGNOSIS FINDINGS:
   // FIX 1: checkAllConfirmed (timer skip) only runs when the HOST confirms via handleConfirmVote.
-  //   Skip discussion works because it has a useEffect watching gameState.skipVotes on the host.
+  //   Ready-to-vote auto-advance works because it has a useEffect watching gameState.readyVotes on the host.
   //   Confirm vote has NO equivalent useEffect — so if the host is not an active player
   //   (e.g. host is civilian during night-mafia), checkAllConfirmed is never called.
   //   FIX: Add a useEffect mirroring the skip discussion pattern that watches confirmedVotes.
@@ -181,18 +182,20 @@ export default function MafiaGame() {
     }
   }, [gameState, user]);
 
-  // Host auto-advances discussion if all living players voted to skip
+  // Host auto-advances discussion if all living players are ready to vote
   useEffect(() => {
     if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
 
-    const livingUids = gameState.players.filter(p => p.isAlive).map(player => player.uid);
-    const skipVotes = gameState.skipVotes || [];
+    const readyVotes = gameState.readyVotes || [];
+    const livingUids = gameState.players
+      .filter((player) => player.isAlive && player.role !== 'narrator')
+      .map((player) => player.uid);
 
-    if (livingUids.length > 0 && livingUids.every((uid) => skipVotes.includes(uid))) {
+    if (livingUids.length > 0 && livingUids.every((uid) => readyVotes.includes(uid))) {
       const roomRef = doc(db, 'rooms', roomId);
       startDayVotePhase(roomRef);
     }
-  }, [isHost, gameState?.phase, gameState?.skipVotes, gameState?.players, roomId]);
+  }, [isHost, gameState?.phase, gameState?.readyVotes, gameState?.players, roomId]);
 
   // FIX 1: Host auto-shortens timer if all active players have confirmed votes
   // Mirrors the skip discussion useEffect pattern — reacts to Firestore state changes
@@ -219,7 +222,7 @@ export default function MafiaGame() {
         activePlayerUids = detective ? [detective.uid] : [];
         break;
       case 'day-vote':
-        activePlayerUids = gameState.players.filter(p => p.isAlive === true).map(p => p.uid);
+        activePlayerUids = gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator').map(p => p.uid);
         break;
       default:
         activePlayerUids = [];
@@ -309,6 +312,7 @@ export default function MafiaGame() {
     phaseTimeoutTriggeredRef.current = false;
     if (gameState) {
       setHasConfirmed(gameState.confirmedVotes?.includes(user?.id) || false);
+      setReadyClicked(gameState.readyVotes?.includes(user?.id) || false);
       if (gameState.phase === 'night-mafia' || gameState.phase === 'night-doctor' || 
           gameState.phase === 'night-detective' || gameState.phase === 'day-vote') {
         setSelectedPlayer(gameState.nightVotes?.[user?.id] || gameState.dayVotes?.[user?.id] || null);
@@ -522,7 +526,7 @@ export default function MafiaGame() {
         activePlayerUids = detective ? [detective.uid] : [];
         break;
       case 'day-vote':
-        activePlayerUids = gameState.players.filter(p => p.isAlive === true).map(p => p.uid);
+        activePlayerUids = gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator').map(p => p.uid);
         break;
       default:
         activePlayerUids = [];
@@ -766,7 +770,7 @@ export default function MafiaGame() {
       'activeActivity.players': updatedPlayers,
       'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
       'activeActivity.lastSaved': isSaved ? pendingVictim : null,
-      'activeActivity.skipVotes': [],
+      'activeActivity.readyVotes': [],
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
     });
@@ -781,7 +785,7 @@ export default function MafiaGame() {
       'activeActivity.phaseDurationMs': votingDurationMs,
       'activeActivity.phaseEndsAt': Date.now() + votingDurationMs,
       'activeActivity.dayVotes': {},
-      'activeActivity.skipVotes': [],
+      'activeActivity.readyVotes': [],
       'activeActivity.confirmedVotes': [],
       lastActivity: serverTimestamp()
     });
@@ -852,28 +856,26 @@ export default function MafiaGame() {
     }
   };
 
-  const handleToggleSkipDiscussion = async () => {
-    if (!gameState || !user || gameState.phase !== 'day-discussion') return;
-    if (!isCurrentUserAlive()) return;
+  const handleReadyToVote = async () => {
+    if (!gameState || !user || gameState.phase !== 'day-discussion' || readyClicked) return;
+    if (!isCurrentUserAlive() || myRole === 'narrator') return;
+
+    setReadyClicked(true);
 
     const roomRef = doc(db, 'rooms', roomId);
-    const currentSkipVotes = gameState.skipVotes || [];
-    const hasVoted = currentSkipVotes.includes(user.id);
-    const updatedSkipVotes = hasVoted
-      ? currentSkipVotes.filter((uid) => uid !== user.id)
-      : [...currentSkipVotes, user.id];
+    const currentReadyVotes = gameState.readyVotes || [];
+    const updatedReadyVotes = [...new Set([...currentReadyVotes, user.id])];
 
     await updateDoc(roomRef, {
-      'activeActivity.skipVotes': updatedSkipVotes,
+      'activeActivity.readyVotes': updatedReadyVotes,
       lastActivity: serverTimestamp()
     });
+  };
 
-    if (isHost) {
-      const livingUids = getLivingPlayers().map((player) => player.uid);
-      if (livingUids.length > 0 && livingUids.every((uid) => updatedSkipVotes.includes(uid))) {
-        await startDayVotePhase(roomRef);
-      }
-    }
+  const handleStartVotingNow = async () => {
+    if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
+    const roomRef = doc(db, 'rooms', roomId);
+    await startDayVotePhase(roomRef);
   };
 
   const handleReturnToGamesNight = async () => {
@@ -907,7 +909,7 @@ export default function MafiaGame() {
         const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
         return detective ? [detective] : [];
       case 'day-vote':
-        return gameState.players.filter(p => p.isAlive === true);
+        return gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator');
       default:
         return [];
     }
@@ -1411,12 +1413,9 @@ export default function MafiaGame() {
     const saved = gameState.lastSaved && gameState.lastSaved === victimUid;
     const victim = victimUid ? gameState.players.find(p => p.uid === victimUid) : null;
     const livingPlayers = gameState.players.filter((p) => p.isAlive && p.role !== 'narrator');
-    const skipVotes = gameState.skipVotes || [];
-    const canSkipVote = !spectator && isCurrentUserAlive() && myRole !== 'narrator';
-    const mySkipVote = skipVotes.includes(user?.id);
-    const skipVotePlayers = skipVotes
-      .map((uid) => gameState.players.find((p) => p.uid === uid))
-      .filter(Boolean);
+    const readyVotes = gameState.readyVotes || [];
+    const canReadyToVote = !spectator && isCurrentUserAlive() && myRole !== 'narrator';
+    const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -1485,36 +1484,57 @@ export default function MafiaGame() {
 
           <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mt-4">
             <button
-              onClick={handleToggleSkipDiscussion}
-              disabled={!canSkipVote}
+              onClick={handleReadyToVote}
+              disabled={!canReadyToVote || myReadyClicked}
               className={`w-full py-3 rounded-xl font-bold transition-colors ${
-                canSkipVote
-                  ? mySkipVote
-                    ? 'bg-violet-700 hover:bg-violet-600 text-white'
+                canReadyToVote
+                  ? myReadyClicked
+                    ? 'bg-slate-700 text-slate-300 cursor-not-allowed'
                     : 'bg-violet-600 hover:bg-violet-500 text-white'
                   : 'bg-slate-700 text-slate-400 cursor-not-allowed'
               }`}
             >
-              {mySkipVote ? 'Undo Skip Vote' : 'Skip Discussion'}
+              {myReadyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
             </button>
             <p className="text-slate-300 text-sm mt-3">
-              Voted to skip: {skipVotes.length}/{livingPlayers.length}
+              Ready: {readyVotes.length}/{livingPlayers.length}
             </p>
-            <div className="flex items-center mt-2">
-              {skipVotePlayers.length === 0 ? (
-                <span className="text-slate-500 text-sm">No votes yet</span>
-              ) : (
-                skipVotePlayers.map((player, index) => (
-                  <div
-                    key={player.uid}
-                    className={`${index > 0 ? '-ml-2' : ''}`}
-                    title={player.displayName}
-                  >
-                    {renderPlayerAvatar(player, 'w-7 h-7', 'text-[10px]', 'border-2 border-slate-900')}
-                  </div>
-                ))
-              )}
+            <div className="flex items-center justify-center mt-3">
+              {livingPlayers.map((player, index) => {
+                const isReady = readyVotes.includes(player.uid);
+                const playerPhoto = getPlayerPhoto(player);
+                return (
+                  playerPhoto ? (
+                    <img
+                      key={player.uid}
+                      src={playerPhoto}
+                      alt={player.displayName}
+                      className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
+                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                    />
+                  ) : (
+                    <div
+                      key={player.uid}
+                      className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
+                        isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
+                      }`}
+                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
+                    >
+                      {getInitials(player.displayName)}
+                    </div>
+                  )
+                );
+              })}
             </div>
+
+            {isHost && (
+              <button
+                onClick={handleStartVotingNow}
+                className="w-full mt-3 bg-white hover:bg-slate-200 text-slate-900 font-bold py-3 rounded-xl transition-colors"
+              >
+                Start Voting
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -1524,7 +1544,7 @@ export default function MafiaGame() {
   // Day phase - Voting
   if (gameState?.phase === 'day-vote') {
     const spectator = isSpectator();
-    const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true);
+    const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true && player.role !== 'narrator');
     const dayVotes = gameState.dayVotes || {};
 
     return (
