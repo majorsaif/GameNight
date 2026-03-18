@@ -297,76 +297,43 @@ export default function GamesScreen() {
           {/* Word Imposter */}
           <button 
             onClick={handleWordImposterClick}
+            aria-label="Word Imposter"
             style={{
               backgroundImage: 'url("/images/cards/word-imposter.png")',
-              backgroundSize: 'cover',
+              backgroundSize: '112%',
               backgroundPosition: 'center'
             }}
-            className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-teal-500/30 rounded-xl flex items-center justify-center mb-4">
-                <div className="w-6 h-6 bg-teal-200 rounded"></div>
-              </div>
-              <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">WORD<br/>IMPOSTER</h2>
-              <p className="text-teal-100 text-sm">Find the imposter who doesn't know the word</p>
-            </div>
-            <div className="absolute bottom-0 right-0 text-teal-400/10 transform translate-x-8 translate-y-8">
-              <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
-                <rect x="4" y="4" width="16" height="16" rx="2" />
-              </svg>
-            </div>
+            <div className="absolute inset-0 bg-black/25" />
           </button>
 
           {/* Spyfall */}
           <button 
             onClick={handleSpyfallClick}
+            aria-label="Spyfall"
             style={{
               backgroundImage: 'url("/images/cards/spyfall.png")',
-              backgroundSize: 'cover',
+              backgroundSize: '112%',
               backgroundPosition: 'center'
             }}
-            className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-indigo-500/30 rounded-xl flex items-center justify-center mb-4">
-                <div className="w-6 h-6 bg-indigo-200 rounded-full"></div>
-              </div>
-              <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">SPYFALL</h2>
-              <p className="text-indigo-100 text-sm">One player is the spy — can you find them?</p>
-            </div>
-            <div className="absolute bottom-0 right-0 text-indigo-400/10 transform translate-x-8 translate-y-8">
-              <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
-                <circle cx="12" cy="12" r="10" />
-              </svg>
-            </div>
+            <div className="absolute inset-0 bg-black/25" />
           </button>
 
           {/* Mafia */}
           <button 
             onClick={handleMafiaClick}
+            aria-label="Mafia"
             style={{
               backgroundImage: 'url("/images/cards/mafia.png")',
-              backgroundSize: 'cover',
+              backgroundSize: '112%',
               backgroundPosition: 'center'
             }}
-            className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
-            <div className="absolute inset-0 bg-black/40" />
-            <div className="relative z-10">
-              <div className="w-12 h-12 bg-red-500/30 rounded-xl flex items-center justify-center mb-4">
-                <div className="w-6 h-6 bg-red-200 rotate-45"></div>
-              </div>
-              <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">MAFIA</h2>
-              <p className="text-red-100 text-sm">Town vs Mafia — who do you trust?</p>
-            </div>
-            <div className="absolute bottom-0 right-0 text-red-400/10 transform translate-x-8 translate-y-8">
-              <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
-                <polygon points="12,2 22,12 12,22 2,12" />
-              </svg>
-            </div>
+            <div className="absolute inset-0 bg-black/25" />
           </button>
 
         </div>

@@ -470,23 +470,12 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
         onClick={() => navigate(`/room/${roomId}/games`)}
         style={{
           backgroundImage: 'url("/images/cards/social-deduction.png")',
-          backgroundSize: 'cover',
+          backgroundSize: '112%',
           backgroundPosition: 'center'
         }}
-        className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+        className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
       >
-        <div className="absolute inset-0 bg-black/40" />
-        <div className="relative z-10">
-          <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">🎮</span>
-          </div>
-          <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">SOCIAL<br/>DEDUCTION</h2>
-        </div>
-        <div className="absolute bottom-0 right-0 text-blue-400/10 transform translate-x-8 translate-y-8">
-          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
-            <path d="M7 6v2h10V6H7zm0 6v-2h10v2H7zm0 4v-2h10v2H7zm0 4v-2h7v2H7z"/>
-          </svg>
-        </div>
+        <div className="absolute inset-0 bg-black/25" />
       </button>
 
       {/* Wheel Spin Card */}
