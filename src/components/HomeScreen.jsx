@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useRoom, leaveRoom, endActivity, startWheel, spinWheel } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
@@ -508,32 +508,72 @@ function GameRulesSection({ activityType }) {
   if (activityType === 'spyfall') rules = spyfallRulesData;
   if (!rules) return null;
 
+  const [isExpanded, setIsExpanded] = useState(false);
+  const contentRef = useRef(null);
+  const [contentHeight, setContentHeight] = useState(0);
+
+  useEffect(() => {
+    setIsExpanded(false);
+  }, [activityType]);
+
+  useEffect(() => {
+    const updateContentHeight = () => {
+      setContentHeight(contentRef.current?.scrollHeight || 0);
+    };
+
+    updateContentHeight();
+    window.addEventListener('resize', updateContentHeight);
+    return () => window.removeEventListener('resize', updateContentHeight);
+  }, [rules, isExpanded]);
+
   return (
     <div className="bg-slate-800/80 border border-slate-700 rounded-2xl overflow-hidden">
-      <div className="px-5 py-4 border-b border-slate-700/70">
-        <span className="text-white font-bold text-base">
-          {rules.title} Rules
+      <button
+        type="button"
+        onClick={() => setIsExpanded((prev) => !prev)}
+        className="w-full px-5 py-4 flex items-center justify-between text-left"
+      >
+        <span className="text-white font-bold text-base">{rules.title}</span>
+        <span className="inline-flex items-center gap-2 text-slate-300 text-sm font-semibold">
+          How to Play
+          <svg
+            className={`w-4 h-4 transition-transform duration-300 ${isExpanded ? 'rotate-180' : ''}`}
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+          </svg>
         </span>
-      </div>
-      <div className="px-5 pb-5 pt-4 space-y-4">
-        <p className="text-slate-300 text-sm leading-relaxed">{rules.summary}</p>
-        {rules.sections.map((section, i) => (
-          <div key={i}>
-            <h4 className="text-violet-400 font-semibold text-sm mb-1">{section.heading}</h4>
-            {section.text && (
-              <p className="text-slate-400 text-sm leading-relaxed">{section.text}</p>
-            )}
-            {section.items && (
-              <ul className="space-y-1">
-                {section.items.map((item, j) => (
-                  <li key={j} className="text-slate-400 text-sm leading-relaxed">
-                    <span className="text-white font-medium">{item.role}:</span> {item.text}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </div>
-        ))}
+      </button>
+
+      <div
+        className="overflow-hidden transition-[max-height,opacity] duration-300 ease-in-out"
+        style={{
+          maxHeight: isExpanded ? `${contentHeight}px` : '0px',
+          opacity: isExpanded ? 1 : 0
+        }}
+      >
+        <div ref={contentRef} className="px-5 pb-5 pt-4 space-y-4 border-t border-slate-700/70">
+          <p className="text-slate-300 text-sm leading-relaxed">{rules.summary}</p>
+          {rules.sections.map((section, i) => (
+            <div key={i}>
+              <h4 className="text-violet-400 font-semibold text-sm mb-1">{section.heading}</h4>
+              {section.text && (
+                <p className="text-slate-400 text-sm leading-relaxed">{section.text}</p>
+              )}
+              {section.items && (
+                <ul className="space-y-1">
+                  {section.items.map((item, j) => (
+                    <li key={j} className="text-slate-400 text-sm leading-relaxed">
+                      <span className="text-white font-medium">{item.role}:</span> {item.text}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -666,6 +706,11 @@ function PlayerView({ room, getCurrentPlayerName, onSpinWheel, onEndWheel, userI
         </div>
       )}
 
+      {/* Rules Section (shown only when activity is active) */}
+      {hasActiveActivity && (
+        <GameRulesSection activityType={room.activeActivity?.type} />
+      )}
+
       {/* Active Activity Section or Waiting Message */}
       {hasActiveActivity ? (
         <div>
@@ -757,11 +802,6 @@ function PlayerView({ room, getCurrentPlayerName, onSpinWheel, onEndWheel, userI
           <h2 className="text-xl font-bold text-slate-400 italic">Waiting for host...</h2>
           <p className="text-slate-600 text-sm mt-2">The host will start an activity soon</p>
         </div>
-      )}
-
-      {/* Rules Section (shown only when activity is active) */}
-      {hasActiveActivity && (
-        <GameRulesSection activityType={room.activeActivity?.type} />
       )}
 
     </div>
