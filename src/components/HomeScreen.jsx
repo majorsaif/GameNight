@@ -479,22 +479,18 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
       </button>
 
       {/* Wheel Spin Card */}
-      <button 
+      <button
+        type="button"
+        aria-label="Spin Wheel"
         onClick={onOpenWheelSetup}
-        className="group relative overflow-hidden bg-gradient-to-br from-orange-500 to-amber-600 hover:from-orange-400 hover:to-amber-500 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
+        style={{
+          backgroundImage: 'url("/images/cards/spin-wheel.png")',
+          backgroundSize: '112%',
+          backgroundPosition: 'center'
+        }}
+        className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
       >
-        <div className="relative z-10">
-          <div className="w-12 h-12 bg-orange-400/30 rounded-xl flex items-center justify-center mb-4">
-            <span className="text-3xl">🎡</span>
-          </div>
-          <h2 className="text-white font-black text-3xl uppercase mb-2 tracking-tight">SPIN<br/>WHEEL</h2>
-          <p className="text-orange-100 text-sm">Random selection</p>
-        </div>
-        <div className="absolute bottom-0 right-0 text-orange-400/10 transform translate-x-12 translate-y-8">
-          <svg className="w-40 h-40" fill="currentColor" viewBox="0 0 24 24">
-            <circle cx="12" cy="12" r="10"/>
-          </svg>
-        </div>
+        <div className="absolute inset-0 bg-black/25" />
       </button>
 
     </div>

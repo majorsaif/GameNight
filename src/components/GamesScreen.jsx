@@ -294,6 +294,20 @@ export default function GamesScreen() {
         {/* Game Tiles */}
         <div className="flex flex-col gap-4">
           
+          {/* Mafia */}
+          <button 
+            onClick={handleMafiaClick}
+            aria-label="Mafia"
+            style={{
+              backgroundImage: 'url("/images/cards/mafia.png")',
+              backgroundSize: '108%',
+              backgroundPosition: 'center bottom'
+            }}
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+          >
+            <div className="absolute inset-0 bg-black/25" />
+          </button>
+
           {/* Word Imposter */}
           <button 
             onClick={handleWordImposterClick}
@@ -314,20 +328,6 @@ export default function GamesScreen() {
             aria-label="Spyfall"
             style={{
               backgroundImage: 'url("/images/cards/spyfall.png")',
-              backgroundSize: '108%',
-              backgroundPosition: 'center bottom'
-            }}
-            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-          >
-            <div className="absolute inset-0 bg-black/25" />
-          </button>
-
-          {/* Mafia */}
-          <button 
-            onClick={handleMafiaClick}
-            aria-label="Mafia"
-            style={{
-              backgroundImage: 'url("/images/cards/mafia.png")',
               backgroundSize: '108%',
               backgroundPosition: 'center bottom'
             }}
