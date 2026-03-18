@@ -297,8 +297,14 @@ export default function GamesScreen() {
           {/* Word Imposter */}
           <button 
             onClick={handleWordImposterClick}
-            className="group relative overflow-hidden bg-gradient-to-br from-teal-600 to-cyan-700 hover:from-teal-500 hover:to-cyan-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
+            style={{
+              backgroundImage: 'url("/images/cards/word-imposter.png")',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+            className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
+            <div className="absolute inset-0 bg-black/40" />
             <div className="relative z-10">
               <div className="w-12 h-12 bg-teal-500/30 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-6 h-6 bg-teal-200 rounded"></div>
@@ -316,8 +322,14 @@ export default function GamesScreen() {
           {/* Spyfall */}
           <button 
             onClick={handleSpyfallClick}
-            className="group relative overflow-hidden bg-gradient-to-br from-indigo-600 to-blue-700 hover:from-indigo-500 hover:to-blue-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
+            style={{
+              backgroundImage: 'url("/images/cards/spyfall.png")',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+            className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
+            <div className="absolute inset-0 bg-black/40" />
             <div className="relative z-10">
               <div className="w-12 h-12 bg-indigo-500/30 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-6 h-6 bg-indigo-200 rounded-full"></div>
@@ -335,8 +347,14 @@ export default function GamesScreen() {
           {/* Mafia */}
           <button 
             onClick={handleMafiaClick}
-            className="group relative overflow-hidden bg-gradient-to-br from-red-600 to-rose-700 hover:from-red-500 hover:to-rose-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52"
+            style={{
+              backgroundImage: 'url("/images/cards/mafia.png")',
+              backgroundSize: 'cover',
+              backgroundPosition: 'center'
+            }}
+            className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
+            <div className="absolute inset-0 bg-black/40" />
             <div className="relative z-10">
               <div className="w-12 h-12 bg-red-500/30 rounded-xl flex items-center justify-center mb-4">
                 <div className="w-6 h-6 bg-red-200 rotate-45"></div>

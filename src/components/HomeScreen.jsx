@@ -464,7 +464,18 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
       )}
 
       {/* Social Deduction - Large Full Width Card */}
-      <button type="button" aria-label="Social Deduction" onClick={() => navigate(`/room/${roomId}/games`)} className="group relative overflow-hidden bg-gradient-to-br from-blue-600 to-indigo-700 hover:from-blue-500 hover:to-indigo-600 rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52">
+      <button
+        type="button"
+        aria-label="Social Deduction"
+        onClick={() => navigate(`/room/${roomId}/games`)}
+        style={{
+          backgroundImage: 'url("/images/cards/social-deduction.png")',
+          backgroundSize: 'cover',
+          backgroundPosition: 'center'
+        }}
+        className="group relative overflow-hidden rounded-2xl p-8 text-left shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+      >
+        <div className="absolute inset-0 bg-black/40" />
         <div className="relative z-10">
           <div className="w-12 h-12 bg-blue-500/30 rounded-xl flex items-center justify-center mb-4">
             <span className="text-3xl">🎮</span>
