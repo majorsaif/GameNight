@@ -8,6 +8,11 @@ import { getInitials, getAvatarColor } from '../utils/avatar';
 import { throttledUpdate } from '../utils/firestoreThrottle';
 import { MAFIA_SOUNDS, playSound } from '../mafia/sounds';
 import VotingPanel from './VotingPanel';
+import mafiaRoleCardImage from '../assets/mafia/mafia-card.png';
+import detectiveRoleCardImage from '../assets/mafia/detective-card.png';
+import doctorRoleCardImage from '../assets/mafia/doctor-card.png';
+import civilianRoleCardImage from '../assets/mafia/civilian-card.png';
+import cardBackImage from '../assets/mafia/card-back.png';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -19,11 +24,15 @@ export default function MafiaGame() {
   const [gameStateLoaded, setGameStateLoaded] = useState(false);
   const [myRole, setMyRole] = useState(null);
   const [showRole, setShowRole] = useState(false);
+  const [isRoleCardFrontVisible, setIsRoleCardFrontVisible] = useState(false);
+  const [isCardFlipping, setIsCardFlipping] = useState(false);
+  const [cardRotationY, setCardRotationY] = useState(0);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [readyClicked, setReadyClicked] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const phaseTimerRef = useRef(null);
+  const flipTimeoutsRef = useRef([]);
   const phaseTimeoutTriggeredRef = useRef(false);
   const timerJumpedRef = useRef(false);
   const previousPhaseRef = useRef(null);
@@ -181,6 +190,23 @@ export default function MafiaGame() {
       }
     }
   }, [gameState, user]);
+
+  useEffect(() => {
+    return () => {
+      flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gameState?.phase === 'roles') return;
+
+    flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    flipTimeoutsRef.current = [];
+    setShowRole(false);
+    setIsRoleCardFrontVisible(false);
+    setIsCardFlipping(false);
+    setCardRotationY(0);
+  }, [gameState?.phase]);
 
   // Host auto-advances discussion if all living players are ready to vote
   useEffect(() => {
@@ -397,12 +423,37 @@ export default function MafiaGame() {
   // stale version that sees gameState === null.
   handlePhaseTimeoutRef.current = handlePhaseTimeout;
 
+  const runRoleCardFlip = (nextFrontVisible) => {
+    if (isCardFlipping) return;
+
+    flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    flipTimeoutsRef.current = [];
+
+    setIsCardFlipping(true);
+    setCardRotationY(90);
+
+    const halfwayTimeout = setTimeout(() => {
+      setIsRoleCardFrontVisible(nextFrontVisible);
+      setCardRotationY(0);
+    }, 300);
+
+    const completeTimeout = setTimeout(() => {
+      setShowRole(nextFrontVisible);
+      setIsCardFlipping(false);
+      flipTimeoutsRef.current = [];
+    }, 600);
+
+    flipTimeoutsRef.current = [halfwayTimeout, completeTimeout];
+  };
+
   const handleRevealRole = () => {
-    setShowRole(true);
+    if (showRole || isCardFlipping) return;
+    runRoleCardFlip(true);
   };
 
   const handleHideRole = () => {
-    setShowRole(false);
+    if (!showRole || isCardFlipping) return;
+    runRoleCardFlip(false);
   };
 
   const startNightPhase = async () => {
@@ -953,18 +1004,18 @@ export default function MafiaGame() {
     }
   };
 
-  const getRoleColor = (role) => {
+  const getRoleCardImage = (role) => {
     switch (role) {
       case 'mafia':
-        return 'from-red-900 to-red-800';
-      case 'civilian':
-        return 'from-blue-900 to-blue-800';
-      case 'doctor':
-        return 'from-green-900 to-green-800';
+        return mafiaRoleCardImage;
       case 'detective':
-        return 'from-yellow-900 to-yellow-800';
+        return detectiveRoleCardImage;
+      case 'doctor':
+        return doctorRoleCardImage;
+      case 'civilian':
+        return civilianRoleCardImage;
       default:
-        return 'from-slate-900 to-slate-800';
+        return cardBackImage;
     }
   };
 
@@ -1024,47 +1075,64 @@ export default function MafiaGame() {
       );
     }
 
+    const displayedRoleCardImage = isRoleCardFrontVisible ? getRoleCardImage(myRole) : cardBackImage;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          {!showRole ? (
-            <div className="text-center">
-              <div className="text-6xl mb-6">🤫</div>
-              <h1 className="text-white text-2xl font-bold mb-4">Your role is hidden</h1>
-              <p className="text-slate-400 mb-8">Tap Reveal to see your role</p>
+          <div className="text-center">
+            <h1 className="text-white text-2xl font-bold mb-6">For your eyes only</h1>
+
+            <div
+              className="mx-auto w-[200px] h-[280px]"
+              style={{
+                perspective: '600px',
+                WebkitPerspective: '600px'
+              }}
+            >
+              <img
+                src={displayedRoleCardImage}
+                alt={showRole ? `${myRole} role card` : 'Mafia role card back'}
+                className="w-full h-full rounded-2xl border border-white/20 object-cover shadow-2xl"
+                style={{
+                  transform: `rotateY(${cardRotationY}deg)`,
+                  WebkitTransform: `rotateY(${cardRotationY}deg)`,
+                  transition: 'transform 0.3s ease',
+                  WebkitTransition: '-webkit-transform 0.3s ease, transform 0.3s ease',
+                  transformStyle: 'preserve-3d',
+                  WebkitTransformStyle: 'preserve-3d',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden'
+                }}
+              />
+            </div>
+
+            {!showRole ? (
               <button
                 onClick={handleRevealRole}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+                disabled={isCardFlipping}
+                className="w-full max-w-[18rem] mx-auto h-14 mt-6 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
               >
                 Reveal Role
               </button>
-            </div>
-          ) : (
-            <div className={`bg-gradient-to-br ${getRoleColor(myRole)} border-2 border-white/20 rounded-2xl p-8 text-center`}>
-              <div className="text-8xl mb-6">{getRoleIcon(myRole)}</div>
-              <h1 className="text-white text-3xl font-black uppercase mb-4">{myRole}</h1>
-              <p className="text-white/80 mb-8">
-                {myRole === 'mafia' && 'Kill townspeople without getting caught'}
-                {myRole === 'civilian' && 'Find and eliminate the mafia'}
-                {myRole === 'doctor' && 'Save players from the mafia each night'}
-                {myRole === 'detective' && 'Investigate players to find the mafia'}
-              </p>
+            ) : (
               <button
                 onClick={handleHideRole}
-                className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition-colors"
+                disabled={isCardFlipping}
+                className="w-full max-w-[18rem] mx-auto h-14 mt-6 flex items-center justify-center bg-white/20 hover:bg-white/30 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
               >
-                Hide Role
+                Hide
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="mt-6">
             {isHost ? (
               <button
                 onClick={startNightPhase}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+                className="w-full max-w-[18rem] mx-auto h-14 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold rounded-xl transition-colors"
               >
-                Start Night 🌙
+                Start Night
               </button>
             ) : (
               <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
@@ -1381,14 +1449,10 @@ export default function MafiaGame() {
       return (
         <div className="min-h-screen bg-gradient-to-br from-yellow-950 via-yellow-900 to-yellow-950 flex items-center justify-center p-6">
           <div className="w-full max-w-md text-center">
-            <div className={`text-8xl mb-6`}>
-              {result.isMafia ? '🔪' : '✅'}
-            </div>
-            <h1 className="text-white text-3xl font-bold mb-4">
-              {result.targetName}
-            </h1>
-            <p className="text-white text-2xl">
-              {result.isMafia ? 'IS a mafia' : 'is NOT a mafia'}
+            <p className="text-white text-3xl font-bold">
+              {result.isMafia
+                ? `${result.targetName} is the mafia`
+                : `${result.targetName} is not the mafia`}
             </p>
           </div>
         </div>

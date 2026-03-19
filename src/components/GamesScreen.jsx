@@ -5,6 +5,9 @@ import { useRoom } from '../hooks/useRoom';
 import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
 import { db } from '../firebase';
 import LOCATIONS from '../spyfall/locations';
+import mafiaButtonImage from '../assets/mafia-button.png';
+import wordImposterButtonImage from '../assets/word-imposter-button.png';
+import spyfallButtonImage from '../assets/spyfall-button.png';
 
 export default function GamesScreen() {
   const navigate = useNavigate();
@@ -299,7 +302,7 @@ export default function GamesScreen() {
             onClick={handleMafiaClick}
             aria-label="Mafia"
             style={{
-              backgroundImage: 'url("/images/cards/mafia.png")',
+              backgroundImage: `url(${mafiaButtonImage})`,
               backgroundSize: '108%',
               backgroundPosition: 'center bottom'
             }}
@@ -313,7 +316,7 @@ export default function GamesScreen() {
             onClick={handleWordImposterClick}
             aria-label="Word Imposter"
             style={{
-              backgroundImage: 'url("/images/cards/word-imposter.png")',
+              backgroundImage: `url(${wordImposterButtonImage})`,
               backgroundSize: '108%',
               backgroundPosition: 'center bottom'
             }}
@@ -327,7 +330,7 @@ export default function GamesScreen() {
             onClick={handleSpyfallClick}
             aria-label="Spyfall"
             style={{
-              backgroundImage: 'url("/images/cards/spyfall.png")',
+              backgroundImage: `url(${spyfallButtonImage})`,
               backgroundSize: '108%',
               backgroundPosition: 'center bottom'
             }}
