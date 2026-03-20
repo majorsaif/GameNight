@@ -13,10 +13,18 @@ export default function VotingPanel({
   currentUid,
   isHost,
   onVote,
-  onEndVoting
+  onEndVoting,
+  theme = 'default',
+  timerLabel = 'TIME REMAINING',
+  timerValue = null,
+  title,
+  subtitle
 }) {
   const allPlayers = Array.isArray(players) ? players : [];
   const votesByVoter = votes && typeof votes === 'object' ? votes : {};
+  const isBallotTheme = theme === 'ballot';
+  const panelTitle = title || (isBallotTheme ? 'OFFICIAL BALLOT' : 'Voting');
+  const panelSubtitle = subtitle || (isBallotTheme ? 'Cast your vote - mark one candidate' : null);
 
   const playersByUid = useMemo(() => {
     const entries = allPlayers
@@ -119,6 +127,170 @@ export default function VotingPanel({
       setIsSubmitting(false);
     }
   };
+
+  if (isBallotTheme) {
+    return (
+      <div className="relative bg-[#f5f0e8] border-2 border-[#bfae95] rounded-xl p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3)] text-[#3f3127] overflow-hidden">
+        {hasConfirmed && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+            <div
+              className="border-4 border-red-700 px-6 py-2 text-red-700 text-5xl font-black uppercase tracking-[0.2em] opacity-35"
+              style={{ transform: 'rotate(-15deg)' }}
+            >
+              VOTED
+            </div>
+          </div>
+        )}
+
+        <div className="text-center mb-4">
+          <h3 className="font-serif text-[#3f3127] text-2xl font-black uppercase tracking-wide">{panelTitle}</h3>
+          {panelSubtitle && (
+            <p className="mt-1 text-sm italic text-[#5a4837]">{panelSubtitle}</p>
+          )}
+          <div className="border-t border-[#5a4837] mt-3" />
+        </div>
+
+        {timerValue != null && (
+          <div className="text-center mb-4">
+            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#5a4837]">{timerLabel}</p>
+            <p className="text-3xl font-black font-serif text-[#3f3127]">{timerValue}</p>
+          </div>
+        )}
+
+        {allVotesConfirmed && autoEndSeconds != null && (
+          <div className="bg-[#ece2d2] border border-[#c8b89f] rounded-lg p-3 text-center mb-4">
+            <p className="text-[#4a3a2b] text-sm font-semibold">
+              All votes confirmed. Ending in {autoEndSeconds}s...
+            </p>
+          </div>
+        )}
+
+        <div className="mb-4 overflow-hidden rounded-lg border border-[#ccbda6] bg-[#f8f3ea]">
+          {allPlayers.map((player, index) => {
+            const candidateUid = getPlayerUid(player);
+            if (!candidateUid) return null;
+
+            const candidateVotes = Object.entries(votesByVoter)
+              .filter(([, targetUid]) => targetUid === candidateUid)
+              .map(([voterUid]) => playersByUid.get(voterUid))
+              .filter(Boolean);
+
+            const candidateVoteCount = candidateVotes.length;
+            const candidatePhoto = getPlayerPhoto(player);
+            const isSelected = selectedTarget === candidateUid;
+            const isCurrentUser = candidateUid === currentUid;
+            const rowDisabled = !canVote || hasConfirmed;
+
+            return (
+              <button
+                key={candidateUid}
+                type="button"
+                onClick={() => handleSelectTarget(candidateUid)}
+                disabled={rowDisabled}
+                className={`w-full text-left px-3 py-3 transition-colors ${
+                  index > 0 ? 'border-t border-[#d5c7b2]' : ''
+                } ${
+                  isSelected ? 'bg-[#eadfcf]' : 'bg-[#f8f3ea]'
+                } ${
+                  rowDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#efe3cf]'
+                }`}
+              >
+                <div className="flex items-start gap-3">
+                  <span
+                    className={`mt-1 inline-flex h-6 w-6 items-center justify-center border-2 text-sm font-black ${
+                      isSelected
+                        ? 'bg-[#3f3127] border-[#3f3127] text-[#f5f0e8]'
+                        : 'bg-[#fdfaf3] border-[#5a4837] text-transparent'
+                    }`}
+                  >
+                    {isSelected ? '✓' : ''}
+                  </span>
+
+                  {candidatePhoto ? (
+                    <img
+                      src={candidatePhoto}
+                      alt={getPlayerName(player)}
+                      className="w-11 h-11 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-11 h-11 rounded-full border border-[#bfae95] bg-[#decfb8] flex items-center justify-center text-[#3f3127] font-bold">
+                      {getInitials(getPlayerName(player))}
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-[#2f241c] font-mono font-semibold truncate">
+                        {getPlayerName(player)} {isCurrentUser ? '(You)' : ''}
+                      </span>
+                      <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-[#3f3127] text-[#f5f0e8] text-sm font-bold">
+                        {candidateVoteCount}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center mt-2 min-h-7">
+                      {candidateVotes.map((voter, voteIndex) => {
+                        const voterUid = getPlayerUid(voter);
+                        const voterPhoto = getPlayerPhoto(voter);
+                        const overlapClass = voteIndex > 0 ? '-ml-2' : '';
+                        const voterName = getPlayerName(voter);
+
+                        return voterPhoto ? (
+                          <img
+                            key={voterUid}
+                            src={voterPhoto}
+                            alt={voterName}
+                            className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] object-cover ${overlapClass}`}
+                            title={voterName}
+                          />
+                        ) : (
+                          <div
+                            key={voterUid}
+                            className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] bg-[#d7c8b2] flex items-center justify-center text-[10px] text-[#3f3127] font-bold ${overlapClass}`}
+                            title={voterName}
+                          >
+                            {getInitials(voterName)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {canVote && !hasConfirmed && (
+          <>
+            <button
+              type="button"
+              onClick={handleConfirmVote}
+              disabled={!selectedTarget || isSubmitting}
+              className="w-full border-2 border-[#4a3a2b] bg-[#f5f0e8] hover:bg-[#ece1cf] disabled:bg-[#ddd2c2] text-[#3f3127] disabled:text-[#867a6b] font-black uppercase tracking-[0.16em] py-3 rounded-md shadow-[0_3px_0_#4a3a2b] active:translate-y-[2px] active:shadow-none transition-all"
+            >
+              {isSubmitting ? 'STAMPING...' : 'CONFIRM VOTE'}
+            </button>
+
+            {voteError && <p className="text-red-800 text-sm text-center mt-2 font-semibold">{voteError}</p>}
+          </>
+        )}
+
+        {hasConfirmed && (
+          <p className="text-center text-[#4b3b2d] font-semibold mt-2">Vote confirmed. Waiting for others...</p>
+        )}
+
+        {isHost && (
+          <button
+            onClick={onEndVoting}
+            className="w-full mt-3 border-2 border-red-700 bg-[#f5f0e8] hover:bg-[#f0e3d6] text-red-700 font-black uppercase tracking-[0.16em] py-3 rounded-md transition-colors"
+          >
+            CLOSE BALLOT
+          </button>
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">

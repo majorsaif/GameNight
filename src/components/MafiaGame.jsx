@@ -13,6 +13,7 @@ import detectiveRoleCardImage from '../assets/mafia/detective-card.png';
 import doctorRoleCardImage from '../assets/mafia/doctor-card.png';
 import civilianRoleCardImage from '../assets/mafia/civilian-card.png';
 import cardBackImage from '../assets/mafia/card-back.png';
+import { KILL_CAUSES, SAVE_CAUSES, KILL_NOTE, SAVE_NOTE } from '../mafia/causes';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -112,6 +113,11 @@ export default function MafiaGame() {
     if (livingMafia === 0) return 'town';
     if (livingMafia >= livingInnocent) return 'mafia';
     return null;
+  };
+
+  const getRandomCause = (causes) => {
+    if (!Array.isArray(causes) || causes.length === 0) return null;
+    return causes[Math.floor(Math.random() * causes.length)];
   };
 
   // Subscribe to game state and detect phase changes for sounds
@@ -786,6 +792,20 @@ export default function MafiaGame() {
     const pendingVictim = gameState?.pendingVictim || null;
     const doctorAlive = currentPlayers.some((player) => player.role === 'doctor' && player.isAlive);
     const isSaved = Boolean(activeRules.doctor && doctorAlive && pendingVictim && gameState?.doctorSave === pendingVictim);
+    const victimPlayer = pendingVictim ? currentPlayers.find((player) => player.uid === pendingVictim) : null;
+
+    let nightReportCause = null;
+    let nightReportNote = null;
+
+    if (victimPlayer) {
+      if (isSaved) {
+        nightReportCause = getRandomCause(SAVE_CAUSES);
+        nightReportNote = SAVE_NOTE.replace('[Name]', victimPlayer.displayName);
+      } else {
+        nightReportCause = getRandomCause(KILL_CAUSES);
+        nightReportNote = KILL_NOTE;
+      }
+    }
 
     const updatedPlayers = currentPlayers.map((player) => {
       if (!pendingVictim || isSaved) return player;
@@ -801,6 +821,8 @@ export default function MafiaGame() {
         'activeActivity.players': updatedPlayers,
         'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
         'activeActivity.lastSaved': isSaved ? pendingVictim : null,
+        'activeActivity.nightReportCause': nightReportCause,
+        'activeActivity.nightReportNote': nightReportNote,
         'activeActivity.phase': 'ended',
         'activeActivity.winner': winner,
         'activeActivity.phaseEndsAt': null,
@@ -821,6 +843,8 @@ export default function MafiaGame() {
       'activeActivity.players': updatedPlayers,
       'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
       'activeActivity.lastSaved': isSaved ? pendingVictim : null,
+      'activeActivity.nightReportCause': nightReportCause,
+      'activeActivity.nightReportNote': nightReportNote,
       'activeActivity.readyVotes': [],
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
@@ -1474,16 +1498,28 @@ export default function MafiaGame() {
   if (gameState?.phase === 'day-discussion') {
     const spectator = isSpectator();
     const victimUid = gameState.pendingVictim;
-    const saved = gameState.lastSaved && gameState.lastSaved === victimUid;
+    const saved = Boolean(gameState.lastSaved && gameState.lastSaved === victimUid);
     const victim = victimUid ? gameState.players.find(p => p.uid === victimUid) : null;
+    const nightReportCause = gameState.nightReportCause || '';
+    const defaultReportNote = victim
+      ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
+      : '';
+    const nightReportNote = gameState.nightReportNote || defaultReportNote;
     const livingPlayers = gameState.players.filter((p) => p.isAlive && p.role !== 'narrator');
     const readyVotes = gameState.readyVotes || [];
     const canReadyToVote = !spectator && isCurrentUserAlive() && myRole !== 'narrator';
     const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-        <div className="w-full max-w-md mx-auto">
+      <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div
+          className="pointer-events-none fixed inset-0 z-0"
+          style={{
+            background: 'radial-gradient(circle at center, rgba(127, 29, 29, 0) 58%, rgba(127, 29, 29, 0.13) 100%)'
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-md mx-auto">
           {spectator && myRole === 'narrator' && (
             <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
               <div className="text-4xl mb-2">🎙️</div>
@@ -1491,76 +1527,97 @@ export default function MafiaGame() {
             </div>
           )}
           {spectator && myRole !== 'narrator' && (
-            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">💀</div>
-              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
+            <div
+              className="relative overflow-hidden bg-[#f4ecd9] border border-[#d4c8b1] rounded-lg p-4 mb-6 text-center shadow-lg"
+              style={{ transform: 'rotate(-2deg)' }}
+            >
+              <h2 className="text-black font-serif font-black text-lg uppercase tracking-wide">YOU HAVE BEEN ELIMINATED</h2>
+              <div
+                className="pointer-events-none absolute right-3 bottom-2 border-2 border-[#7f1d1d] px-2 py-1 text-[#7f1d1d] text-xs font-black uppercase tracking-widest opacity-85"
+                style={{ transform: 'rotate(-15deg)' }}
+              >
+                DECEASED
+              </div>
             </div>
           )}
 
           <div className="text-center mb-6">
-            <div className="text-6xl mb-4">👀</div>
-            <h1 className="text-white text-3xl font-black mb-4">Open your eyes!</h1>
+            <h1 className="text-[#f5f0e8] text-3xl font-black mb-4">Open your eyes!</h1>
             
             {victim && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-4">
-                {saved ? (
-                  <>
-                    <p className="text-white text-lg mb-2">
-                      <span className="font-bold">{victim.displayName}</span> was attacked last night
-                    </p>
-                    <p className="text-green-400 text-lg font-bold">
-                      But the doctor saved them! 🏥
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-white text-lg">
-                      <span className="font-bold">{victim.displayName}</span> was killed last night
-                    </p>
-                    <p className="text-red-400 text-2xl mt-2">🔪</p>
-                  </>
-                )}
+              <div className="relative overflow-hidden bg-[#f5f0e8] border border-[#ccbda6] rounded-xl p-5 mb-5 text-left shadow-lg">
+                <p className="font-mono text-[#3f3127] text-xs font-bold tracking-[0.2em]">INCIDENT REPORT</p>
+                <div className="border-t border-[#665341] my-3" />
+                <p className="font-mono text-[#2f241c] text-sm">
+                  {saved ? 'PATIENT' : 'VICTIM'}: {victim.displayName}
+                </p>
+                <p className="font-mono text-[#2f241c] text-sm mt-1">
+                  CAUSE: {nightReportCause}
+                </p>
+                <p className="font-mono text-[#2f241c] text-sm mt-1">
+                  STATUS: {saved ? 'ALIVE' : 'DECEASED'}
+                </p>
+                <p className="font-mono text-[#2f241c] text-sm mt-1">
+                  NOTE: {nightReportNote}
+                </p>
+                <div className="border-t border-[#665341] my-3" />
+
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div
+                    className={`border-4 px-4 py-1 text-3xl font-black uppercase tracking-widest opacity-35 ${
+                      saved ? 'border-green-700 text-green-700' : 'border-red-800 text-red-800'
+                    }`}
+                    style={{ transform: 'rotate(-15deg)' }}
+                  >
+                    {saved ? 'ALIVE' : 'DECEASED'}
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="bg-violet-900/50 border border-violet-700 rounded-xl p-4 mb-6">
-              <h2 className="text-white text-2xl font-bold mb-2">DISCUSS 💬</h2>
+            <div
+              className="bg-[#f5f0e8] border border-[#ccbda6] rounded-xl p-4 mb-6 text-[#3f3127] shadow-lg"
+              style={{ transform: 'rotate(-1deg)' }}
+            >
+              <h2 className="font-serif text-2xl font-black uppercase tracking-wide">THE MORNING AFTER</h2>
+              <div className="border-t border-[#665341] my-2" />
               {timeLeft !== null && (
-                <p className="text-violet-300 font-mono text-3xl">{formatTime(timeLeft)}</p>
+                <p className="font-serif text-4xl font-black">{formatTime(timeLeft)}</p>
               )}
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-            <h3 className="text-white font-semibold mb-3">Alive Players</h3>
+          <div className="bg-[#f5f0e8] border border-[#ccbda6] rounded-xl p-4 shadow-lg">
+            <h3 className="text-[#3f3127] font-mono font-bold uppercase tracking-widest">SUSPECTS</h3>
+            <div className="border-t border-red-700/70 mt-2 mb-3" />
             <div className="space-y-2">
               {livingPlayers.map((player) => (
                 <div
                   key={player.uid}
-                  className="flex items-center gap-3 bg-slate-700/50 rounded-lg p-3"
+                  className="flex items-center gap-3 bg-[#eee2ce] border border-[#d9cab4] rounded-lg p-3"
                 >
                   {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                  <span className="text-white">{player.displayName}</span>
+                  <span className="text-[#2f241c] font-mono">{player.displayName}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mt-4">
+          <div className="bg-[#f5f0e8] border border-[#ccbda6] rounded-xl p-4 mt-4 shadow-lg">
             <button
               onClick={handleReadyToVote}
               disabled={!canReadyToVote || myReadyClicked}
-              className={`w-full py-3 rounded-xl font-bold transition-colors ${
+              className={`w-full py-3 rounded-md font-black uppercase tracking-wide border-2 transition-colors ${
                 canReadyToVote
                   ? myReadyClicked
-                    ? 'bg-slate-700 text-slate-300 cursor-not-allowed'
-                    : 'bg-violet-600 hover:bg-violet-500 text-white'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    ? 'border-[#8a7a68] bg-[#ddd1be] text-[#7f7262] cursor-not-allowed'
+                    : 'border-[#4a3a2b] bg-[#f5f0e8] hover:bg-[#ece0cc] text-[#3f3127]'
+                  : 'border-[#9f917f] bg-[#e6dac8] text-[#8a7e6e] cursor-not-allowed'
               }`}
             >
-              {myReadyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
+              {myReadyClicked ? 'BALLOT READY' : 'READY TO VOTE'}
             </button>
-            <p className="text-slate-300 text-sm mt-3">
+            <p className="text-[#4b3b2d] text-sm mt-3 font-mono">
               Ready: {readyVotes.length}/{livingPlayers.length}
             </p>
             <div className="flex items-center justify-center mt-3">
@@ -1573,14 +1630,14 @@ export default function MafiaGame() {
                       key={player.uid}
                       src={playerPhoto}
                       alt={player.displayName}
-                      className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
+                      className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
                       title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
                     />
                   ) : (
                     <div
                       key={player.uid}
-                      className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
-                        isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
+                      className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
+                        isReady ? `${player.avatarColor} text-white` : 'bg-[#b3a694] text-[#665b4e]'
                       }`}
                       title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
                     >
@@ -1594,7 +1651,7 @@ export default function MafiaGame() {
             {isHost && (
               <button
                 onClick={handleStartVotingNow}
-                className="w-full mt-3 bg-white hover:bg-slate-200 text-slate-900 font-bold py-3 rounded-xl transition-colors"
+                className="w-full mt-3 border-2 border-[#4a3a2b] bg-[#f5f0e8] hover:bg-[#ece0cc] text-[#3f3127] font-black uppercase tracking-wide py-3 rounded-md transition-colors"
               >
                 Start Voting
               </button>
@@ -1610,6 +1667,7 @@ export default function MafiaGame() {
     const spectator = isSpectator();
     const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true && player.role !== 'narrator');
     const dayVotes = gameState.dayVotes || {};
+    const formattedTimeLeft = timeLeft !== null ? formatTime(timeLeft) : null;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -1627,13 +1685,6 @@ export default function MafiaGame() {
             </div>
           )}
 
-          <div className="text-center mb-6">
-            <h1 className="text-white text-2xl font-black mb-2">Vote to Eliminate 🗳️</h1>
-            {timeLeft !== null && (
-              <p className="text-violet-400 font-mono text-3xl">{formatTime(timeLeft)}</p>
-            )}
-          </div>
-
           <VotingPanel
             players={selectablePlayers}
             votes={dayVotes}
@@ -1641,6 +1692,9 @@ export default function MafiaGame() {
             isHost={isHost}
             onVote={handleSubmitDayVote}
             onEndVoting={handleEndDayVoting}
+            theme="ballot"
+            timerLabel="TIME REMAINING"
+            timerValue={formattedTimeLeft}
           />
         </div>
       </div>
