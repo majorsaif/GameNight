@@ -195,31 +195,31 @@ export default function VotingPanel({
                   rowDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#efe3cf]'
                 }`}
               >
-                <div className="flex items-start gap-3">
-                  <span
-                    className={`mt-1 inline-flex h-6 w-6 items-center justify-center border-2 text-sm font-black ${
-                      isSelected
-                        ? 'bg-[#3f3127] border-[#3f3127] text-[#f5f0e8]'
-                        : 'bg-[#fdfaf3] border-[#5a4837] text-transparent'
-                    }`}
-                  >
-                    {isSelected ? '✓' : ''}
-                  </span>
+                <div className="flex flex-col gap-2">
+                  <div className="flex items-center gap-3">
+                    <span
+                      className={`inline-flex h-6 w-6 items-center justify-center border-2 text-sm font-black ${
+                        isSelected
+                          ? 'bg-[#3f3127] border-[#3f3127] text-[#f5f0e8]'
+                          : 'bg-[#fdfaf3] border-[#5a4837] text-transparent'
+                      }`}
+                    >
+                      {isSelected ? '✓' : ''}
+                    </span>
 
-                  {candidatePhoto ? (
-                    <img
-                      src={candidatePhoto}
-                      alt={getPlayerName(player)}
-                      className="w-11 h-11 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className="w-11 h-11 rounded-full border border-[#bfae95] bg-[#decfb8] flex items-center justify-center text-[#3f3127] font-bold">
-                      {getInitials(getPlayerName(player))}
-                    </div>
-                  )}
+                    {candidatePhoto ? (
+                      <img
+                        src={candidatePhoto}
+                        alt={getPlayerName(player)}
+                        className="w-11 h-11 rounded-full object-cover"
+                      />
+                    ) : (
+                      <div className="w-11 h-11 rounded-full border border-[#bfae95] bg-[#decfb8] flex items-center justify-center text-[#3f3127] font-bold">
+                        {getInitials(getPlayerName(player))}
+                      </div>
+                    )}
 
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
+                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
                       <span className="text-[#2f241c] font-mono font-semibold truncate">
                         {getPlayerName(player)} {isCurrentUser ? '(You)' : ''}
                       </span>
@@ -227,33 +227,33 @@ export default function VotingPanel({
                         {candidateVoteCount}
                       </span>
                     </div>
+                  </div>
 
-                    <div className="flex items-center mt-2 min-h-7">
-                      {candidateVotes.map((voter, voteIndex) => {
-                        const voterUid = getPlayerUid(voter);
-                        const voterPhoto = getPlayerPhoto(voter);
-                        const overlapClass = voteIndex > 0 ? '-ml-2' : '';
-                        const voterName = getPlayerName(voter);
+                  <div className="flex items-center min-h-7 pl-[5.75rem]">
+                    {candidateVotes.map((voter, voteIndex) => {
+                      const voterUid = getPlayerUid(voter);
+                      const voterPhoto = getPlayerPhoto(voter);
+                      const overlapClass = voteIndex > 0 ? '-ml-2' : '';
+                      const voterName = getPlayerName(voter);
 
-                        return voterPhoto ? (
-                          <img
-                            key={voterUid}
-                            src={voterPhoto}
-                            alt={voterName}
-                            className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] object-cover ${overlapClass}`}
-                            title={voterName}
-                          />
-                        ) : (
-                          <div
-                            key={voterUid}
-                            className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] bg-[#d7c8b2] flex items-center justify-center text-[10px] text-[#3f3127] font-bold ${overlapClass}`}
-                            title={voterName}
-                          >
-                            {getInitials(voterName)}
-                          </div>
-                        );
-                      })}
-                    </div>
+                      return voterPhoto ? (
+                        <img
+                          key={voterUid}
+                          src={voterPhoto}
+                          alt={voterName}
+                          className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] object-cover ${overlapClass}`}
+                          title={voterName}
+                        />
+                      ) : (
+                        <div
+                          key={voterUid}
+                          className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] bg-[#d7c8b2] flex items-center justify-center text-[10px] text-[#3f3127] font-bold ${overlapClass}`}
+                          title={voterName}
+                        >
+                          {getInitials(voterName)}
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               </button>
