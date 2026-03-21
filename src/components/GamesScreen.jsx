@@ -365,7 +365,7 @@ export default function GamesScreen() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white text-2xl font-bold">🔪 Mafia Setup</h2>
+              <h2 className="text-white text-2xl font-bold">Mafia Setup</h2>
               <button
                 onClick={() => setShowMafiaSetup(false)}
                 className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
@@ -479,7 +479,7 @@ export default function GamesScreen() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white text-2xl font-bold">🕵️ Spyfall Setup</h2>
+              <h2 className="text-white text-2xl font-bold">Spyfall Setup</h2>
               <button
                 onClick={() => setShowSpyfallSetup(false)}
                 className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
@@ -512,7 +512,7 @@ export default function GamesScreen() {
               <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-white font-semibold">Show Roles 🎭</label>
+                    <label className="text-white font-semibold">Show Roles</label>
                     <p className="text-slate-400 text-sm">Each non-spy player sees their role at the location</p>
                   </div>
                   <button
@@ -558,7 +558,7 @@ export default function GamesScreen() {
         <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
           <div className="bg-slate-800 border border-slate-700 rounded-2xl p-6 max-w-md w-full max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-6">
-              <h2 className="text-white text-2xl font-bold">🕵️ Word Imposter Setup</h2>
+              <h2 className="text-white text-2xl font-bold">Word Imposter Setup</h2>
               <button
                 onClick={() => setShowWordImposterSetup(false)}
                 className="text-slate-400 hover:text-slate-300 transition-colors text-2xl"
@@ -591,7 +591,7 @@ export default function GamesScreen() {
               <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
                 <div className="flex items-center justify-between">
                   <div>
-                    <label className="text-white font-semibold">Show Category 📂</label>
+                    <label className="text-white font-semibold">Show Category</label>
                     <p className="text-slate-400 text-sm">Imposters see the category but not the word</p>
                   </div>
                   <button

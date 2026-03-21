@@ -268,7 +268,7 @@ export default function SpyfallLobbyCard({
           <div>
             <div className="flex items-center justify-between">
               <div>
-                <label className="text-white font-semibold text-sm">Show Roles 🎭</label>
+                <label className="text-white font-semibold text-sm">Show Roles</label>
                 <p className="text-slate-400 text-xs">Non-spy players see their role at the location</p>
               </div>
               <button
