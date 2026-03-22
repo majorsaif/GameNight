@@ -19,6 +19,7 @@ export default function WordImposterGame() {
   const [showWord, setShowWord] = useState(false);
   const [countdown, setCountdown] = useState(null);
   const [readyClicked, setReadyClicked] = useState(false);
+  const [guessConfirmed, setGuessConfirmed] = useState(false);
   const countdownRef = useRef(null);
 
   // Subscribe to game state via onSnapshot
@@ -51,6 +52,9 @@ export default function WordImposterGame() {
   useEffect(() => {
     if (gameState?.phase === 'word-reveal') {
       setShowWord(false);
+    }
+    if (gameState?.phase === 'imposter-guess') {
+      setGuessConfirmed(false);
     }
   }, [gameState?.phase]);
 
@@ -219,6 +223,8 @@ export default function WordImposterGame() {
   const handleImposterGuessResult = async (_guessedCorrect) => {
     if (!isHost) return;
 
+    setGuessConfirmed(true);
+
     const roomRef = doc(db, 'rooms', roomId);
     await updateDoc(roomRef, {
       'activeActivity.phase': 'ended',
@@ -308,33 +314,47 @@ export default function WordImposterGame() {
         <div className="w-full max-w-md">
           <div className="text-center">
             {!showWord ? (
-              <div>
-                <div className="text-6xl mb-6">🤫</div>
-                <h1 className="text-white text-2xl font-bold mb-4">Your word is hidden</h1>
-                <p className="text-slate-400 mb-8">Tap Reveal to see your card</p>
+              <div className="bg-white rounded-lg p-8" style={{ backgroundColor: '#1e2a3a', border: '1px solid #2a3a5a' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-6" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Eyes Only</p>
+                <div className="flex items-center justify-center mb-6">
+                  <div style={{ width: '52px', height: '52px', borderRadius: '50%', border: '3px dashed #999', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <span style={{ fontFamily: "'Special Elite', monospace", fontSize: '11px', color: '#999', textAlign: 'center', fontWeight: 'bold' }}>TOP<br/>SECRET</span>
+                  </div>
+                </div>
+                <p style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', fontSize: '14px', marginBottom: '8px' }}>Your word is sealed</p>
+                <p style={{ color: '#aaa', fontSize: '12px', marginBottom: '16px' }}>Tap reveal when alone</p>
                 <button
                   onClick={() => setShowWord(true)}
-                  className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
+                  className="w-full font-bold py-3 rounded transition-colors"
+                  style={{ backgroundColor: '#1a2540', color: '#4dd9ac', fontFamily: "'Special Elite', monospace" }}
                 >
                   Reveal
                 </button>
               </div>
             ) : isImposter && gameState.rules?.imposterNoWord ? (
-              <div className="bg-gradient-to-br from-red-900 to-red-800 border-2 border-red-600/50 rounded-2xl p-8 text-center">
-                <div className="text-8xl mb-6">🕵️</div>
-                <h1 className="text-white text-3xl font-black mb-4">You are the IMPOSTER 🕵️</h1>
-                <p className="text-red-200 mt-3 text-lg">You have no word — blend in!</p>
-              </div>
-            ) : (
-              <div className="bg-gradient-to-br from-teal-900 to-cyan-900 border-2 border-teal-500/30 rounded-2xl p-8">
-                <p className="text-teal-200 text-sm mb-2">Your word is:</p>
-                <h1 className="text-white text-4xl font-black mb-2">
-                  {isImposter ? (gameState.imposterWord || gameState.word) : gameState.word}
-                </h1>
-                <p className="text-teal-300 text-sm mb-6">Category: {gameState.category}</p>
+              <div className="rounded-lg p-8 text-center" style={{ backgroundColor: '#1e2a3a', border: '1px solid #2a3a5a' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>You are</p>
+                <h1 className="text-4xl font-black mb-4" style={{ fontFamily: "'Special Elite', monospace", color: '#c8d0e0' }}>IMPOSTER</h1>
+                <p className="text-base mb-6" style={{ fontFamily: "'Permanent Marker', cursive", color: '#c9384c' }}>No word to hide</p>
                 <button
                   onClick={() => setShowWord(false)}
-                  className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition-colors"
+                  className="w-full font-bold py-3 rounded"
+                  style={{ backgroundColor: '#1a1a2e22', border: '1px solid #1a1a2e33', borderRadius: '4px', fontFamily: "'Special Elite', monospace", color: '#1a1a2e' }}
+                >
+                  Hide
+                </button>
+              </div>
+            ) : (
+              <div className="rounded-lg p-8" style={{ backgroundColor: '#1e2a3a', border: '1px solid #2a3a5a' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Your Word Is</p>
+                <h1 className="font-black mb-2" style={{ fontFamily: "'Special Elite', cursive", fontSize: '2rem', color: '#c8d0e0' }}>
+                  {isImposter ? (gameState.imposterWord || gameState.word) : gameState.word}
+                </h1>
+                <p className="text-sm mb-6" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa' }}>Category: {gameState.category}</p>
+                <button
+                  onClick={() => setShowWord(false)}
+                  className="w-full font-bold py-3 rounded"
+                  style={{ backgroundColor: '#1a1a2e22', border: '1px solid #1a1a2e33', borderRadius: '4px', fontFamily: "'Special Elite', monospace", color: '#c8d0e0' }}
                 >
                   Hide
                 </button>
@@ -346,13 +366,14 @@ export default function WordImposterGame() {
             {isHost ? (
               <button
                 onClick={handleStartDescribing}
-                className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
+                className="w-full font-bold py-4 rounded-xl transition-colors"
+                style={{ backgroundColor: '#e8e4dc', color: '#1a1a2e', fontFamily: "'Special Elite', monospace", border: 'none' }}
               >
-                Start Describing 🗣️
+                Start Describing
               </button>
             ) : (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                <p className="text-slate-300">Waiting for host to start describing...</p>
+              <div className="rounded-xl p-4 text-center" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+                <p style={{ color: '#8899bb', fontFamily: "'Special Elite', monospace", fontSize: '12px' }}>Waiting for host to start</p>
               </div>
             )}
           </div>
@@ -364,7 +385,7 @@ export default function WordImposterGame() {
   // === DESCRIBING PHASE ===
   if (gameState.phase === 'describing') {
     const startingPlayer = getPlayerByUid(gameState.startingPlayerId);
-    const directionText = gameState.direction === 'clockwise' ? 'Going clockwise ➡️' : 'Going anticlockwise ⬅️';
+    const directionText = gameState.direction === 'clockwise' ? 'clockwise' : 'anticlockwise';
     const showCountdown = countdown !== null && countdown > 0;
     const readyVotes = gameState.readyVotes || [];
 
@@ -372,43 +393,42 @@ export default function WordImposterGame() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
           <div className="text-center">
-            {showCountdown ? (
-              <>
-                <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-8 mb-6">
-                  <div className="text-4xl mb-4">🗣️</div>
-                  <h2 className="text-white text-xl font-bold mb-2">
-                    {startingPlayer?.displayName} is going first!
-                  </h2>
-                  <p className="text-teal-300 text-lg mb-6">{directionText}</p>
-                  <div className="text-white text-7xl font-black animate-pulse">{countdown}</div>
-                </div>
-              </>
-            ) : (
-              <>
-                <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-8 mb-6">
-                  <div className="text-4xl mb-4">🗣️</div>
-                  <h2 className="text-white text-xl font-bold mb-2">
-                    {startingPlayer?.displayName} is going first!
-                  </h2>
-                  <p className="text-teal-300 text-lg mb-4">{directionText}</p>
-                  <p className="text-slate-300 text-sm">Describe the word now</p>
-                </div>
-              </>
-            )}
+            <div className="rounded-xl p-6 mb-6" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+              <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Order of Play</p>
+              <div className="mb-3" style={{ display: 'inline-block', backgroundColor: '#4dd9ac22', border: '1px solid #4dd9ac55', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', color: '#4dd9ac', fontFamily: "'Special Elite', monospace" }}>
+                {directionText}
+              </div>
+              <h2 className="text-white font-bold mb-2" style={{ fontSize: '15px' }}>
+                {startingPlayer?.displayName}
+              </h2>
+              {showCountdown && (
+                <div className="text-white text-5xl font-black mt-3 animate-pulse">{countdown}</div>
+              )}
+              {!showCountdown && (
+                <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>Describe the word — one clue each</p>
+              )}
+            </div>
 
             <button
               onClick={handleReadyToVote}
               disabled={readyClicked}
-              className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 disabled:from-slate-700 disabled:to-slate-700 text-white disabled:text-slate-300 font-bold py-4 rounded-xl transition-colors"
+              className="w-full font-bold py-4 rounded-xl transition-colors mb-3"
+              style={{
+                backgroundColor: readyClicked ? '#1a2540' : '#e8e4dc',
+                color: readyClicked ? '#8899bb' : '#1a1a2e',
+                fontFamily: "'Special Elite', monospace",
+                border: 'none',
+                opacity: readyClicked ? 0.7 : 1
+              }}
             >
-              {readyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
+              {readyClicked ? 'Ready ✅' : 'Ready to Vote'}
             </button>
 
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center mt-3">
-              <p className="text-slate-300 text-sm">
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+              <p style={{ color: '#8899bb', fontFamily: "'Special Elite', monospace", fontSize: '12px', marginBottom: '12px' }}>
                 Ready: {readyVotes.length}/{(gameState.players ?? []).length}
               </p>
-              <div className="flex items-center justify-center mt-3">
+              <div className="flex items-center justify-center">
                 {(gameState.players ?? []).map((player, index) => {
                   const isReady = readyVotes.includes(player.uid);
                   const playerPhoto = getPlayerPhoto(player);
@@ -440,7 +460,8 @@ export default function WordImposterGame() {
             {isHost && (
               <button
                 onClick={handleStartVotingNow}
-                className="w-full mt-3 bg-white hover:bg-slate-200 text-slate-900 font-bold py-4 rounded-xl transition-colors"
+                className="w-full mt-3 font-bold py-4 rounded-xl transition-colors"
+                style={{ backgroundColor: '#e8e4dc', color: '#1a1a2e', fontFamily: "'Special Elite', monospace", border: 'none' }}
               >
                 Start Voting
               </button>
@@ -487,55 +508,98 @@ export default function WordImposterGame() {
     const primaryImposter = imposterPlayers[0];
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 text-center mb-6">
-            <p className="text-slate-300 text-sm font-semibold uppercase tracking-wide mb-2">Winner</p>
-            <p className="text-white text-2xl font-black">
-              {gameState.winner === 'town' ? 'Town' : 'Imposter'}
-            </p>
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4 overflow-y-auto">
+        <div className="w-full max-w-md py-6">
+          {/* Lineup Card */}
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a', borderTop: '5px solid #8a2a3a' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', letterSpacing: '0.15em' }}>Suspect Identified</p>
+            <h2 className="font-bold mb-1" style={{ fontFamily: "'Special Elite', monospace", fontSize: '1.5rem', color: '#c8d0e0' }}>
+              {primaryImposter?.displayName || 'The imposter'}
+            </h2>
+            <p style={{ fontFamily: "'Permanent Marker', cursive", fontSize: '1.2rem', color: '#c9384c' }}>The Imposter</p>
           </div>
 
-          <div className="text-center -mt-2 mb-6">
-            <p className="text-white text-2xl font-black">
-              {primaryImposter?.displayName || 'The imposter'} is the imposter
-            </p>
+          {/* Evidence Board */}
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a' }}>
+            <div className="grid grid-cols-2 gap-4">
+              {/* Town Word */}
+              <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9a84c', position: 'relative' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Town Word</p>
+                {!guessConfirmed ? (
+                  <>
+                    <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#9a9080', position: 'relative', zIndex: 10 }}>???</p>
+                    <div style={{
+                      position: 'absolute',
+                      inset: 0,
+                      backgroundImage: 'repeating-linear-gradient(45deg, transparent, transparent 4px, #ccc5bb44 4px, #ccc5bb44 5px)',
+                      borderRadius: '4px'
+                    }}></div>
+                  </>
+                ) : (
+                  <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c8d0e0' }}>{gameState.word}</p>
+                )}
+              </div>
+              {/* Imposter Word */}
+              <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9384c' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Imposter Word</p>
+                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c9384c' }}>{gameState.imposterWord ? gameState.imposterWord : '—'}</p>
+              </div>
+            </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 text-center mb-6">
-            <p className="text-slate-200 text-lg font-semibold">
-              Can {primaryImposter?.displayName || 'the imposter'} guess the town's word?
-            </p>
-            {!isHost ? (
-              <p className="text-slate-400 text-sm mt-2">
-                Waiting for {primaryImposter?.displayName || 'the imposter'} to guess...
-              </p>
-            ) : null}
+          {/* Guess Prompt */}
+          <div className="rounded-xl p-6 mb-6" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+            {isHost ? (
+              <>
+                <p className="text-white font-bold mb-2" style={{ fontSize: '14px' }}>Can {primaryImposter?.displayName || 'the imposter'} guess the town's word?</p>
+                <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '11px' }}>Waiting for {primaryImposter?.displayName || 'the imposter'} to guess aloud...</p>
+              </>
+            ) : isImposter ? (
+              <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>Say your guess out loud...</p>
+            ) : (
+              <div style={{ backgroundColor: '#12192e', padding: '12px', borderRadius: '8px' }}>
+                <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>Waiting for host to confirm...</p>
+              </div>
+            )}
           </div>
 
-          {isHost ? (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6">
-              <p className="text-white font-semibold text-center mb-4">
-                Did the imposter guess the word correctly?
-              </p>
+          {/* Host Confirm Buttons */}
+          {isHost && (
+            <div className="rounded-xl p-6" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+              <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '10px', marginBottom: '12px', textAlign: 'center', letterSpacing: '0.15em' }}>DID THEY GET IT RIGHT?</p>
               <div className="flex gap-3">
                 <button
                   onClick={() => handleImposterGuessResult(true)}
-                  className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl transition-colors"
+                  className="flex-1 font-bold py-4 rounded transition-colors"
+                  style={{
+                    backgroundColor: '#1e6a40',
+                    border: '1px solid #2a9d60',
+                    color: '#7effc4',
+                    fontFamily: "'Special Elite', monospace",
+                    borderRadius: '8px'
+                  }}
                 >
                   Correct
                 </button>
                 <button
                   onClick={() => handleImposterGuessResult(false)}
-                  className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl transition-colors"
+                  className="flex-1 font-bold py-4 rounded transition-colors"
+                  style={{
+                    backgroundColor: '#6a1e1e',
+                    border: '1px solid #9d2a2a',
+                    color: '#ffb0b0',
+                    fontFamily: "'Special Elite', monospace",
+                    borderRadius: '8px'
+                  }}
                 >
                   Incorrect
                 </button>
               </div>
             </div>
-          ) : (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-slate-300">Waiting for host to confirm the imposter's guess...</p>
+          )}
+          {!isHost && (
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+              <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>Waiting for host to confirm...</p>
             </div>
           )}
         </div>
@@ -548,65 +612,78 @@ export default function WordImposterGame() {
     const winner = gameState.winner;
     const imposterPlayers = (gameState.imposterIds || []).map(uid => getPlayerByUid(uid)).filter(Boolean);
     const eliminatedPlayer = getPlayerByUid(gameState.eliminatedUid);
+    const townWonByImposterVotedOut = winner === 'town' && eliminatedPlayer && gameState.imposterIds?.includes(eliminatedPlayer.uid);
+    const imposterWon = winner === 'imposter';
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-        <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-8">
-            {winner === 'town' ? <div className="text-8xl mb-4">🎉</div> : null}
-            <h1 className="text-white text-4xl font-black mb-2">
-              {winner === 'town' ? 'Town wins!' : 'Imposter wins!'}
-            </h1>
-            {winner === 'town' && eliminatedPlayer && gameState.imposterIds?.includes(eliminatedPlayer.uid) && (
-              <p className="text-green-400 text-lg">The imposter was voted out!</p>
-            )}
-            {winner === 'imposter' && eliminatedPlayer && !gameState.imposterIds?.includes(eliminatedPlayer.uid) && (
-              <p className="text-red-400 text-lg">An innocent player was voted out!</p>
-            )}
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-center justify-center overflow-y-auto">
+        <div className="w-full max-w-md py-6">
+          {/* Winner Banner */}
+          <div className="text-center mb-6">
+            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.2em' }}>Winner</p>
+            <p style={{
+              fontFamily: "'Special Elite', cursive",
+              fontSize: '2rem',
+              color: winner === 'town' ? '#4dd9ac' : '#c9384c',
+              marginBottom: '8px'
+            }}>
+              {winner === 'town' ? 'Town' : 'Imposter'}
+            </p>
+            <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>
+              {townWonByImposterVotedOut ? 'The imposter was voted out' : imposterWon ? 'The town was deceived' : ''}
+            </p>
           </div>
 
-          <div className="bg-teal-900/50 border border-teal-700 rounded-2xl p-6 text-center mb-6">
-            <p className="text-teal-200 text-sm mb-1">Town word</p>
-            <h2 className="text-white text-3xl font-black">{gameState.word}</h2>
-            <p className="text-teal-300 text-sm mt-1">Category: {gameState.category}</p>
-            {gameState.imposterWord ? (
-              <div className="mt-4 border-t border-teal-700 pt-4">
-                <p className="text-teal-200 text-sm mb-1">Imposter word</p>
-                <h3 className="text-white text-2xl font-black">{gameState.imposterWord}</h3>
+          {/* Lineup Card */}
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a', borderTop: '5px solid #8a2a3a' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', letterSpacing: '0.15em' }}>Suspect Identified</p>
+            <h2 className="font-bold mb-1" style={{ fontFamily: "'Special Elite', monospace", fontSize: '1.5rem', color: '#c8d0e0' }}>
+              {imposterPlayers[0]?.displayName || 'The imposter'}
+            </h2>
+            <p style={{ fontFamily: "'Permanent Marker', cursive", fontSize: '1.2rem', color: '#c9384c' }}>The Imposter</p>
+          </div>
+
+          {/* Evidence Board - Always Fully Revealed */}
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a' }}>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9a84c' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Town Word</p>
+                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c8d0e0' }}>{gameState.word}</p>
               </div>
-            ) : null}
+              <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9384c' }}>
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Imposter Word</p>
+                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c9384c' }}>{gameState.imposterWord ? gameState.imposterWord : '—'}</p>
+              </div>
+            </div>
           </div>
 
-          {/* Reveal imposters */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 mb-6">
-            <h3 className="text-white font-semibold mb-4">
-              {imposterPlayers.length === 1 ? 'The Imposter was' : 'The Imposters were'}
-            </h3>
-            <div className="space-y-3">
+          {/* Agents Assigned */}
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', letterSpacing: '0.15em' }}>Agents Assigned</p>
+            <div className="space-y-2">
               {gameState.players.map((player) => {
                 const wasImposter = gameState.imposterIds?.includes(player.uid);
                 const playerPhoto = getPlayerPhoto(player);
                 return (
                   <div
                     key={player.uid}
-                    className={`flex items-center justify-between rounded-lg p-3 ${
-                      wasImposter ? 'bg-red-900/30' : 'bg-slate-700/50'
-                    }`}
+                    className="rounded flex items-center justify-between p-3"
+                    style={{
+                      backgroundColor: wasImposter ? '#c9384c18' : 'transparent',
+                    }}
                   >
                     <div className="flex items-center gap-3">
                       {playerPhoto ? (
-                        <img src={playerPhoto} alt={player.displayName} className="w-10 h-10 rounded-full object-cover" />
+                        <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
                       ) : (
-                        <div className={`w-10 h-10 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-sm`}>
+                        <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-xs`}>
                           {getInitials(player.displayName)}
                         </div>
                       )}
-                      <span className="text-white">{player.displayName}</span>
+                      <span style={{ fontFamily: "'Special Elite', monospace", color: '#c8d0e0', fontSize: '14px' }}>{player.displayName}</span>
                     </div>
                     {wasImposter ? (
-                      <span className="text-sm font-semibold uppercase text-red-400">
-                        IMPOSTER
-                      </span>
+                      <span style={{ fontFamily: "'Permanent Marker', cursive", fontSize: '12px', color: '#c9384c' }}>IMPOSTER</span>
                     ) : null}
                   </div>
                 );
@@ -618,20 +695,22 @@ export default function WordImposterGame() {
             <div className="space-y-3">
               <button
                 onClick={handlePlayAgain}
-                className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
+                className="w-full font-bold py-4 rounded-xl transition-colors"
+                style={{ backgroundColor: '#e8e4dc', color: '#1a1a2e', fontFamily: "'Special Elite', monospace", border: 'none' }}
               >
-                Play Again 🔄
+                Play Again
               </button>
               <button
                 onClick={handleEndGame}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 rounded-xl transition-colors"
+                className="w-full font-bold py-4 rounded-xl transition-colors"
+                style={{ backgroundColor: '#1a2540', color: '#8899bb', fontFamily: "'Special Elite', monospace", border: '1px solid #2a3a5a' }}
               >
                 End Game
               </button>
             </div>
           ) : (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-slate-300">Thanks for playing!</p>
+            <div className="rounded-xl p-4 text-center" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+              <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>Thanks for playing!</p>
             </div>
           )}
         </div>
