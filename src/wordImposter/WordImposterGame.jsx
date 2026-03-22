@@ -530,13 +530,13 @@ export default function WordImposterGame() {
                   onClick={() => handleImposterGuessResult(true)}
                   className="flex-1 bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl transition-colors"
                 >
-                  They got it right ✅
+                  Correct
                 </button>
                 <button
                   onClick={() => handleImposterGuessResult(false)}
                   className="flex-1 bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl transition-colors"
                 >
-                  They got it wrong ❌
+                  Incorrect
                 </button>
               </div>
             </div>
