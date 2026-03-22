@@ -30,7 +30,8 @@ export default function GamesScreen() {
   const [imposterCountError, setImposterCountError] = useState('');
   const [wordImposterRules, setWordImposterRules] = useState({
     imposterCount: '1',
-    showCategory: true
+    showCategory: true,
+    imposterNoWord: false
   });
   const [showSpyfallSetup, setShowSpyfallSetup] = useState(false);
   const [spyCountError, setSpyCountError] = useState('');
@@ -171,7 +172,8 @@ export default function GamesScreen() {
 
     const finalRules = {
       imposterCount: imposterCount,
-      showCategory: wordImposterRules.showCategory
+      showCategory: wordImposterRules.showCategory,
+      imposterNoWord: !!wordImposterRules.imposterNoWord
     };
 
     await updateDoc(roomRef, {
@@ -182,6 +184,7 @@ export default function GamesScreen() {
         players: gamePlayers,
         lobbyPlayers: [user.id],
         word: null,
+        imposterWord: null,
         category: null,
         imposterIds: [],
         startingPlayerId: null,
@@ -610,6 +613,26 @@ export default function GamesScreen() {
                   >
                     <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
                       wordImposterRules.showCategory ? 'translate-x-6' : 'translate-x-1'
+                    }`} />
+                  </button>
+                </div>
+              </div>
+
+              {/* Imposter gets no word */}
+              <div>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <label className="text-white font-semibold">Imposter gets no word</label>
+                    <p className="text-slate-400 text-sm">When off, imposter receives a different related word</p>
+                  </div>
+                  <button
+                    onClick={() => setWordImposterRules({ ...wordImposterRules, imposterNoWord: !wordImposterRules.imposterNoWord })}
+                    className={`w-12 h-7 rounded-full transition-colors ${
+                      wordImposterRules.imposterNoWord ? 'bg-teal-600' : 'bg-slate-600'
+                    }`}
+                  >
+                    <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                      wordImposterRules.imposterNoWord ? 'translate-x-6' : 'translate-x-1'
                     }`} />
                   </button>
                 </div>

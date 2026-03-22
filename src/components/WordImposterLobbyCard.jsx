@@ -28,7 +28,8 @@ export default function WordImposterLobbyCard({
   const [showRulesEdit, setShowRulesEdit] = useState(showRulesModal);
   const [editRules, setEditRules] = useState({
     imposterCount: String(gameRules.imposterCount || '1'),
-    showCategory: gameRules.showCategory !== false
+    showCategory: gameRules.showCategory !== false,
+    imposterNoWord: gameRules.imposterNoWord === true
   });
   const [imposterCountError, setImposterCountError] = useState('');
 
@@ -36,7 +37,8 @@ export default function WordImposterLobbyCard({
     if (showRulesEdit) {
       setEditRules({
         imposterCount: String(gameRules.imposterCount || '1'),
-        showCategory: gameRules.showCategory !== false
+        showCategory: gameRules.showCategory !== false,
+        imposterNoWord: gameRules.imposterNoWord === true
       });
       setImposterCountError('');
     }
@@ -131,7 +133,7 @@ export default function WordImposterLobbyCard({
     const imposterIds = shuffled.slice(0, imposterCount).map(p => p.uid);
 
     // Pick random word
-    const { word, category } = getRandomWord();
+    const { word, related, category } = getRandomWord();
 
     // Random starting player and direction
     const startingPlayer = playersToAssign[Math.floor(Math.random() * playersToAssign.length)];
@@ -139,12 +141,14 @@ export default function WordImposterLobbyCard({
 
     const finalRules = {
       imposterCount: imposterCount,
-      showCategory: editRules.showCategory
+      showCategory: editRules.showCategory,
+      imposterNoWord: !!editRules.imposterNoWord
     };
 
     await updateDoc(roomRef, {
       'activeActivity.phase': 'word-reveal',
       'activeActivity.word': word,
+      'activeActivity.imposterWord': finalRules.imposterNoWord ? null : related,
       'activeActivity.category': category,
       'activeActivity.rules': finalRules,
       'activeActivity.imposterIds': imposterIds,
@@ -190,7 +194,8 @@ export default function WordImposterLobbyCard({
     const roomRef = doc(db, 'rooms', roomId);
     const finalRules = {
       imposterCount: imposterCount,
-      showCategory: editRules.showCategory
+      showCategory: editRules.showCategory,
+      imposterNoWord: !!editRules.imposterNoWord
     };
 
     await updateDoc(roomRef, {
@@ -343,6 +348,25 @@ export default function WordImposterLobbyCard({
                     >
                       <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
                         editRules.showCategory ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-white font-semibold text-sm">Imposter gets no word</label>
+                      <p className="text-slate-400 text-xs">When off, imposter receives a different related word</p>
+                    </div>
+                    <button
+                      onClick={() => setEditRules({ ...editRules, imposterNoWord: !editRules.imposterNoWord })}
+                      className={`w-12 h-7 rounded-full transition-colors ${
+                        editRules.imposterNoWord ? 'bg-teal-600' : 'bg-slate-600'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                        editRules.imposterNoWord ? 'translate-x-6' : 'translate-x-1'
                       }`} />
                     </button>
                   </div>
