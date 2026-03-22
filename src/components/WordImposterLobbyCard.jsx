@@ -3,6 +3,7 @@ import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 import { getRandomWord } from '../wordImposter/words';
+import AnimatedNumberStepper from './AnimatedNumberStepper';
 
 export default function WordImposterLobbyCard({
   lobbyState,
@@ -232,6 +233,7 @@ export default function WordImposterLobbyCard({
   };
 
   const joinedPlayers = allPlayers.filter((player) => lobbyPlayers.includes(player.uid));
+  const maxStepperCount = Math.max(1, Math.floor(lobbyPlayers.length * 0.25));
   const dossierCardClass = 'relative overflow-hidden bg-[#d4b483] border border-[#8b6b3f] rounded-2xl p-5 text-left shadow-xl';
   const stampButtonClass = 'w-full bg-[#efe4cc]/90 hover:bg-[#f5ecd9] text-[#3a2a1a] border-2 border-dashed border-[#4a3622] font-mono uppercase tracking-widest font-semibold py-2.5 rounded-md transition-colors text-xs';
   const startEnabledClass = 'w-full bg-[#f7ecd8] hover:bg-[#fbf3e4] text-red-700 border-2 border-red-700 font-mono uppercase tracking-widest font-black py-3 rounded-md transition-colors text-xs';
@@ -311,17 +313,16 @@ export default function WordImposterLobbyCard({
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Number of Imposters</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={editRules.imposterCount}
-                    onChange={(e) => {
-                      setEditRules({ ...editRules, imposterCount: e.target.value });
+                  <label className="text-white font-semibold block mb-2 text-sm text-center">Number of Imposters</label>
+                  <AnimatedNumberStepper
+                    value={parseInt(editRules.imposterCount, 10) || 1}
+                    min={1}
+                    max={maxStepperCount}
+                    valueWidthClass="w-16"
+                    onChange={(nextValue) => {
+                      setEditRules({ ...editRules, imposterCount: String(nextValue) });
                       setImposterCountError('');
                     }}
-                    placeholder="Enter number"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                   />
                   {imposterCountError && (
                     <p className="text-red-400 text-sm mt-2">{imposterCountError}</p>

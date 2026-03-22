@@ -8,6 +8,7 @@ import LOCATIONS from '../spyfall/locations';
 import mafiaButtonImage from '../assets/mafia-button.png';
 import wordImposterButtonImage from '../assets/word-imposter-button.png';
 import spyfallButtonImage from '../assets/spyfall-button.png';
+import AnimatedNumberStepper from './AnimatedNumberStepper';
 
 export default function GamesScreen() {
   const navigate = useNavigate();
@@ -38,6 +39,20 @@ export default function GamesScreen() {
     showRoles: true,
     discussionTime: 8
   });
+
+  const roomPlayerCount = room?.players?.length || 0;
+  const maxStepperCount = Math.max(1, Math.floor(roomPlayerCount * 0.25));
+
+  const formatMinutes = (value) => `${value} min`;
+  const formatVotingTime = (stepValue) => {
+    if (stepValue === 1) return '30s';
+    const minutes = stepValue / 2;
+    if (Number.isInteger(minutes)) {
+      return `${minutes} min`;
+    }
+    const wholeMinutes = Math.floor(minutes);
+    return `${wholeMinutes} min 30s`;
+  };
 
   const handleSpyfallClick = () => {
     if (!isHost) {
@@ -376,26 +391,51 @@ export default function GamesScreen() {
 
             <div className="space-y-4">
               {/* Number of mafias */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-                <label className="text-white font-semibold block mb-2">Number of Mafias</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={rules.mafiaCount}
-                  onChange={(e) => {
-                    setRules({ ...rules, mafiaCount: e.target.value });
+              <div>
+                <label className="text-white font-semibold block mb-2 text-center">Number of Mafias</label>
+                <AnimatedNumberStepper
+                  value={parseInt(rules.mafiaCount, 10) || 1}
+                  min={1}
+                  max={maxStepperCount}
+                  valueWidthClass="w-16"
+                  onChange={(nextValue) => {
+                    setRules({ ...rules, mafiaCount: String(nextValue) });
                     setMafiaCountError('');
                   }}
-                  placeholder="Enter number"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                 />
                 {mafiaCountError && (
                   <p className="text-red-400 text-sm mt-2">{mafiaCountError}</p>
                 )}
               </div>
 
+              {/* Discussion time */}
+              <div>
+                <label className="text-white font-semibold block mb-2 text-center">Discussion Time</label>
+                <AnimatedNumberStepper
+                  value={rules.discussionTime}
+                  min={1}
+                  max={10}
+                  valueWidthClass="w-28"
+                  formatValue={formatMinutes}
+                  onChange={(nextValue) => setRules({ ...rules, discussionTime: nextValue })}
+                />
+              </div>
+
+              {/* Voting time */}
+              <div>
+                <label className="text-white font-semibold block mb-2 text-center">Voting Time</label>
+                <AnimatedNumberStepper
+                  value={Math.max(1, Math.min(6, Math.round((rules.votingTime || 0.5) * 2)))}
+                  min={1}
+                  max={6}
+                  valueWidthClass="w-28"
+                  formatValue={formatVotingTime}
+                  onChange={(nextValue) => setRules({ ...rules, votingTime: nextValue / 2 })}
+                />
+              </div>
+
               {/* Doctor */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+              <div>
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-white font-semibold">Doctor 🩺</label>
@@ -415,7 +455,7 @@ export default function GamesScreen() {
               </div>
 
               {/* Detective */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+              <div>
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-white font-semibold">Detective 🔍</label>
@@ -432,35 +472,6 @@ export default function GamesScreen() {
                     }`} />
                   </button>
                 </div>
-              </div>
-
-              {/* Discussion time */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-                <label className="text-white font-semibold block mb-2">Discussion Time</label>
-                <select
-                  value={rules.discussionTime}
-                  onChange={(e) => setRules({ ...rules, discussionTime: parseInt(e.target.value) })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                >
-                  <option value={1}>1 minute</option>
-                  <option value={2}>2 minutes</option>
-                  <option value={3}>3 minutes</option>
-                  <option value={5}>5 minutes</option>
-                </select>
-              </div>
-
-              {/* Voting time */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-                <label className="text-white font-semibold block mb-2">Voting Time</label>
-                <select
-                  value={rules.votingTime}
-                  onChange={(e) => setRules({ ...rules, votingTime: parseFloat(e.target.value) })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                >
-                  <option value={0.5}>30 seconds</option>
-                  <option value={1}>1 minute</option>
-                  <option value={2}>2 minutes</option>
-                </select>
               </div>
 
               <button
@@ -490,26 +501,38 @@ export default function GamesScreen() {
 
             <div className="space-y-4">
               {/* Number of spies */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-                <label className="text-white font-semibold block mb-2">Number of Spies</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={spyfallRules.spyCount}
-                  onChange={(e) => {
-                    setSpyfallRules({ ...spyfallRules, spyCount: e.target.value });
+              <div>
+                <label className="text-white font-semibold block mb-2 text-center">Number of Spies</label>
+                <AnimatedNumberStepper
+                  value={parseInt(spyfallRules.spyCount, 10) || 1}
+                  min={1}
+                  max={maxStepperCount}
+                  valueWidthClass="w-16"
+                  onChange={(nextValue) => {
+                    setSpyfallRules({ ...spyfallRules, spyCount: String(nextValue) });
                     setSpyCountError('');
                   }}
-                  placeholder="Enter number"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                 />
                 {spyCountError && (
                   <p className="text-red-400 text-sm mt-2">{spyCountError}</p>
                 )}
               </div>
 
+              {/* Discussion time */}
+              <div>
+                <label className="text-white font-semibold block mb-2 text-center">Discussion Time</label>
+                <AnimatedNumberStepper
+                  value={spyfallRules.discussionTime}
+                  min={1}
+                  max={10}
+                  valueWidthClass="w-28"
+                  formatValue={formatMinutes}
+                  onChange={(nextValue) => setSpyfallRules({ ...spyfallRules, discussionTime: nextValue })}
+                />
+              </div>
+
               {/* Show roles */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+              <div>
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-white font-semibold">Show Roles</label>
@@ -526,20 +549,6 @@ export default function GamesScreen() {
                     }`} />
                   </button>
                 </div>
-              </div>
-
-              {/* Discussion time */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-                <label className="text-white font-semibold block mb-2">Discussion Time</label>
-                <select
-                  value={spyfallRules.discussionTime}
-                  onChange={(e) => setSpyfallRules({ ...spyfallRules, discussionTime: parseInt(e.target.value) })}
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                >
-                  <option value={5}>5 minutes</option>
-                  <option value={8}>8 minutes</option>
-                  <option value={10}>10 minutes</option>
-                </select>
               </div>
 
               <button
@@ -569,18 +578,17 @@ export default function GamesScreen() {
 
             <div className="space-y-4">
               {/* Number of imposters */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
-                <label className="text-white font-semibold block mb-2">Number of Imposters</label>
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  value={wordImposterRules.imposterCount}
-                  onChange={(e) => {
-                    setWordImposterRules({ ...wordImposterRules, imposterCount: e.target.value });
+              <div>
+                <label className="text-white font-semibold block mb-2 text-center">Number of Imposters</label>
+                <AnimatedNumberStepper
+                  value={parseInt(wordImposterRules.imposterCount, 10) || 1}
+                  min={1}
+                  max={maxStepperCount}
+                  valueWidthClass="w-16"
+                  onChange={(nextValue) => {
+                    setWordImposterRules({ ...wordImposterRules, imposterCount: String(nextValue) });
                     setImposterCountError('');
                   }}
-                  placeholder="Enter number"
-                  className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                 />
                 {imposterCountError && (
                   <p className="text-red-400 text-sm mt-2">{imposterCountError}</p>
@@ -588,7 +596,7 @@ export default function GamesScreen() {
               </div>
 
               {/* Show category to imposter */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+              <div>
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-white font-semibold">Show Category</label>
