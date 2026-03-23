@@ -496,6 +496,7 @@ export default function WordImposterGame() {
             isHost={isHost}
             onVote={handleConfirmVote}
             onEndVoting={handleEndVoting}
+            theme="ballot"
           />
         </div>
       </div>

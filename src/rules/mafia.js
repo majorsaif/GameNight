@@ -5,6 +5,10 @@ const mafiaRules = {
 
   sections: [
     {
+      heading: 'Sound Effects',
+      text: 'This game uses sound effects to signal each phase of the night. When the first night begins, you will have 7 seconds to turn up your volume before the night sounds start. Make sure your volume is on before the host starts the game.',
+    },
+    {
       heading: 'Roles',
       items: [
         { role: 'Mafia', text: 'Knows who the other Mafia members are. Each night, the Mafia collectively chooses one player to eliminate.' },

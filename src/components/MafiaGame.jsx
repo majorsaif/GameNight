@@ -467,11 +467,15 @@ export default function MafiaGame() {
     
     const roomRef = doc(db, 'rooms', roomId);
 
+    // First night includes a 7s volume prompt + 5s eyes-closed. Later nights stay 5s.
+    const isFirstNight = (gameState?.roundNumber ?? 1) === 1;
+    const nightEyesClosedDurationMs = isFirstNight ? 12000 : 5000;
+
     await updateDoc(roomRef, {
       'activeActivity.phase': 'night-eyes-closed',
       'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': 5000,
-      'activeActivity.phaseEndsAt': Date.now() + 5000,
+      'activeActivity.phaseDurationMs': nightEyesClosedDurationMs,
+      'activeActivity.phaseEndsAt': Date.now() + nightEyesClosedDurationMs,
       'activeActivity.nightVotes': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
@@ -480,7 +484,7 @@ export default function MafiaGame() {
       lastActivity: serverTimestamp()
     });
 
-    // After 3 seconds, advance to mafia turn
+    // Advance to mafia turn after the current night-eyes-closed duration.
     setTimeout(async () => {
       await updateDoc(roomRef, {
         'activeActivity.phase': 'night-mafia',
@@ -491,7 +495,7 @@ export default function MafiaGame() {
         'activeActivity.nightVotes': {},
         lastActivity: serverTimestamp()
       });
-    }, 3000);
+    }, nightEyesClosedDurationMs);
   };
 
   const handleVotePlayer = async (targetUid) => {
@@ -1191,6 +1195,28 @@ export default function MafiaGame() {
 
   // Night phase - Eyes closed
   if (gameState?.phase?.startsWith('night-eyes-closed')) {
+    const isInitialNight = gameState?.phase === 'night-eyes-closed';
+    const isFirstRound = (gameState?.roundNumber ?? 1) === 1;
+    const showFirstNightVolumePrompt =
+      isInitialNight &&
+      isFirstRound &&
+      timeLeft !== null &&
+      timeLeft > 5;
+
+    if (showFirstNightVolumePrompt) {
+      const volumeCountdown = Math.max(1, Math.min(7, timeLeft - 5));
+      return (
+        <div className="min-h-screen bg-black p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-9xl mb-8">🔊</div>
+            <h1 className="text-white text-4xl font-black mb-4">Turn up your volume</h1>
+            <p className="text-slate-300 text-lg mb-12">Sound effects are coming...</p>
+            <div className="text-6xl font-bold text-slate-400">{volumeCountdown}</div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="min-h-screen bg-black p-6">
         <div className="w-full max-w-md mx-auto">
