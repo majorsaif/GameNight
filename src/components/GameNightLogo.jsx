@@ -1,32 +1,14 @@
 import React from 'react';
+import logo from '../assets/itsgamesnight-logo.png';
 
 export default function GameNightLogo({ size = 'compact', className = '' }) {
-  const isHero = size === 'hero';
-  const wrapperClasses = isHero
-    ? 'inline-flex items-center justify-center'
-    : 'inline-flex items-center';
-  const paddingLeftClasses = isHero ? 'pl-5 sm:pl-6' : 'pl-2 sm:pl-3';
-  const itsClasses = isHero
-    ? 'text-xl sm:text-2xl'
-    : 'text-[9px] sm:text-[10px]';
-  const itsPositionClasses = isHero
-    ? 'left-5 bottom-2 sm:left-6 sm:bottom-2'
-    : 'left-2.5 bottom-1.5';
-  const wordClasses = isHero
-    ? 'text-5xl sm:text-6xl'
-    : 'text-xl sm:text-2xl';
+  const logoSizeClass = size === 'hero' ? 'h-20' : 'h-8';
 
   return (
-    <div className={`${wrapperClasses} ${className}`.trim()}>
-      <div className={`relative flex items-center ${paddingLeftClasses}`}>
-        <span className={`absolute ${itsPositionClasses} rotate-[-78deg] origin-bottom-left whitespace-nowrap leading-none font-black italic tracking-tight text-violet-400 ${itsClasses}`}>
-          ITS
-        </span>
-        <div className={`flex items-baseline leading-none ${wordClasses} font-black tracking-tight`}>
-          <span className="text-white italic">GAMES</span>
-          <span className="text-violet-400 italic">NIGHT</span>
-        </div>
-      </div>
-    </div>
+    <img
+      src={logo}
+      alt="Its Games Night"
+      className={`${logoSizeClass} w-auto ${className}`.trim()}
+    />
   );
 }

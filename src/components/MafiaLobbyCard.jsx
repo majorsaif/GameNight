@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from 'firebase/firestore';
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
+import AnimatedNumberStepper from './AnimatedNumberStepper';
 
 export default function MafiaLobbyCard({ 
   lobbyState, 
@@ -231,6 +232,17 @@ export default function MafiaLobbyCard({
   };
 
   const joinedPlayers = allPlayers.filter((player) => lobbyPlayers.includes(player.uid));
+  const maxStepperCount = Math.max(1, Math.floor(lobbyPlayers.length * 0.25));
+  const formatMinutes = (value) => `${value} min`;
+  const formatVotingTime = (stepValue) => {
+    if (stepValue === 1) return '30s';
+    const minutes = stepValue / 2;
+    if (Number.isInteger(minutes)) {
+      return `${minutes} min`;
+    }
+    const wholeMinutes = Math.floor(minutes);
+    return `${wholeMinutes} min 30s`;
+  };
   const dossierCardClass = 'relative overflow-hidden bg-[#d4b483] border border-[#8b6b3f] rounded-2xl p-5 text-left shadow-xl';
   const stampButtonClass = 'w-full bg-[#efe4cc]/90 hover:bg-[#f5ecd9] text-[#3a2a1a] border-2 border-dashed border-[#4a3622] font-mono uppercase tracking-widest font-semibold py-2.5 rounded-md transition-colors text-xs';
   const startEnabledClass = 'w-full bg-[#f7ecd8] hover:bg-[#fbf3e4] text-red-700 border-2 border-red-700 font-mono uppercase tracking-widest font-black py-3 rounded-md transition-colors text-xs';
@@ -310,21 +322,44 @@ export default function MafiaLobbyCard({
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Number of Mafias</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={editRules.mafiaCount}
-                    onChange={(e) => {
-                      setEditRules({ ...editRules, mafiaCount: e.target.value });
+                  <label className="text-white font-semibold block mb-2 text-sm text-center">Number of Mafias</label>
+                  <AnimatedNumberStepper
+                    value={parseInt(editRules.mafiaCount, 10) || 1}
+                    min={1}
+                    max={maxStepperCount}
+                    valueWidthClass="w-16"
+                    onChange={(nextValue) => {
+                      setEditRules({ ...editRules, mafiaCount: String(nextValue) });
                       setMafiaCountError('');
                     }}
-                    placeholder="Enter number"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                   />
                   {mafiaCountError && (
                     <p className="text-red-400 text-sm mt-2">{mafiaCountError}</p>
                   )}
+                </div>
+
+                <div>
+                  <label className="text-white font-semibold block mb-2 text-sm text-center">Discussion Time</label>
+                  <AnimatedNumberStepper
+                    value={editRules.discussionTime}
+                    min={1}
+                    max={10}
+                    valueWidthClass="w-28"
+                    formatValue={formatMinutes}
+                    onChange={(nextValue) => setEditRules({ ...editRules, discussionTime: nextValue })}
+                  />
+                </div>
+
+                <div>
+                  <label className="text-white font-semibold block mb-2 text-sm text-center">Voting Time</label>
+                  <AnimatedNumberStepper
+                    value={Math.max(1, Math.min(6, Math.round((editRules.votingTime || 0.5) * 2)))}
+                    min={1}
+                    max={6}
+                    valueWidthClass="w-28"
+                    formatValue={formatVotingTime}
+                    onChange={(nextValue) => setEditRules({ ...editRules, votingTime: nextValue / 2 })}
+                  />
                 </div>
 
                 <div>
@@ -351,33 +386,6 @@ export default function MafiaLobbyCard({
                     Detective 🔍
                   </label>
                   <p className="text-slate-400 text-xs">Can investigate one player each night</p>
-                </div>
-
-                <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Discussion Time</label>
-                  <select
-                    value={editRules.discussionTime}
-                    onChange={(e) => setEditRules({ ...editRules, discussionTime: parseInt(e.target.value) })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                  >
-                    <option value={1}>1 minute</option>
-                    <option value={2}>2 minutes</option>
-                    <option value={3}>3 minutes</option>
-                    <option value={5}>5 minutes</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Voting Time</label>
-                  <select
-                    value={editRules.votingTime}
-                    onChange={(e) => setEditRules({ ...editRules, votingTime: parseFloat(e.target.value) })}
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-                  >
-                    <option value={0.5}>30 seconds</option>
-                    <option value={1}>1 minute</option>
-                    <option value={2}>2 minutes</option>
-                  </select>
                 </div>
               </div>
 

@@ -661,13 +661,13 @@ export default function SpyfallGame() {
                     onClick={() => handleSpyGuessResult(true)}
                     className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl transition-colors"
                   >
-                    Got it right ✅
+                    Correct
                   </button>
                   <button
                     onClick={() => handleSpyGuessResult(false)}
                     className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl transition-colors"
                   >
-                    Got it wrong ❌
+                    Incorrect
                   </button>
                 </div>
               ) : (

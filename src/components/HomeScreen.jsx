@@ -364,6 +364,11 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
         </div>
       )}
 
+      {/* Rules Section (shown only when activity is active) */}
+      {hasActiveActivity && (
+        <GameRulesSection activityType={room.activeActivity?.type} />
+      )}
+
       {/* Active Activity Section */}
       {hasActiveActivity && (
         <div>

@@ -8,6 +8,12 @@ import { getInitials, getAvatarColor } from '../utils/avatar';
 import { throttledUpdate } from '../utils/firestoreThrottle';
 import { MAFIA_SOUNDS, playSound } from '../mafia/sounds';
 import VotingPanel from './VotingPanel';
+import mafiaRoleCardImage from '../assets/mafia/mafia-card.png';
+import detectiveRoleCardImage from '../assets/mafia/detective-card.png';
+import doctorRoleCardImage from '../assets/mafia/doctor-card.png';
+import civilianRoleCardImage from '../assets/mafia/civilian-card.png';
+import cardBackImage from '../assets/mafia/card-back.png';
+import { KILL_CAUSES, SAVE_CAUSES, KILL_NOTE, SAVE_NOTE } from '../mafia/causes';
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -19,11 +25,15 @@ export default function MafiaGame() {
   const [gameStateLoaded, setGameStateLoaded] = useState(false);
   const [myRole, setMyRole] = useState(null);
   const [showRole, setShowRole] = useState(false);
+  const [isRoleCardFrontVisible, setIsRoleCardFrontVisible] = useState(false);
+  const [isCardFlipping, setIsCardFlipping] = useState(false);
+  const [cardRotationY, setCardRotationY] = useState(0);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [hasConfirmed, setHasConfirmed] = useState(false);
   const [readyClicked, setReadyClicked] = useState(false);
   const [timeLeft, setTimeLeft] = useState(null);
   const phaseTimerRef = useRef(null);
+  const flipTimeoutsRef = useRef([]);
   const phaseTimeoutTriggeredRef = useRef(false);
   const timerJumpedRef = useRef(false);
   const previousPhaseRef = useRef(null);
@@ -105,6 +115,11 @@ export default function MafiaGame() {
     return null;
   };
 
+  const getRandomCause = (causes) => {
+    if (!Array.isArray(causes) || causes.length === 0) return null;
+    return causes[Math.floor(Math.random() * causes.length)];
+  };
+
   // Subscribe to game state and detect phase changes for sounds
   useEffect(() => {
     if (!roomId) return;
@@ -181,6 +196,23 @@ export default function MafiaGame() {
       }
     }
   }, [gameState, user]);
+
+  useEffect(() => {
+    return () => {
+      flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    };
+  }, []);
+
+  useEffect(() => {
+    if (gameState?.phase === 'roles') return;
+
+    flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    flipTimeoutsRef.current = [];
+    setShowRole(false);
+    setIsRoleCardFrontVisible(false);
+    setIsCardFlipping(false);
+    setCardRotationY(0);
+  }, [gameState?.phase]);
 
   // Host auto-advances discussion if all living players are ready to vote
   useEffect(() => {
@@ -397,12 +429,37 @@ export default function MafiaGame() {
   // stale version that sees gameState === null.
   handlePhaseTimeoutRef.current = handlePhaseTimeout;
 
+  const runRoleCardFlip = (nextFrontVisible) => {
+    if (isCardFlipping) return;
+
+    flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
+    flipTimeoutsRef.current = [];
+
+    setIsCardFlipping(true);
+    setCardRotationY(90);
+
+    const halfwayTimeout = setTimeout(() => {
+      setIsRoleCardFrontVisible(nextFrontVisible);
+      setCardRotationY(0);
+    }, 300);
+
+    const completeTimeout = setTimeout(() => {
+      setShowRole(nextFrontVisible);
+      setIsCardFlipping(false);
+      flipTimeoutsRef.current = [];
+    }, 600);
+
+    flipTimeoutsRef.current = [halfwayTimeout, completeTimeout];
+  };
+
   const handleRevealRole = () => {
-    setShowRole(true);
+    if (showRole || isCardFlipping) return;
+    runRoleCardFlip(true);
   };
 
   const handleHideRole = () => {
-    setShowRole(false);
+    if (!showRole || isCardFlipping) return;
+    runRoleCardFlip(false);
   };
 
   const startNightPhase = async () => {
@@ -410,12 +467,17 @@ export default function MafiaGame() {
     
     const roomRef = doc(db, 'rooms', roomId);
 
+    // First night includes a 7s volume prompt + 5s eyes-closed. Later nights stay 5s.
+    const isFirstNight = (gameState?.roundNumber ?? 1) === 1;
+    const nightEyesClosedDurationMs = isFirstNight ? 12000 : 5000;
+
     await updateDoc(roomRef, {
       'activeActivity.phase': 'night-eyes-closed',
       'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': 5000,
-      'activeActivity.phaseEndsAt': Date.now() + 5000,
+      'activeActivity.phaseDurationMs': nightEyesClosedDurationMs,
+      'activeActivity.phaseEndsAt': Date.now() + nightEyesClosedDurationMs,
       'activeActivity.nightVotes': {},
+      'activeActivity.mafiaSelections': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
       'activeActivity.doctorSave': null,
@@ -423,7 +485,7 @@ export default function MafiaGame() {
       lastActivity: serverTimestamp()
     });
 
-    // After 3 seconds, advance to mafia turn
+    // Advance to mafia turn after the current night-eyes-closed duration.
     setTimeout(async () => {
       await updateDoc(roomRef, {
         'activeActivity.phase': 'night-mafia',
@@ -432,9 +494,10 @@ export default function MafiaGame() {
         'activeActivity.phaseEndsAt': Date.now() + 30000,
         'activeActivity.confirmedVotes': [],
         'activeActivity.nightVotes': {},
+        'activeActivity.mafiaSelections': {},
         lastActivity: serverTimestamp()
       });
-    }, 3000);
+    }, nightEyesClosedDurationMs);
   };
 
   const handleVotePlayer = async (targetUid) => {
@@ -443,6 +506,16 @@ export default function MafiaGame() {
     if (myRole === 'narrator') return;
     
     setSelectedPlayer(targetUid);
+
+    if (gameState.phase === 'night-mafia' && myRole === 'mafia' && !isHost) {
+      const roomRef = doc(db, 'rooms', roomId);
+      await updateDoc(roomRef, {
+        [`activeActivity.mafiaSelections.${user.id}`]: {
+          targetUid,
+          confirmed: false
+        }
+      });
+    }
   };
 
   const handleConfirmVote = async () => {
@@ -453,12 +526,20 @@ export default function MafiaGame() {
     const roomRef = doc(db, 'rooms', roomId);
     const voteField = gameState.phase === 'day-vote' ? 'dayVotes' : 'nightVotes';
     const confirmedVotes = Array.from(new Set([...(gameState.confirmedVotes || []), user.id]));
-
-    await updateDoc(roomRef, {
+    const updates = {
       [`activeActivity.${voteField}.${user.id}`]: selectedPlayer,
       'activeActivity.confirmedVotes': confirmedVotes,
       lastActivity: serverTimestamp()
-    });
+    };
+
+    if (gameState.phase === 'night-mafia' && myRole === 'mafia' && !isHost) {
+      updates[`activeActivity.mafiaSelections.${user.id}`] = {
+        targetUid: selectedPlayer,
+        confirmed: true
+      };
+    }
+
+    await updateDoc(roomRef, updates);
 
     setHasConfirmed(true);
 
@@ -635,6 +716,7 @@ export default function MafiaGame() {
       'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
       'activeActivity.confirmedVotes': [],
       'activeActivity.nightVotes': {},
+      'activeActivity.mafiaSelections': {},
       lastActivity: serverTimestamp()
     });
   };
@@ -735,6 +817,20 @@ export default function MafiaGame() {
     const pendingVictim = gameState?.pendingVictim || null;
     const doctorAlive = currentPlayers.some((player) => player.role === 'doctor' && player.isAlive);
     const isSaved = Boolean(activeRules.doctor && doctorAlive && pendingVictim && gameState?.doctorSave === pendingVictim);
+    const victimPlayer = pendingVictim ? currentPlayers.find((player) => player.uid === pendingVictim) : null;
+
+    let nightReportCause = null;
+    let nightReportNote = null;
+
+    if (victimPlayer) {
+      if (isSaved) {
+        nightReportCause = getRandomCause(SAVE_CAUSES);
+        nightReportNote = SAVE_NOTE.replace('[Name]', victimPlayer.displayName);
+      } else {
+        nightReportCause = getRandomCause(KILL_CAUSES);
+        nightReportNote = KILL_NOTE;
+      }
+    }
 
     const updatedPlayers = currentPlayers.map((player) => {
       if (!pendingVictim || isSaved) return player;
@@ -750,6 +846,8 @@ export default function MafiaGame() {
         'activeActivity.players': updatedPlayers,
         'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
         'activeActivity.lastSaved': isSaved ? pendingVictim : null,
+        'activeActivity.nightReportCause': nightReportCause,
+        'activeActivity.nightReportNote': nightReportNote,
         'activeActivity.phase': 'ended',
         'activeActivity.winner': winner,
         'activeActivity.phaseEndsAt': null,
@@ -770,6 +868,8 @@ export default function MafiaGame() {
       'activeActivity.players': updatedPlayers,
       'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
       'activeActivity.lastSaved': isSaved ? pendingVictim : null,
+      'activeActivity.nightReportCause': nightReportCause,
+      'activeActivity.nightReportNote': nightReportNote,
       'activeActivity.readyVotes': [],
       'activeActivity.nightVotes': {},
       lastActivity: serverTimestamp()
@@ -935,8 +1035,27 @@ export default function MafiaGame() {
   const isSpectator = () => {
     if (!myRole) return true;
     const me = gameState?.players?.find(p => p.uid === user?.id);
-    return me && !me.isAlive;
+    return Boolean(me && !me.isAlive);
   };
+
+  const isDeadSpectator = () => {
+    const me = gameState?.players?.find((player) => player.uid === user?.id);
+    return Boolean(me && !me.isAlive && me.role !== 'narrator');
+  };
+
+  const renderEliminatedBanner = () => (
+    <div className="relative overflow-hidden bg-[#e3d2ad] border border-[#c4ab78] rounded-lg p-4 mb-6 text-center shadow-lg">
+      <h2 className="text-black font-serif font-black text-lg uppercase tracking-wide">
+        YOU HAVE BEEN
+        <span
+          className="inline-block align-middle ml-2 border-2 border-[#6d1010] px-2 py-1 text-[#6d1010] text-xs font-black uppercase tracking-widest opacity-95"
+          style={{ transform: 'rotate(10deg)' }}
+        >
+          ELIMINATED
+        </span>
+      </h2>
+    </div>
+  );
 
   const getRoleIcon = (role) => {
     switch (role) {
@@ -953,18 +1072,18 @@ export default function MafiaGame() {
     }
   };
 
-  const getRoleColor = (role) => {
+  const getRoleCardImage = (role) => {
     switch (role) {
       case 'mafia':
-        return 'from-red-900 to-red-800';
-      case 'civilian':
-        return 'from-blue-900 to-blue-800';
-      case 'doctor':
-        return 'from-green-900 to-green-800';
+        return mafiaRoleCardImage;
       case 'detective':
-        return 'from-yellow-900 to-yellow-800';
+        return detectiveRoleCardImage;
+      case 'doctor':
+        return doctorRoleCardImage;
+      case 'civilian':
+        return civilianRoleCardImage;
       default:
-        return 'from-slate-900 to-slate-800';
+        return cardBackImage;
     }
   };
 
@@ -1024,50 +1143,67 @@ export default function MafiaGame() {
       );
     }
 
+    const displayedRoleCardImage = isRoleCardFrontVisible ? getRoleCardImage(myRole) : cardBackImage;
+
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          {!showRole ? (
-            <div className="text-center">
-              <div className="text-6xl mb-6">🤫</div>
-              <h1 className="text-white text-2xl font-bold mb-4">Your role is hidden</h1>
-              <p className="text-slate-400 mb-8">Tap Reveal to see your role</p>
+          <div className="text-center">
+            <h1 className="text-white text-2xl font-bold mb-6">For your eyes only</h1>
+
+            <div
+              className="mx-auto w-[200px] h-[280px]"
+              style={{
+                perspective: '600px',
+                WebkitPerspective: '600px'
+              }}
+            >
+              <img
+                src={displayedRoleCardImage}
+                alt={showRole ? `${myRole} role card` : 'Mafia role card back'}
+                className="w-full h-full rounded-2xl border border-white/20 object-cover shadow-2xl"
+                style={{
+                  transform: `rotateY(${cardRotationY}deg)`,
+                  WebkitTransform: `rotateY(${cardRotationY}deg)`,
+                  transition: 'transform 0.3s ease',
+                  WebkitTransition: '-webkit-transform 0.3s ease, transform 0.3s ease',
+                  transformStyle: 'preserve-3d',
+                  WebkitTransformStyle: 'preserve-3d',
+                  backfaceVisibility: 'hidden',
+                  WebkitBackfaceVisibility: 'hidden'
+                }}
+              />
+            </div>
+
+            {!showRole ? (
               <button
                 onClick={handleRevealRole}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+                disabled={isCardFlipping}
+                className="w-full max-w-[18rem] mx-auto h-14 mt-6 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
               >
                 Reveal Role
               </button>
-            </div>
-          ) : (
-            <div className={`bg-gradient-to-br ${getRoleColor(myRole)} border-2 border-white/20 rounded-2xl p-8 text-center`}>
-              <div className="text-8xl mb-6">{getRoleIcon(myRole)}</div>
-              <h1 className="text-white text-3xl font-black uppercase mb-4">{myRole}</h1>
-              <p className="text-white/80 mb-8">
-                {myRole === 'mafia' && 'Kill townspeople without getting caught'}
-                {myRole === 'civilian' && 'Find and eliminate the mafia'}
-                {myRole === 'doctor' && 'Save players from the mafia each night'}
-                {myRole === 'detective' && 'Investigate players to find the mafia'}
-              </p>
+            ) : (
               <button
                 onClick={handleHideRole}
-                className="w-full bg-white/20 hover:bg-white/30 text-white font-bold py-3 rounded-xl transition-colors"
+                disabled={isCardFlipping}
+                className="w-full max-w-[18rem] mx-auto h-14 mt-6 flex items-center justify-center bg-white/20 hover:bg-white/30 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
               >
-                Hide Role
+                Hide
               </button>
-            </div>
-          )}
+            )}
+          </div>
 
           <div className="mt-6">
             {isHost ? (
               <button
                 onClick={startNightPhase}
-                className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+                className="w-full max-w-[18rem] mx-auto h-14 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold rounded-xl transition-colors"
               >
-                Start Night 🌙
+                Start Night
               </button>
             ) : (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
+              <div className="w-full max-w-[18rem] mx-auto h-14 bg-slate-800/50 border border-slate-700 rounded-xl flex items-center justify-center text-center px-3">
                 <p className="text-slate-300">Waiting for host to start the night...</p>
               </div>
             )}
@@ -1079,14 +1215,42 @@ export default function MafiaGame() {
 
   // Night phase - Eyes closed
   if (gameState?.phase?.startsWith('night-eyes-closed')) {
+    const isInitialNight = gameState?.phase === 'night-eyes-closed';
+    const isFirstRound = (gameState?.roundNumber ?? 1) === 1;
+    const showFirstNightVolumePrompt =
+      isInitialNight &&
+      isFirstRound &&
+      timeLeft !== null &&
+      timeLeft > 5;
+
+    if (showFirstNightVolumePrompt) {
+      const volumeCountdown = Math.max(1, Math.min(7, timeLeft - 5));
+      return (
+        <div className="min-h-screen bg-black p-6 flex items-center justify-center">
+          <div className="text-center">
+            <div className="text-9xl mb-8">🔊</div>
+            <h1 className="text-white text-4xl font-black mb-4">Turn up your volume</h1>
+            <p className="text-slate-300 text-lg mb-12">Sound effects are coming...</p>
+            <div className="text-6xl font-bold text-slate-400">{volumeCountdown}</div>
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="text-8xl mb-6">😴</div>
-          <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-          {timeLeft !== null && (
-            <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
-          )}
+      <div className="min-h-screen bg-black p-6">
+        <div className="w-full max-w-md mx-auto">
+          {isDeadSpectator() && renderEliminatedBanner()}
+
+          <div className="min-h-[70vh] flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-8xl mb-6">😴</div>
+              <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+              {timeLeft !== null && (
+                <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
+              )}
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1105,10 +1269,7 @@ export default function MafiaGame() {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
-            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">💀</div>
-              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
-            </div>
+            {isDeadSpectator() && renderEliminatedBanner()}
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-4">
               <div className="text-center mb-4">
@@ -1145,10 +1306,16 @@ export default function MafiaGame() {
 
     if (!isMafia) {
       return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-6">
-          <div className="text-center">
-            <div className="text-8xl mb-6">😴</div>
-            <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+        <div className="min-h-screen bg-black p-6">
+          <div className="w-full max-w-md mx-auto">
+            {isDeadSpectator() && renderEliminatedBanner()}
+
+            <div className="min-h-[70vh] flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-8xl mb-6">😴</div>
+                <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -1156,6 +1323,13 @@ export default function MafiaGame() {
 
     // Active mafia player
     const selectablePlayers = getSelectablePlayers();
+    const mafiaPlayers = gameState.players.filter((player) => player.role === 'mafia');
+    const sortedMafiaPlayers = [...mafiaPlayers].sort((a, b) => {
+      if (a.isAlive === b.isAlive) return 0;
+      return a.isAlive ? -1 : 1;
+    });
+    const mafiaSelections = gameState.mafiaSelections || {};
+    const showMafiaCoordination = !isHost;
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-950 via-red-900 to-red-950 p-6">
@@ -1168,21 +1342,46 @@ export default function MafiaGame() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.map((player) => (
-              <button
-                key={player.uid}
-                onClick={() => handleVotePlayer(player.uid)}
-                disabled={hasConfirmed}
-                className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                  selectedPlayer === player.uid
-                    ? 'bg-red-600 ring-2 ring-white'
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
-                <span className="text-white font-semibold">{player.displayName}</span>
-              </button>
-            ))}
+            {selectablePlayers.map((player) => {
+              const selectorsForPlayer = mafiaPlayers.filter(
+                (mafiaPlayer) => mafiaSelections[mafiaPlayer.uid]?.targetUid === player.uid
+              );
+
+              return (
+                <button
+                  key={player.uid}
+                  onClick={() => handleVotePlayer(player.uid)}
+                  disabled={hasConfirmed}
+                  className={`flex items-start gap-3 rounded-xl p-4 transition-all ${
+                    selectedPlayer === player.uid
+                      ? 'bg-red-600 ring-2 ring-white'
+                      : 'bg-slate-800/50 hover:bg-slate-700'
+                  } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
+                  <div className="flex-1 min-w-0 text-left">
+                    <span className="text-white font-semibold block">{player.displayName}</span>
+                    {showMafiaCoordination && selectorsForPlayer.length > 0 && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        {selectorsForPlayer.map((mafiaPlayer) => {
+                          const selection = mafiaSelections[mafiaPlayer.uid];
+                          const isConfirmedSelection = selection?.confirmed === true;
+                          return (
+                            <div
+                              key={mafiaPlayer.uid}
+                              className={`${isConfirmedSelection ? 'opacity-100' : 'opacity-40'} transition-opacity`}
+                              title={`${mafiaPlayer.displayName}${isConfirmedSelection ? ' (confirmed)' : ' (selecting)'}`}
+                            >
+                              {renderPlayerAvatar(mafiaPlayer, 'w-8 h-8', 'text-xs')}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           <button
@@ -1192,6 +1391,34 @@ export default function MafiaGame() {
           >
             {hasConfirmed ? 'Vote Confirmed' : 'Confirm'}
           </button>
+
+          {showMafiaCoordination && (
+            <div className="mt-6 rounded-xl border border-red-900/60 bg-black/20 p-4">
+              <p className="text-red-200/80 text-[11px] font-mono uppercase tracking-widest mb-3">
+                Look up to coordinate with your team
+              </p>
+              <div className="space-y-2">
+                {sortedMafiaPlayers.map((mafiaPlayer) => {
+                  const isEliminatedMafia = mafiaPlayer.isAlive === false;
+                  return (
+                    <div key={mafiaPlayer.uid} className="flex items-center gap-3">
+                      <div className={isEliminatedMafia ? 'opacity-30' : 'opacity-100'}>
+                        {renderPlayerAvatar(mafiaPlayer, 'w-9 h-9', 'text-xs')}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${isEliminatedMafia ? 'text-red-100/30 line-through' : 'text-red-100'}`}>
+                          {mafiaPlayer.displayName}
+                        </span>
+                        {isEliminatedMafia && (
+                          <span className="text-[11px] uppercase tracking-wide text-red-300/60">eliminated</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -1210,16 +1437,12 @@ export default function MafiaGame() {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
+            {isDeadSpectator() && renderEliminatedBanner()}
+
             {myRole === 'narrator' && (
               <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
                 <div className="text-4xl mb-2">🎙️</div>
                 <h2 className="text-white font-bold text-xl">NARRATOR</h2>
-              </div>
-            )}
-            {myRole !== 'narrator' && (
-              <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-                <div className="text-4xl mb-2">💀</div>
-                <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
               </div>
             )}
 
@@ -1230,6 +1453,26 @@ export default function MafiaGame() {
                   <p className="text-green-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
                 )}
               </div>
+
+              <div className="space-y-2">
+                {selectablePlayers.map((player) => {
+                  const voteCount = Object.values(doctorVote).filter((v) => v === player.uid).length;
+                  return (
+                    <div
+                      key={player.uid}
+                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
+                        <span className="text-white">{player.displayName}</span>
+                      </div>
+                      {voteCount > 0 && (
+                        <span className="text-green-400 font-bold">🩺</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -1238,10 +1481,16 @@ export default function MafiaGame() {
 
     if (!isDoctor) {
       return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-6">
-          <div className="text-center">
-            <div className="text-8xl mb-6">😴</div>
-            <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+        <div className="min-h-screen bg-black p-6">
+          <div className="w-full max-w-md mx-auto">
+            {isDeadSpectator() && renderEliminatedBanner()}
+
+            <div className="min-h-[70vh] flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-8xl mb-6">😴</div>
+                <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -1297,13 +1546,13 @@ export default function MafiaGame() {
     const detectiveDead = !gameState.players.find(p => p.role === 'detective' && p.isAlive);
 
     if (spectator && !detectiveDead) {
+      const detectiveVote = gameState.nightVotes || {};
+      const selectablePlayers = getSelectablePlayers();
+
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
-            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">💀</div>
-              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
-            </div>
+            {isDeadSpectator() && renderEliminatedBanner()}
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
               <div className="text-center mb-4">
@@ -1311,6 +1560,26 @@ export default function MafiaGame() {
                 {timeLeft !== null && (
                   <p className="text-yellow-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                {selectablePlayers.map((player) => {
+                  const voteCount = Object.values(detectiveVote).filter((v) => v === player.uid).length;
+                  return (
+                    <div
+                      key={player.uid}
+                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
+                        <span className="text-white">{player.displayName}</span>
+                      </div>
+                      {voteCount > 0 && (
+                        <span className="text-yellow-400 font-bold">🔍</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1320,10 +1589,16 @@ export default function MafiaGame() {
 
     if (!isDetective) {
       return (
-        <div className="min-h-screen bg-black flex items-center justify-center p-6">
-          <div className="text-center">
-            <div className="text-8xl mb-6">😴</div>
-            <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+        <div className="min-h-screen bg-black p-6">
+          <div className="w-full max-w-md mx-auto">
+            {isDeadSpectator() && renderEliminatedBanner()}
+
+            <div className="min-h-[70vh] flex items-center justify-center">
+              <div className="text-center">
+                <div className="text-8xl mb-6">😴</div>
+                <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+              </div>
+            </div>
           </div>
         </div>
       );
@@ -1381,14 +1656,10 @@ export default function MafiaGame() {
       return (
         <div className="min-h-screen bg-gradient-to-br from-yellow-950 via-yellow-900 to-yellow-950 flex items-center justify-center p-6">
           <div className="w-full max-w-md text-center">
-            <div className={`text-8xl mb-6`}>
-              {result.isMafia ? '🔪' : '✅'}
-            </div>
-            <h1 className="text-white text-3xl font-bold mb-4">
-              {result.targetName}
-            </h1>
-            <p className="text-white text-2xl">
-              {result.isMafia ? 'IS a mafia' : 'is NOT a mafia'}
+            <p className="text-white text-3xl font-bold">
+              {result.isMafia
+                ? `${result.targetName} is the mafia`
+                : `${result.targetName} is not the mafia`}
             </p>
           </div>
         </div>
@@ -1397,10 +1668,16 @@ export default function MafiaGame() {
 
     // Non-detective players - no timer during detective result phase
     return (
-      <div className="min-h-screen bg-black flex items-center justify-center p-6">
-        <div className="text-center">
-          <div className="text-8xl mb-6">😴</div>
-          <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+      <div className="min-h-screen bg-black p-6">
+        <div className="w-full max-w-md mx-auto">
+          {isDeadSpectator() && renderEliminatedBanner()}
+
+          <div className="min-h-[70vh] flex items-center justify-center">
+            <div className="text-center">
+              <div className="text-8xl mb-6">😴</div>
+              <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
+            </div>
+          </div>
         </div>
       </div>
     );
@@ -1410,93 +1687,134 @@ export default function MafiaGame() {
   if (gameState?.phase === 'day-discussion') {
     const spectator = isSpectator();
     const victimUid = gameState.pendingVictim;
-    const saved = gameState.lastSaved && gameState.lastSaved === victimUid;
+    const saved = Boolean(gameState.lastSaved && gameState.lastSaved === victimUid);
     const victim = victimUid ? gameState.players.find(p => p.uid === victimUid) : null;
+    const savedPlayer = gameState.lastSaved ? gameState.players.find((p) => p.uid === gameState.lastSaved) : null;
+    const investigatedPlayer = gameState.detectiveResult?.targetUid
+      ? gameState.players.find((p) => p.uid === gameState.detectiveResult.targetUid)
+      : null;
+    const nightReportCause = gameState.nightReportCause || '';
+    const defaultReportNote = victim
+      ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
+      : '';
+    const nightReportNote = gameState.nightReportNote || defaultReportNote;
     const livingPlayers = gameState.players.filter((p) => p.isAlive && p.role !== 'narrator');
     const readyVotes = gameState.readyVotes || [];
     const canReadyToVote = !spectator && isCurrentUserAlive() && myRole !== 'narrator';
     const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-        <div className="w-full max-w-md mx-auto">
+      <div className="relative min-h-screen bg-gradient-to-br from-[#020817] via-[#0b1325] to-[#020817] p-6">
+        <div
+          className="pointer-events-none fixed inset-0 z-0"
+          style={{
+            background: 'radial-gradient(circle at center, rgba(127, 29, 29, 0) 58%, rgba(127, 29, 29, 0.13) 100%)'
+          }}
+        />
+
+        <div className="relative z-10 w-full max-w-md mx-auto">
+          {isDeadSpectator() && renderEliminatedBanner()}
+
           {spectator && myRole === 'narrator' && (
             <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
               <div className="text-4xl mb-2">🎙️</div>
               <h2 className="text-white font-bold text-xl">NARRATOR</h2>
             </div>
           )}
-          {spectator && myRole !== 'narrator' && (
-            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">💀</div>
-              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
-            </div>
-          )}
 
           <div className="text-center mb-6">
-            <div className="text-6xl mb-4">👀</div>
-            <h1 className="text-white text-3xl font-black mb-4">Open your eyes!</h1>
-            
             {victim && (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-4">
-                {saved ? (
-                  <>
-                    <p className="text-white text-lg mb-2">
-                      <span className="font-bold">{victim.displayName}</span> was attacked last night
-                    </p>
-                    <p className="text-green-400 text-lg font-bold">
-                      But the doctor saved them! 🏥
-                    </p>
-                  </>
-                ) : (
-                  <>
-                    <p className="text-white text-lg">
-                      <span className="font-bold">{victim.displayName}</span> was killed last night
-                    </p>
-                    <p className="text-red-400 text-2xl mt-2">🔪</p>
-                  </>
+              <div className="relative overflow-hidden bg-[#e8dcc8] border border-[#c1ab89] rounded-xl p-5 mb-5 text-left shadow-lg">
+                <p className="font-mono text-[#3f3127] text-xs font-bold tracking-[0.2em]">INCIDENT REPORT</p>
+                <div className="border-t border-[#665341] my-3" />
+                <p className="font-mono text-[#2f241c] text-sm">
+                  {saved ? 'PATIENT' : 'VICTIM'}: {victim.displayName}
+                </p>
+
+                {spectator && activeRules.doctor && savedPlayer && (
+                  <p className="font-mono text-[#2f241c] text-sm mt-1">
+                    DOCTOR SAVE: {savedPlayer.displayName}
+                  </p>
                 )}
+
+                {spectator && activeRules.detective && gameState.detectiveResult && (
+                  <p className="font-mono text-[#2f241c] text-sm mt-1">
+                    DETECTIVE CHECK: {investigatedPlayer?.displayName || gameState.detectiveResult.targetName}
+                  </p>
+                )}
+
+                {!saved && (
+                  <p className="font-mono text-[#2f241c] text-sm mt-1">
+                    CAUSE: {nightReportCause}
+                  </p>
+                )}
+
+                <p className="font-mono text-[#2f241c] text-sm mt-1">
+                  STATUS: {saved ? 'ALIVE' : 'DECEASED'}
+                </p>
+
+                <p className="font-mono text-[#2f241c] text-sm mt-4 text-center">
+                  {nightReportNote}
+                </p>
+
+                <div className="border-t border-[#665341] my-3" />
+
+                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
+                  <div
+                    className={`border-4 px-4 py-1 text-3xl font-black uppercase tracking-widest opacity-60 ${
+                      saved ? 'border-green-900 text-green-900' : 'border-red-900 text-red-900'
+                    }`}
+                    style={{ transform: 'rotate(-15deg)' }}
+                  >
+                    {saved ? 'ALIVE' : 'DECEASED'}
+                  </div>
+                </div>
               </div>
             )}
 
-            <div className="bg-violet-900/50 border border-violet-700 rounded-xl p-4 mb-6">
-              <h2 className="text-white text-2xl font-bold mb-2">DISCUSS 💬</h2>
+            <div
+              className="bg-[#0b1325] border border-[#334258] rounded-xl p-4 mb-6 text-[#f0e5cf] shadow-lg"
+              style={{ transform: 'rotate(-1deg)' }}
+            >
+              <h2 className="font-serif text-2xl font-black uppercase tracking-wide">THE MORNING AFTER</h2>
+              <div className="border-t border-[#f0e5cf]/60 my-2" />
               {timeLeft !== null && (
-                <p className="text-violet-300 font-mono text-3xl">{formatTime(timeLeft)}</p>
+                <p className="font-serif text-4xl font-black">{formatTime(timeLeft)}</p>
               )}
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-            <h3 className="text-white font-semibold mb-3">Alive Players</h3>
+          <div className="bg-[#0f1a2f] border border-[#334258] rounded-xl p-4 shadow-lg">
+            <h3 className="text-[#e7dbc6] font-mono font-bold uppercase tracking-widest">SUSPECTS</h3>
+            <div className="border-t border-red-700/70 mt-2 mb-3" />
             <div className="space-y-2">
               {livingPlayers.map((player) => (
                 <div
                   key={player.uid}
-                  className="flex items-center gap-3 bg-slate-700/50 rounded-lg p-3"
+                  className="flex items-center gap-3 bg-[#16233b] border border-[#334258] rounded-lg p-3"
                 >
                   {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                  <span className="text-white">{player.displayName}</span>
+                  <span className="text-[#e7dbc6] font-mono">{player.displayName}</span>
                 </div>
               ))}
             </div>
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mt-4">
+          <div className="bg-[#0f1a2f] border border-[#334258] rounded-xl p-4 mt-4 shadow-lg">
             <button
               onClick={handleReadyToVote}
               disabled={!canReadyToVote || myReadyClicked}
-              className={`w-full py-3 rounded-xl font-bold transition-colors ${
+              className={`w-full py-3 rounded-md font-black uppercase tracking-wide border-2 transition-colors ${
                 canReadyToVote
                   ? myReadyClicked
-                    ? 'bg-slate-700 text-slate-300 cursor-not-allowed'
-                    : 'bg-violet-600 hover:bg-violet-500 text-white'
-                  : 'bg-slate-700 text-slate-400 cursor-not-allowed'
+                    ? 'border-[#3e4d63] bg-[#1f2a3f] text-[#7e8ea6] cursor-not-allowed'
+                    : 'border-[#e7dbc6] bg-[#0f1a2f] hover:bg-[#16233b] text-[#f2e8d3]'
+                  : 'border-[#3e4d63] bg-[#1f2a3f] text-[#7e8ea6] cursor-not-allowed'
               }`}
             >
-              {myReadyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
+              {myReadyClicked ? 'BALLOT READY' : 'READY TO VOTE'}
             </button>
-            <p className="text-slate-300 text-sm mt-3">
+            <p className="text-[#c7baa3] text-sm mt-3 font-mono">
               Ready: {readyVotes.length}/{livingPlayers.length}
             </p>
             <div className="flex items-center justify-center mt-3">
@@ -1509,14 +1827,14 @@ export default function MafiaGame() {
                       key={player.uid}
                       src={playerPhoto}
                       alt={player.displayName}
-                      className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
+                      className={`w-7 h-7 rounded-full border-2 border-[#0f1a2f] object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
                       title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
                     />
                   ) : (
                     <div
                       key={player.uid}
-                      className={`w-7 h-7 rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
-                        isReady ? `${player.avatarColor} text-white` : 'bg-slate-700 text-slate-400'
+                      className={`w-7 h-7 rounded-full border-2 border-[#0f1a2f] flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
+                        isReady ? `${player.avatarColor} text-white` : 'bg-[#3a4760] text-[#9faec4]'
                       }`}
                       title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
                     >
@@ -1530,7 +1848,7 @@ export default function MafiaGame() {
             {isHost && (
               <button
                 onClick={handleStartVotingNow}
-                className="w-full mt-3 bg-white hover:bg-slate-200 text-slate-900 font-bold py-3 rounded-xl transition-colors"
+                className="w-full mt-3 border-2 border-[#e7dbc6] bg-[#0f1a2f] hover:bg-[#16233b] text-[#f2e8d3] font-black uppercase tracking-wide py-3 rounded-md transition-colors"
               >
                 Start Voting
               </button>
@@ -1546,29 +1864,19 @@ export default function MafiaGame() {
     const spectator = isSpectator();
     const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true && player.role !== 'narrator');
     const dayVotes = gameState.dayVotes || {};
+    const formattedTimeLeft = timeLeft !== null ? formatTime(timeLeft) : null;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
         <div className="w-full max-w-md mx-auto">
+          {isDeadSpectator() && renderEliminatedBanner()}
+
           {spectator && myRole === 'narrator' && (
             <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
               <div className="text-4xl mb-2">🎙️</div>
               <h2 className="text-white font-bold text-xl">NARRATOR</h2>
             </div>
           )}
-          {spectator && myRole !== 'narrator' && (
-            <div className="bg-red-900/50 border border-red-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">💀</div>
-              <h2 className="text-white font-bold text-xl">YOU ARE DEAD</h2>
-            </div>
-          )}
-
-          <div className="text-center mb-6">
-            <h1 className="text-white text-2xl font-black mb-2">Vote to Eliminate 🗳️</h1>
-            {timeLeft !== null && (
-              <p className="text-violet-400 font-mono text-3xl">{formatTime(timeLeft)}</p>
-            )}
-          </div>
 
           <VotingPanel
             players={selectablePlayers}
@@ -1577,6 +1885,9 @@ export default function MafiaGame() {
             isHost={isHost}
             onVote={handleSubmitDayVote}
             onEndVoting={handleEndDayVoting}
+            theme="ballot"
+            timerLabel="TIME REMAINING"
+            timerValue={formattedTimeLeft}
           />
         </div>
       </div>
@@ -1587,48 +1898,206 @@ export default function MafiaGame() {
   if (gameState?.phase === 'ended') {
     console.log('[MafiaGame] Rendering end game phase', { winner: gameState.winner, playersCount: gameState.players?.length });
     const winner = gameState.winner;
+    const townWon = winner === 'town';
+    const totalPlayers = gameState.players?.length || 0;
+    const eliminatedCount = gameState.players?.filter((player) => player.isAlive === false).length || 0;
+    const nightsCount = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : null;
+    const rightMetaText = nightsCount !== null ? `NIGHTS: ${nightsCount}` : `ELIMINATED: ${eliminatedCount}`;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
         <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <div className="text-8xl mb-4">{winner === 'mafia' ? '🔪' : '🎉'}</div>
-            <h1 className="text-white text-4xl font-black mb-2">
-              {winner === 'mafia' ? 'Mafia Wins!' : 'Town Wins!'}
+          {/* Newspaper Masthead - Classic Broadsheet Style */}
+          <div className="mb-8 text-[#e8e0d0]" style={{ fontFamily: 'serif' }}>
+            {/* Top metadata bar */}
+            <div className="border-t-2 border-[#e8e0d0]/40 mb-2" style={{ fontSize: '1px' }} />
+            <div className="flex items-center justify-between py-1 mb-2 text-[15px] leading-none">
+              <span className="font-mono tracking-wider">PLAYERS: {totalPlayers}</span>
+              <span className="font-mono text-center flex-1">THE GAMES NIGHT GAZETTE</span>
+              <span className="font-mono tracking-wider">{rightMetaText}</span>
+            </div>
+
+            {/* Double Rule */}
+            <div className="border-t-2 border-[#e8e0d0]/60" style={{ marginBottom: '2px' }} />
+            <div className="border-t border-[#e8e0d0]/40 mb-4" />
+
+            {/* Headline */}
+            <h1
+              className="font-black uppercase text-center mb-2"
+              style={{
+                fontSize: '3rem',
+                letterSpacing: '0.1em',
+                lineHeight: '1.1',
+                fontFamily: "'Playfair Display', 'Georgia', serif",
+                fontWeight: 900
+              }}
+            >
+              {townWon ? 'TOWN TRIUMPHS' : 'MAFIA REIGNS'}
             </h1>
-            <p className="text-slate-400">Game Over</p>
+
+            {/* Deck Line */}
+            <p
+              className="text-center italic mb-4"
+              style={{
+                fontSize: '14px',
+                fontFamily: "'Georgia', serif",
+                lineHeight: '1.4'
+              }}
+            >
+              {townWon
+                ? 'Mafia members identified and removed from the village'
+                : 'Civilians deceived as mafia seizes control of the village'}
+            </p>
+
+            {/* Bottom Rule */}
+            <div className="border-t border-[#e8e0d0]/40" />
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-6">
-            <h2 className="text-white font-semibold mb-4">Final Roles</h2>
-            <div className="space-y-3">
-              {gameState.players.map((player) => (
-                <div
-                  key={player.uid}
-                  className={`flex items-center justify-between rounded-lg p-3 ${
-                    player.role === 'mafia' ? 'bg-red-900/30' : 'bg-slate-700/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                    <span className="text-white">{player.displayName}</span>
+          {/* Case Closed Card */}
+          <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
+            {/* CASE Header */}
+            <div className="mb-4 flex items-center gap-2">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#3a2a1a' }}>
+                CASE:
+              </span>
+              <span
+                className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                style={{
+                  borderColor: townWon ? '#5a7a9a' : '#8b3a3a',
+                  color: townWon ? '#5a7a9a' : '#8b3a3a',
+                  transform: 'rotate(-6deg)',
+                  fontSize: '10px'
+                }}
+              >
+                CLOSED
+              </span>
+            </div>
+
+            {/* Divider */}
+            <div style={{ height: '1px', backgroundColor: '#4a3622', marginBottom: '16px', opacity: '0.45' }} />
+
+            {/* Player List */}
+            <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
+              <div>
+                {gameState.players.map((player, idx) => (
+                  <div key={player.uid}>
+                    <div
+                      className="relative flex items-center justify-between py-3"
+                      style={{
+                        backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        {renderPlayerAvatar(player, 'w-8 h-8', 'text-xs')}
+                        <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
+                          {player.displayName}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Mafia: stamp first, then emoji */}
+                        {player.role === 'mafia' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#8b3a3a',
+                                color: '#8b3a3a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              MAFIA
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                        {/* Doctor: green stamp + emoji */}
+                        {player.role === 'doctor' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#4a7c5a',
+                                color: '#4a7c5a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              Doctor
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                        {/* Detective: brown stamp + emoji */}
+                        {player.role === 'detective' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#8b6b3f',
+                                color: '#8b6b3f',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              Detective
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                        {/* Civilian: blue stamp + emoji */}
+                        {player.role === 'civilian' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#5a7a9a',
+                                color: '#5a7a9a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              Civilian
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                      </div>
+
+                      {!player.isAlive && (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-20 z-10">
+                          <span
+                            className="border-2 px-3 py-1 text-sm font-black uppercase tracking-[0.18em]"
+                            style={{
+                              borderColor: '#dc2626',
+                              color: '#dc2626',
+                              backgroundColor: 'transparent',
+                              transform: 'rotate(0deg)'
+                            }}
+                          >
+                            ELIMINATED
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {idx < gameState.players.length - 1 && (
+                      <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{getRoleIcon(player.role)}</span>
-                    <span className={`text-sm font-semibold uppercase ${
-                      player.role === 'mafia' ? 'text-red-400' : 'text-slate-400'
-                    }`}>
-                      {player.role}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
+          {/* Return Button */}
           <button
             onClick={handleReturnToGamesNight}
-            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+            className="w-full bg-[#e8dcc8] hover:bg-[#f0e5cf] border border-[#c1ab89] text-[#3f3127] font-mono font-bold py-3 rounded-lg transition-colors tracking-wide"
           >
             Return to Its Games Night
           </button>

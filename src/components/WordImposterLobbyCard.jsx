@@ -3,6 +3,7 @@ import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 import { getRandomWord } from '../wordImposter/words';
+import AnimatedNumberStepper from './AnimatedNumberStepper';
 
 export default function WordImposterLobbyCard({
   lobbyState,
@@ -27,7 +28,8 @@ export default function WordImposterLobbyCard({
   const [showRulesEdit, setShowRulesEdit] = useState(showRulesModal);
   const [editRules, setEditRules] = useState({
     imposterCount: String(gameRules.imposterCount || '1'),
-    showCategory: gameRules.showCategory !== false
+    showCategory: gameRules.showCategory !== false,
+    imposterNoWord: gameRules.imposterNoWord === true
   });
   const [imposterCountError, setImposterCountError] = useState('');
 
@@ -35,7 +37,8 @@ export default function WordImposterLobbyCard({
     if (showRulesEdit) {
       setEditRules({
         imposterCount: String(gameRules.imposterCount || '1'),
-        showCategory: gameRules.showCategory !== false
+        showCategory: gameRules.showCategory !== false,
+        imposterNoWord: gameRules.imposterNoWord === true
       });
       setImposterCountError('');
     }
@@ -130,7 +133,7 @@ export default function WordImposterLobbyCard({
     const imposterIds = shuffled.slice(0, imposterCount).map(p => p.uid);
 
     // Pick random word
-    const { word, category } = getRandomWord();
+    const { word, related, category } = getRandomWord();
 
     // Random starting player and direction
     const startingPlayer = playersToAssign[Math.floor(Math.random() * playersToAssign.length)];
@@ -138,12 +141,14 @@ export default function WordImposterLobbyCard({
 
     const finalRules = {
       imposterCount: imposterCount,
-      showCategory: editRules.showCategory
+      showCategory: editRules.showCategory,
+      imposterNoWord: !!editRules.imposterNoWord
     };
 
     await updateDoc(roomRef, {
       'activeActivity.phase': 'word-reveal',
       'activeActivity.word': word,
+      'activeActivity.imposterWord': finalRules.imposterNoWord ? null : related,
       'activeActivity.category': category,
       'activeActivity.rules': finalRules,
       'activeActivity.imposterIds': imposterIds,
@@ -189,7 +194,8 @@ export default function WordImposterLobbyCard({
     const roomRef = doc(db, 'rooms', roomId);
     const finalRules = {
       imposterCount: imposterCount,
-      showCategory: editRules.showCategory
+      showCategory: editRules.showCategory,
+      imposterNoWord: !!editRules.imposterNoWord
     };
 
     await updateDoc(roomRef, {
@@ -232,6 +238,7 @@ export default function WordImposterLobbyCard({
   };
 
   const joinedPlayers = allPlayers.filter((player) => lobbyPlayers.includes(player.uid));
+  const maxStepperCount = Math.max(1, Math.floor(lobbyPlayers.length * 0.25));
   const dossierCardClass = 'relative overflow-hidden bg-[#d4b483] border border-[#8b6b3f] rounded-2xl p-5 text-left shadow-xl';
   const stampButtonClass = 'w-full bg-[#efe4cc]/90 hover:bg-[#f5ecd9] text-[#3a2a1a] border-2 border-dashed border-[#4a3622] font-mono uppercase tracking-widest font-semibold py-2.5 rounded-md transition-colors text-xs';
   const startEnabledClass = 'w-full bg-[#f7ecd8] hover:bg-[#fbf3e4] text-red-700 border-2 border-red-700 font-mono uppercase tracking-widest font-black py-3 rounded-md transition-colors text-xs';
@@ -311,17 +318,16 @@ export default function WordImposterLobbyCard({
 
               <div className="space-y-4">
                 <div>
-                  <label className="text-white font-semibold block mb-2 text-sm">Number of Imposters</label>
-                  <input
-                    type="text"
-                    inputMode="numeric"
-                    value={editRules.imposterCount}
-                    onChange={(e) => {
-                      setEditRules({ ...editRules, imposterCount: e.target.value });
+                  <label className="text-white font-semibold block mb-2 text-sm text-center">Number of Imposters</label>
+                  <AnimatedNumberStepper
+                    value={parseInt(editRules.imposterCount, 10) || 1}
+                    min={1}
+                    max={maxStepperCount}
+                    valueWidthClass="w-16"
+                    onChange={(nextValue) => {
+                      setEditRules({ ...editRules, imposterCount: String(nextValue) });
                       setImposterCountError('');
                     }}
-                    placeholder="Enter number"
-                    className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
                   />
                   {imposterCountError && (
                     <p className="text-red-400 text-sm mt-2">{imposterCountError}</p>
@@ -342,6 +348,25 @@ export default function WordImposterLobbyCard({
                     >
                       <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
                         editRules.showCategory ? 'translate-x-6' : 'translate-x-1'
+                      }`} />
+                    </button>
+                  </div>
+                </div>
+
+                <div>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <label className="text-white font-semibold text-sm">Imposter gets no word</label>
+                      <p className="text-slate-400 text-xs">When off, imposter receives a different related word</p>
+                    </div>
+                    <button
+                      onClick={() => setEditRules({ ...editRules, imposterNoWord: !editRules.imposterNoWord })}
+                      className={`w-12 h-7 rounded-full transition-colors ${
+                        editRules.imposterNoWord ? 'bg-teal-600' : 'bg-slate-600'
+                      }`}
+                    >
+                      <div className={`w-5 h-5 bg-white rounded-full transition-transform ${
+                        editRules.imposterNoWord ? 'translate-x-6' : 'translate-x-1'
                       }`} />
                     </button>
                   </div>

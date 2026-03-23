@@ -3,6 +3,7 @@ import { doc, getDoc, updateDoc, serverTimestamp, arrayUnion, arrayRemove } from
 import { db } from '../firebase';
 import { getInitials, getAvatarColor } from '../utils/avatar';
 import LOCATIONS from '../spyfall/locations';
+import AnimatedNumberStepper from './AnimatedNumberStepper';
 
 export default function SpyfallLobbyCard({
   lobbyState,
@@ -227,6 +228,8 @@ export default function SpyfallLobbyCard({
   };
 
   const joinedPlayers = allPlayers.filter((player) => lobbyPlayers.includes(player.uid));
+  const maxStepperCount = Math.max(1, Math.floor(lobbyPlayers.length * 0.25));
+  const formatMinutes = (value) => `${value} min`;
   const dossierCardClass = 'relative overflow-hidden bg-[#d4b483] border border-[#8b6b3f] rounded-2xl p-5 text-left shadow-xl';
   const stampButtonClass = 'w-full bg-[#efe4cc]/90 hover:bg-[#f5ecd9] text-[#3a2a1a] border-2 border-dashed border-[#4a3622] font-mono uppercase tracking-widest font-semibold py-2.5 rounded-md transition-colors text-xs';
   const startEnabledClass = 'w-full bg-[#f7ecd8] hover:bg-[#fbf3e4] text-red-700 border-2 border-red-700 font-mono uppercase tracking-widest font-black py-3 rounded-md transition-colors text-xs';
@@ -249,26 +252,38 @@ export default function SpyfallLobbyCard({
         <div className="space-y-4">
           {/* Spy count */}
           <div>
-            <label className="text-white font-semibold block mb-2 text-sm">Number of Spies</label>
-            <input
-              type="text"
-              inputMode="numeric"
-              value={editRules.spyCount}
-              onChange={(e) => {
-                setEditRules({ ...editRules, spyCount: e.target.value });
+            <label className="text-white font-semibold block mb-2 text-sm text-center">Number of Spies</label>
+            <AnimatedNumberStepper
+              value={parseInt(editRules.spyCount, 10) || 1}
+              min={1}
+              max={maxStepperCount}
+              valueWidthClass="w-16"
+              onChange={(nextValue) => {
+                setEditRules({ ...editRules, spyCount: String(nextValue) });
                 setSpyCountError('');
               }}
-              placeholder="Enter number"
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white placeholder-slate-500"
             />
             {spyCountError && <p className="text-red-400 text-sm mt-2">{spyCountError}</p>}
+          </div>
+
+          {/* Discussion time */}
+          <div>
+            <label className="text-white font-semibold block mb-2 text-sm text-center">Discussion Time</label>
+            <AnimatedNumberStepper
+              value={editRules.discussionTime}
+              min={1}
+              max={10}
+              valueWidthClass="w-28"
+              formatValue={formatMinutes}
+              onChange={(nextValue) => setEditRules({ ...editRules, discussionTime: nextValue })}
+            />
           </div>
 
           {/* Show roles */}
           <div>
             <div className="flex items-center justify-between">
               <div>
-                <label className="text-white font-semibold text-sm">Show Roles 🎭</label>
+                <label className="text-white font-semibold text-sm">Show Roles</label>
                 <p className="text-slate-400 text-xs">Non-spy players see their role at the location</p>
               </div>
               <button
@@ -278,20 +293,6 @@ export default function SpyfallLobbyCard({
                 <div className={`w-5 h-5 bg-white rounded-full transition-transform ${editRules.showRoles ? 'translate-x-6' : 'translate-x-1'}`} />
               </button>
             </div>
-          </div>
-
-          {/* Discussion time */}
-          <div>
-            <label className="text-white font-semibold block mb-2 text-sm">Discussion Time</label>
-            <select
-              value={editRules.discussionTime}
-              onChange={(e) => setEditRules({ ...editRules, discussionTime: parseInt(e.target.value) })}
-              className="w-full bg-slate-700 border border-slate-600 rounded-lg px-4 py-2 text-white"
-            >
-              <option value={5}>5 minutes</option>
-              <option value={8}>8 minutes</option>
-              <option value={10}>10 minutes</option>
-            </select>
           </div>
         </div>
 
