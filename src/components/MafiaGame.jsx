@@ -1898,48 +1898,206 @@ export default function MafiaGame() {
   if (gameState?.phase === 'ended') {
     console.log('[MafiaGame] Rendering end game phase', { winner: gameState.winner, playersCount: gameState.players?.length });
     const winner = gameState.winner;
+    const townWon = winner === 'town';
+    const totalPlayers = gameState.players?.length || 0;
+    const eliminatedCount = gameState.players?.filter((player) => player.isAlive === false).length || 0;
+    const nightsCount = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : null;
+    const rightMetaText = nightsCount !== null ? `NIGHTS: ${nightsCount}` : `ELIMINATED: ${eliminatedCount}`;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
         <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <div className="text-8xl mb-4">{winner === 'mafia' ? '🔪' : '🎉'}</div>
-            <h1 className="text-white text-4xl font-black mb-2">
-              {winner === 'mafia' ? 'Mafia Wins!' : 'Town Wins!'}
+          {/* Newspaper Masthead - Classic Broadsheet Style */}
+          <div className="mb-8 text-[#e8e0d0]" style={{ fontFamily: 'serif' }}>
+            {/* Top metadata bar */}
+            <div className="border-t-2 border-[#e8e0d0]/40 mb-2" style={{ fontSize: '1px' }} />
+            <div className="flex items-center justify-between py-1 mb-2 text-[15px] leading-none">
+              <span className="font-mono tracking-wider">PLAYERS: {totalPlayers}</span>
+              <span className="font-mono text-center flex-1">THE GAMES NIGHT GAZETTE</span>
+              <span className="font-mono tracking-wider">{rightMetaText}</span>
+            </div>
+
+            {/* Double Rule */}
+            <div className="border-t-2 border-[#e8e0d0]/60" style={{ marginBottom: '2px' }} />
+            <div className="border-t border-[#e8e0d0]/40 mb-4" />
+
+            {/* Headline */}
+            <h1
+              className="font-black uppercase text-center mb-2"
+              style={{
+                fontSize: '3rem',
+                letterSpacing: '0.1em',
+                lineHeight: '1.1',
+                fontFamily: "'Playfair Display', 'Georgia', serif",
+                fontWeight: 900
+              }}
+            >
+              {townWon ? 'TOWN TRIUMPHS' : 'MAFIA REIGNS'}
             </h1>
-            <p className="text-slate-400">Game Over</p>
+
+            {/* Deck Line */}
+            <p
+              className="text-center italic mb-4"
+              style={{
+                fontSize: '14px',
+                fontFamily: "'Georgia', serif",
+                lineHeight: '1.4'
+              }}
+            >
+              {townWon
+                ? 'Mafia members identified and removed from the village'
+                : 'Civilians deceived as mafia seizes control of the village'}
+            </p>
+
+            {/* Bottom Rule */}
+            <div className="border-t border-[#e8e0d0]/40" />
           </div>
 
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 mb-6">
-            <h2 className="text-white font-semibold mb-4">Final Roles</h2>
-            <div className="space-y-3">
-              {gameState.players.map((player) => (
-                <div
-                  key={player.uid}
-                  className={`flex items-center justify-between rounded-lg p-3 ${
-                    player.role === 'mafia' ? 'bg-red-900/30' : 'bg-slate-700/50'
-                  }`}
-                >
-                  <div className="flex items-center gap-3">
-                    {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                    <span className="text-white">{player.displayName}</span>
+          {/* Case Closed Card */}
+          <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
+            {/* CASE Header */}
+            <div className="mb-4 flex items-center gap-2">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#3a2a1a' }}>
+                CASE:
+              </span>
+              <span
+                className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                style={{
+                  borderColor: townWon ? '#5a7a9a' : '#8b3a3a',
+                  color: townWon ? '#5a7a9a' : '#8b3a3a',
+                  transform: 'rotate(-6deg)',
+                  fontSize: '10px'
+                }}
+              >
+                CLOSED
+              </span>
+            </div>
+
+            {/* Divider */}
+            <div style={{ height: '1px', backgroundColor: '#4a3622', marginBottom: '16px', opacity: '0.45' }} />
+
+            {/* Player List */}
+            <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
+              <div>
+                {gameState.players.map((player, idx) => (
+                  <div key={player.uid}>
+                    <div
+                      className="relative flex items-center justify-between py-3"
+                      style={{
+                        backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
+                      }}
+                    >
+                      <div className="flex items-center gap-3">
+                        {renderPlayerAvatar(player, 'w-8 h-8', 'text-xs')}
+                        <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
+                          {player.displayName}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {/* Mafia: stamp first, then emoji */}
+                        {player.role === 'mafia' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#8b3a3a',
+                                color: '#8b3a3a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              MAFIA
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                        {/* Doctor: green stamp + emoji */}
+                        {player.role === 'doctor' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#4a7c5a',
+                                color: '#4a7c5a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              Doctor
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                        {/* Detective: brown stamp + emoji */}
+                        {player.role === 'detective' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#8b6b3f',
+                                color: '#8b6b3f',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              Detective
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                        {/* Civilian: blue stamp + emoji */}
+                        {player.role === 'civilian' && (
+                          <>
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#5a7a9a',
+                                color: '#5a7a9a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              Civilian
+                            </span>
+                            <span className="text-lg">{getRoleIcon(player.role)}</span>
+                          </>
+                        )}
+
+                      </div>
+
+                      {!player.isAlive && (
+                        <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-20 z-10">
+                          <span
+                            className="border-2 px-3 py-1 text-sm font-black uppercase tracking-[0.18em]"
+                            style={{
+                              borderColor: '#dc2626',
+                              color: '#dc2626',
+                              backgroundColor: 'transparent',
+                              transform: 'rotate(0deg)'
+                            }}
+                          >
+                            ELIMINATED
+                          </span>
+                        </div>
+                      )}
+                    </div>
+                    {idx < gameState.players.length - 1 && (
+                      <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
+                    )}
                   </div>
-                  <div className="flex items-center gap-2">
-                    <span className="text-2xl">{getRoleIcon(player.role)}</span>
-                    <span className={`text-sm font-semibold uppercase ${
-                      player.role === 'mafia' ? 'text-red-400' : 'text-slate-400'
-                    }`}>
-                      {player.role}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                ))}
+              </div>
             </div>
           </div>
 
+          {/* Return Button */}
           <button
             onClick={handleReturnToGamesNight}
-            className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
+            className="w-full bg-[#e8dcc8] hover:bg-[#f0e5cf] border border-[#c1ab89] text-[#3f3127] font-mono font-bold py-3 rounded-lg transition-colors tracking-wide"
           >
             Return to Its Games Night
           </button>

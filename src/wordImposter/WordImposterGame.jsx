@@ -105,6 +105,15 @@ export default function WordImposterGame() {
     return activityPlayer?.photo || activityPlayer?.photoURL || matchingRoomPlayer?.photo || null;
   };
 
+  const getWordFontSize = (word) => {
+    if (!word) return '1.6rem';
+    const wordLength = word.length;
+    if (wordLength <= 8) return '1.6rem';
+    if (wordLength <= 12) return '1.2rem';
+    if (wordLength <= 16) return '1rem';
+    return '0.85rem';
+  };
+
   // === HOST ACTIONS ===
 
   const handleStartDescribing = async () => {
@@ -398,9 +407,21 @@ export default function WordImposterGame() {
               <div className="mb-3" style={{ display: 'inline-block', backgroundColor: '#4dd9ac22', border: '1px solid #4dd9ac55', padding: '4px 12px', borderRadius: '20px', fontSize: '11px', color: '#4dd9ac', fontFamily: "'Special Elite', monospace" }}>
                 {directionText}
               </div>
-              <h2 className="text-white font-bold mb-2" style={{ fontSize: '15px' }}>
-                {startingPlayer?.displayName}
-              </h2>
+              <div className="flex items-center gap-3 mb-2">
+                {(() => {
+                  const playerPhoto = getPlayerPhoto(startingPlayer);
+                  return playerPhoto ? (
+                    <img src={playerPhoto} alt={startingPlayer?.displayName} className="w-8 h-8 rounded-full object-cover" />
+                  ) : (
+                    <div className={`w-8 h-8 ${startingPlayer?.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-xs`}>
+                      {getInitials(startingPlayer?.displayName)}
+                    </div>
+                  );
+                })()}
+                <h2 className="text-white font-bold" style={{ fontSize: '15px' }}>
+                  {startingPlayer?.displayName}
+                </h2>
+              </div>
               {showCountdown && (
                 <div className="text-white text-5xl font-black mt-3 animate-pulse">{countdown}</div>
               )}
@@ -483,7 +504,7 @@ export default function WordImposterGame() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-6">
-            <h1 className="text-white text-2xl font-black mb-2">Who is the Imposter? 🕵️</h1>
+            <h1 className="text-white text-2xl font-black mb-2">Who is the Imposter?</h1>
             <p className="text-slate-400 text-sm">
               Votes: {votedCount}/{totalVoters}
             </p>
@@ -512,16 +533,16 @@ export default function WordImposterGame() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4 overflow-y-auto">
         <div className="w-full max-w-md py-6">
           {/* Lineup Card */}
-          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a', borderTop: '5px solid #8a2a3a' }}>
-            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', letterSpacing: '0.15em' }}>Suspect Identified</p>
+          <div className="rounded-lg p-6 mb-6 text-center" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
+            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Suspect Identified</p>
             <h2 className="font-bold mb-1" style={{ fontFamily: "'Special Elite', monospace", fontSize: '1.5rem', color: '#c8d0e0' }}>
               {primaryImposter?.displayName || 'The imposter'}
             </h2>
-            <p style={{ fontFamily: "'Permanent Marker', cursive", fontSize: '1.2rem', color: '#c9384c' }}>The Imposter</p>
+            <p style={{ fontFamily: "'Special Elite', monospace", fontSize: '1.2rem', color: '#c9384c' }}>The Imposter</p>
           </div>
 
           {/* Evidence Board */}
-          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a' }}>
+          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1a2540', border: '1px solid #2a3a5a' }}>
             <div className="grid grid-cols-2 gap-4">
               {/* Town Word */}
               <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9a84c', position: 'relative' }}>
@@ -537,13 +558,13 @@ export default function WordImposterGame() {
                     }}></div>
                   </>
                 ) : (
-                  <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c8d0e0' }}>{gameState.word}</p>
+                  <p style={{ fontFamily: "'Special Elite', cursive", fontSize: getWordFontSize(gameState.word), color: '#c8d0e0', whiteSpace: 'normal', wordBreak: 'break-word' }}>{gameState.word}</p>
                 )}
               </div>
               {/* Imposter Word */}
               <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9384c' }}>
                 <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Imposter Word</p>
-                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c9384c' }}>{gameState.imposterWord ? gameState.imposterWord : '—'}</p>
+                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: getWordFontSize(gameState.imposterWord), color: '#c9384c', whiteSpace: 'normal', wordBreak: 'break-word' }}>{gameState.imposterWord ? gameState.imposterWord : '—'}</p>
               </div>
             </div>
           </div>
@@ -612,83 +633,166 @@ export default function WordImposterGame() {
   if (gameState.phase === 'ended') {
     const winner = gameState.winner;
     const imposterPlayers = (gameState.imposterIds || []).map(uid => getPlayerByUid(uid)).filter(Boolean);
-    const eliminatedPlayer = getPlayerByUid(gameState.eliminatedUid);
-    const townWonByImposterVotedOut = winner === 'town' && eliminatedPlayer && gameState.imposterIds?.includes(eliminatedPlayer.uid);
     const imposterWon = winner === 'imposter';
+    const caseClosedStampColor = imposterWon ? '#8b3a3a' : '#5a7a9a';
+    const roundsPlayed = gameState.roundNumber || 1;
+    const voteTargets = Object.values(gameState.votes || {});
+    const imposterIds = gameState.imposterIds || [];
+    const deceivedCount = imposterWon
+      ? voteTargets.filter((targetUid) => !imposterIds.includes(targetUid)).length
+      : voteTargets.filter((targetUid) => imposterIds.includes(targetUid)).length;
 
     return (
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 flex items-center justify-center overflow-y-auto">
         <div className="w-full max-w-md py-6">
-          {/* Winner Banner */}
-          <div className="text-center mb-6">
-            <p className="text-xs font-semibold uppercase tracking-widest mb-2" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.2em' }}>Winner</p>
-            <p style={{
-              fontFamily: "'Special Elite', cursive",
-              fontSize: '2rem',
-              color: winner === 'town' ? '#4dd9ac' : '#c9384c',
-              marginBottom: '8px'
-            }}>
-              {winner === 'town' ? 'Town' : 'Imposter'}
-            </p>
-            <p style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', fontSize: '12px' }}>
-              {townWonByImposterVotedOut ? 'The imposter was voted out' : imposterWon ? 'The town was deceived' : ''}
+          {/* Typed Memo Header */}
+          <div className="mb-6" style={{ fontFamily: "'Special Elite', monospace" }}>
+            <div style={{ borderTop: '1px solid #8899bb66', marginBottom: '12px' }} />
+            <div className="space-y-2 text-left">
+              <p>
+                <span className="uppercase tracking-widest" style={{ color: '#8899bb' }}>WINNER:</span>
+                <span className="ml-3" style={{ color: '#d7deeb' }}>{winner === 'town' ? 'Town' : 'Imposter'}</span>
+              </p>
+
+              {imposterWon && (
+                <p>
+                  <span className="uppercase tracking-widest" style={{ color: '#8899bb' }}>AGENT:</span>
+                  <span className="ml-3" style={{ color: '#d7deeb' }}>{imposterPlayers[0]?.displayName || 'Unknown'}</span>
+                </p>
+              )}
+
+              {winner === 'town' && (
+                <p>
+                  <span className="uppercase tracking-widest" style={{ color: '#8899bb' }}>STATUS:</span>
+                  <span className="ml-3" style={{ color: '#d7deeb' }}>Imposter correctly identified</span>
+                </p>
+              )}
+
+              <p>
+                <span className="uppercase tracking-widest" style={{ color: '#8899bb' }}>ROUNDS:</span>
+                <span className="ml-3" style={{ color: '#d7deeb' }}>
+                  {roundsPlayed}
+                </span>
+              </p>
+
+              <p>
+                <span className="uppercase tracking-widest" style={{ color: '#8899bb' }}>DECEIVED:</span>
+                <span className="ml-3" style={{ color: '#d7deeb' }}>
+                  {deceivedCount}
+                </span>
+              </p>
+            </div>
+            <div style={{ borderTop: '1px solid #8899bb66', marginTop: '12px' }} />
+            <p className="italic mt-2" style={{ color: '#9facc5', fontSize: '11px' }}>
+              {imposterWon
+                ? 'This report is classified - filed by the Imposter Division'
+                : 'Justice served - filed by the Village Council'}
             </p>
           </div>
 
-          {/* Lineup Card */}
-          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a', borderTop: '5px solid #8a2a3a' }}>
-            <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', letterSpacing: '0.15em' }}>Suspect Identified</p>
-            <h2 className="font-bold mb-1" style={{ fontFamily: "'Special Elite', monospace", fontSize: '1.5rem', color: '#c8d0e0' }}>
-              {imposterPlayers[0]?.displayName || 'The imposter'}
-            </h2>
-            <p style={{ fontFamily: "'Permanent Marker', cursive", fontSize: '1.2rem', color: '#c9384c' }}>The Imposter</p>
-          </div>
+          {/* Word Reveal - Envelope Style */}
+          <div className="grid grid-cols-2 gap-4 mb-6">
+            <div className="word-envelope-wrap">
+              <div className="word-envelope-back" />
 
-          {/* Evidence Board - Always Fully Revealed */}
-          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a' }}>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9a84c' }}>
-                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Town Word</p>
-                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c8d0e0' }}>{gameState.word}</p>
+              <div className="word-envelope-letter text-center">
+                <div style={{ height: '1px', background: '#c9a84c33', marginBottom: '8px' }} />
+                <div style={{ height: '1px', background: '#c9a84c2a', marginBottom: '8px' }} />
+                <div style={{ height: '1px', background: '#c9a84c20', marginBottom: '10px' }} />
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#7a6a4a', letterSpacing: '0.15em' }}>Town Word</p>
+                <p style={{ fontFamily: "'Special Elite', monospace", fontSize: getWordFontSize(gameState.word), color: '#1a1a2e', whiteSpace: 'normal', wordBreak: 'break-word' }}>{gameState.word}</p>
               </div>
-              <div className="rounded p-4 text-center" style={{ backgroundColor: '#16202e', borderBottom: '2px solid #c9384c' }}>
-                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#8899bb', letterSpacing: '0.15em' }}>Imposter Word</p>
-                <p style={{ fontFamily: "'Special Elite', cursive", fontSize: '1.8rem', color: '#c9384c' }}>{gameState.imposterWord ? gameState.imposterWord : '—'}</p>
+
+              <div className="word-envelope-front" style={{ borderBottom: '3px solid #c9a84c' }} />
+            </div>
+
+            <div className="word-envelope-wrap">
+              <div className="word-envelope-back" />
+
+              <div className="word-envelope-letter text-center">
+                <div style={{ height: '1px', background: '#c9384c33', marginBottom: '8px' }} />
+                <div style={{ height: '1px', background: '#c9384c2a', marginBottom: '8px' }} />
+                <div style={{ height: '1px', background: '#c9384c20', marginBottom: '10px' }} />
+                <p className="text-xs font-semibold uppercase tracking-widest mb-3" style={{ fontFamily: "'Special Elite', monospace", color: '#7a6a4a', letterSpacing: '0.15em' }}>Imposter Word</p>
+                <p style={{ fontFamily: "'Special Elite', monospace", fontSize: getWordFontSize(gameState.imposterWord), color: '#8a2020', whiteSpace: 'normal', wordBreak: 'break-word' }}>{gameState.imposterWord ? gameState.imposterWord : '—'}</p>
               </div>
+
+              <div className="word-envelope-front" style={{ borderBottom: '3px solid #c9384c' }} />
             </div>
           </div>
 
-          {/* Agents Assigned */}
-          <div className="rounded-lg p-6 mb-6" style={{ backgroundColor: '#1e2a3a' }}>
-            <p className="text-xs font-semibold uppercase tracking-widest mb-4" style={{ fontFamily: "'Special Elite', monospace", color: '#7a8aaa', letterSpacing: '0.15em' }}>Agents Assigned</p>
-            <div className="space-y-2">
-              {gameState.players.map((player) => {
-                const wasImposter = gameState.imposterIds?.includes(player.uid);
-                const playerPhoto = getPlayerPhoto(player);
-                return (
-                  <div
-                    key={player.uid}
-                    className="rounded flex items-center justify-between p-3"
-                    style={{
-                      backgroundColor: wasImposter ? '#c9384c18' : 'transparent',
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      {playerPhoto ? (
-                        <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
-                      ) : (
-                        <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-xs`}>
-                          {getInitials(player.displayName)}
+          {/* Agents Assigned - Mafia Case Closed Style */}
+          <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#3a2a1a' }}>
+                CASE:
+              </span>
+              <span
+                className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                style={{
+                  borderColor: caseClosedStampColor,
+                  color: caseClosedStampColor,
+                  transform: 'rotate(-6deg)',
+                  fontSize: '10px'
+                }}
+              >
+                CLOSED
+              </span>
+            </div>
+
+            <div style={{ height: '1px', backgroundColor: '#4a3622', marginBottom: '16px', opacity: '0.45' }} />
+
+            <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
+              <div>
+                {gameState.players.map((player, idx) => {
+                  const wasImposter = gameState.imposterIds?.includes(player.uid);
+                  const playerPhoto = getPlayerPhoto(player);
+
+                  return (
+                    <div key={player.uid}>
+                      <div
+                        className="relative flex items-center justify-between py-3"
+                        style={{
+                          backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {playerPhoto ? (
+                            <img src={playerPhoto} alt={player.displayName} className="w-8 h-8 rounded-full object-cover" />
+                          ) : (
+                            <div className={`w-8 h-8 ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold text-xs`}>
+                              {getInitials(player.displayName)}
+                            </div>
+                          )}
+                          <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
+                            {player.displayName}
+                          </span>
                         </div>
+
+                        <div className="flex items-center gap-2">
+                          {wasImposter && (
+                            <span
+                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              style={{
+                                borderColor: '#8b3a3a',
+                                color: '#8b3a3a',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px'
+                              }}
+                            >
+                              IMPOSTER
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {idx < gameState.players.length - 1 && (
+                        <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
                       )}
-                      <span style={{ fontFamily: "'Special Elite', monospace", color: '#c8d0e0', fontSize: '14px' }}>{player.displayName}</span>
                     </div>
-                    {wasImposter ? (
-                      <span style={{ fontFamily: "'Permanent Marker', cursive", fontSize: '12px', color: '#c9384c' }}>IMPOSTER</span>
-                    ) : null}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
 

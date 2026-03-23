@@ -3,3 +3,72 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+.word-envelope-wrap {
+	position: relative;
+	height: 240px;
+	overflow: visible;
+	--envelope-height: 152px;
+}
+
+.word-envelope-back {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: var(--envelope-height);
+	z-index: 1;
+	background: #a89878;
+	border-radius: 8px;
+	overflow: visible;
+}
+
+.word-envelope-back::before {
+	content: none;
+}
+
+.word-envelope-letter {
+	position: absolute;
+	top: 32px;
+	left: 10%;
+	right: 10%;
+	height: 75%;
+	z-index: 2;
+	background: #e8e4d9;
+	border-radius: 6px;
+	padding: 0.75rem 1rem;
+}
+
+.word-envelope-front {
+	position: absolute;
+	bottom: 0;
+	left: 0;
+	right: 0;
+	height: calc(var(--envelope-height) * 0.55);
+	z-index: 3;
+	background: #e8dcc8;
+	clip-path: polygon(0 0, 50% 60%, 100% 0, 100% 100%, 0 100%);
+	border-radius: 0 0 8px 8px;
+	overflow: hidden;
+}
+
+.word-envelope-front::before,
+.word-envelope-front::after {
+	content: '';
+	position: absolute;
+	bottom: 0;
+	height: 100%;
+	background: #c2b396;
+}
+
+.word-envelope-front::before {
+	left: 0;
+	width: 50%;
+	clip-path: polygon(0 0, 100% 60%, 100% 100%, 0 100%);
+}
+
+.word-envelope-front::after {
+	right: 0;
+	width: 50%;
+	clip-path: polygon(0 60%, 100% 0, 100% 100%, 0 100%);
+}
