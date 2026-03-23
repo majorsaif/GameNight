@@ -1044,17 +1044,16 @@ export default function MafiaGame() {
   };
 
   const renderEliminatedBanner = () => (
-    <div
-      className="relative overflow-hidden bg-[#e3d2ad] border border-[#c4ab78] rounded-lg p-4 mb-6 text-center shadow-lg"
-      style={{ transform: 'rotate(-2deg)' }}
-    >
-      <h2 className="text-black font-serif font-black text-lg uppercase tracking-wide">YOU HAVE BEEN ELIMINATED</h2>
-      <div
-        className="pointer-events-none absolute right-3 bottom-2 border-2 border-[#6d1010] px-2 py-1 text-[#6d1010] text-xs font-black uppercase tracking-widest opacity-95"
-        style={{ transform: 'rotate(-15deg)' }}
-      >
-        DECEASED
-      </div>
+    <div className="relative overflow-hidden bg-[#e3d2ad] border border-[#c4ab78] rounded-lg p-4 mb-6 text-center shadow-lg">
+      <h2 className="text-black font-serif font-black text-lg uppercase tracking-wide">
+        YOU HAVE BEEN
+        <span
+          className="inline-block align-middle ml-2 border-2 border-[#6d1010] px-2 py-1 text-[#6d1010] text-xs font-black uppercase tracking-widest opacity-95"
+          style={{ transform: 'rotate(10deg)' }}
+        >
+          ELIMINATED
+        </span>
+      </h2>
     </div>
   );
 
@@ -1454,6 +1453,26 @@ export default function MafiaGame() {
                   <p className="text-green-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
                 )}
               </div>
+
+              <div className="space-y-2">
+                {selectablePlayers.map((player) => {
+                  const voteCount = Object.values(doctorVote).filter((v) => v === player.uid).length;
+                  return (
+                    <div
+                      key={player.uid}
+                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
+                        <span className="text-white">{player.displayName}</span>
+                      </div>
+                      {voteCount > 0 && (
+                        <span className="text-green-400 font-bold">🩺</span>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           </div>
         </div>
@@ -1527,6 +1546,9 @@ export default function MafiaGame() {
     const detectiveDead = !gameState.players.find(p => p.role === 'detective' && p.isAlive);
 
     if (spectator && !detectiveDead) {
+      const detectiveVote = gameState.nightVotes || {};
+      const selectablePlayers = getSelectablePlayers();
+
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
@@ -1538,6 +1560,26 @@ export default function MafiaGame() {
                 {timeLeft !== null && (
                   <p className="text-yellow-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
                 )}
+              </div>
+
+              <div className="space-y-2">
+                {selectablePlayers.map((player) => {
+                  const voteCount = Object.values(detectiveVote).filter((v) => v === player.uid).length;
+                  return (
+                    <div
+                      key={player.uid}
+                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
+                    >
+                      <div className="flex items-center gap-3">
+                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
+                        <span className="text-white">{player.displayName}</span>
+                      </div>
+                      {voteCount > 0 && (
+                        <span className="text-yellow-400 font-bold">🔍</span>
+                      )}
+                    </div>
+                  );
+                })}
               </div>
             </div>
           </div>
@@ -1647,6 +1689,10 @@ export default function MafiaGame() {
     const victimUid = gameState.pendingVictim;
     const saved = Boolean(gameState.lastSaved && gameState.lastSaved === victimUid);
     const victim = victimUid ? gameState.players.find(p => p.uid === victimUid) : null;
+    const savedPlayer = gameState.lastSaved ? gameState.players.find((p) => p.uid === gameState.lastSaved) : null;
+    const investigatedPlayer = gameState.detectiveResult?.targetUid
+      ? gameState.players.find((p) => p.uid === gameState.detectiveResult.targetUid)
+      : null;
     const nightReportCause = gameState.nightReportCause || '';
     const defaultReportNote = victim
       ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
@@ -1684,6 +1730,18 @@ export default function MafiaGame() {
                 <p className="font-mono text-[#2f241c] text-sm">
                   {saved ? 'PATIENT' : 'VICTIM'}: {victim.displayName}
                 </p>
+
+                {spectator && activeRules.doctor && savedPlayer && (
+                  <p className="font-mono text-[#2f241c] text-sm mt-1">
+                    DOCTOR SAVE: {savedPlayer.displayName}
+                  </p>
+                )}
+
+                {spectator && activeRules.detective && gameState.detectiveResult && (
+                  <p className="font-mono text-[#2f241c] text-sm mt-1">
+                    DETECTIVE CHECK: {investigatedPlayer?.displayName || gameState.detectiveResult.targetName}
+                  </p>
+                )}
 
                 {!saved && (
                   <p className="font-mono text-[#2f241c] text-sm mt-1">
