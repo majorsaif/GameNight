@@ -477,6 +477,7 @@ export default function MafiaGame() {
       'activeActivity.phaseDurationMs': nightEyesClosedDurationMs,
       'activeActivity.phaseEndsAt': Date.now() + nightEyesClosedDurationMs,
       'activeActivity.nightVotes': {},
+      'activeActivity.mafiaSelections': {},
       'activeActivity.confirmedVotes': [],
       'activeActivity.pendingVictim': null,
       'activeActivity.doctorSave': null,
@@ -493,6 +494,7 @@ export default function MafiaGame() {
         'activeActivity.phaseEndsAt': Date.now() + 30000,
         'activeActivity.confirmedVotes': [],
         'activeActivity.nightVotes': {},
+        'activeActivity.mafiaSelections': {},
         lastActivity: serverTimestamp()
       });
     }, nightEyesClosedDurationMs);
@@ -504,6 +506,16 @@ export default function MafiaGame() {
     if (myRole === 'narrator') return;
     
     setSelectedPlayer(targetUid);
+
+    if (gameState.phase === 'night-mafia' && myRole === 'mafia' && !isHost) {
+      const roomRef = doc(db, 'rooms', roomId);
+      await updateDoc(roomRef, {
+        [`activeActivity.mafiaSelections.${user.id}`]: {
+          targetUid,
+          confirmed: false
+        }
+      });
+    }
   };
 
   const handleConfirmVote = async () => {
@@ -514,12 +526,20 @@ export default function MafiaGame() {
     const roomRef = doc(db, 'rooms', roomId);
     const voteField = gameState.phase === 'day-vote' ? 'dayVotes' : 'nightVotes';
     const confirmedVotes = Array.from(new Set([...(gameState.confirmedVotes || []), user.id]));
-
-    await updateDoc(roomRef, {
+    const updates = {
       [`activeActivity.${voteField}.${user.id}`]: selectedPlayer,
       'activeActivity.confirmedVotes': confirmedVotes,
       lastActivity: serverTimestamp()
-    });
+    };
+
+    if (gameState.phase === 'night-mafia' && myRole === 'mafia' && !isHost) {
+      updates[`activeActivity.mafiaSelections.${user.id}`] = {
+        targetUid: selectedPlayer,
+        confirmed: true
+      };
+    }
+
+    await updateDoc(roomRef, updates);
 
     setHasConfirmed(true);
 
@@ -696,6 +716,7 @@ export default function MafiaGame() {
       'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
       'activeActivity.confirmedVotes': [],
       'activeActivity.nightVotes': {},
+      'activeActivity.mafiaSelections': {},
       lastActivity: serverTimestamp()
     });
   };
@@ -1303,6 +1324,13 @@ export default function MafiaGame() {
 
     // Active mafia player
     const selectablePlayers = getSelectablePlayers();
+    const mafiaPlayers = gameState.players.filter((player) => player.role === 'mafia');
+    const sortedMafiaPlayers = [...mafiaPlayers].sort((a, b) => {
+      if (a.isAlive === b.isAlive) return 0;
+      return a.isAlive ? -1 : 1;
+    });
+    const mafiaSelections = gameState.mafiaSelections || {};
+    const showMafiaCoordination = !isHost;
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-950 via-red-900 to-red-950 p-6">
@@ -1315,21 +1343,46 @@ export default function MafiaGame() {
           </div>
 
           <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.map((player) => (
-              <button
-                key={player.uid}
-                onClick={() => handleVotePlayer(player.uid)}
-                disabled={hasConfirmed}
-                className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                  selectedPlayer === player.uid
-                    ? 'bg-red-600 ring-2 ring-white'
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
-                <span className="text-white font-semibold">{player.displayName}</span>
-              </button>
-            ))}
+            {selectablePlayers.map((player) => {
+              const selectorsForPlayer = mafiaPlayers.filter(
+                (mafiaPlayer) => mafiaSelections[mafiaPlayer.uid]?.targetUid === player.uid
+              );
+
+              return (
+                <button
+                  key={player.uid}
+                  onClick={() => handleVotePlayer(player.uid)}
+                  disabled={hasConfirmed}
+                  className={`flex items-start gap-3 rounded-xl p-4 transition-all ${
+                    selectedPlayer === player.uid
+                      ? 'bg-red-600 ring-2 ring-white'
+                      : 'bg-slate-800/50 hover:bg-slate-700'
+                  } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
+                  <div className="flex-1 min-w-0 text-left">
+                    <span className="text-white font-semibold block">{player.displayName}</span>
+                    {showMafiaCoordination && selectorsForPlayer.length > 0 && (
+                      <div className="mt-2 flex items-center gap-2 flex-wrap">
+                        {selectorsForPlayer.map((mafiaPlayer) => {
+                          const selection = mafiaSelections[mafiaPlayer.uid];
+                          const isConfirmedSelection = selection?.confirmed === true;
+                          return (
+                            <div
+                              key={mafiaPlayer.uid}
+                              className={`${isConfirmedSelection ? 'opacity-100' : 'opacity-40'} transition-opacity`}
+                              title={`${mafiaPlayer.displayName}${isConfirmedSelection ? ' (confirmed)' : ' (selecting)'}`}
+                            >
+                              {renderPlayerAvatar(mafiaPlayer, 'w-8 h-8', 'text-xs')}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </div>
+                </button>
+              );
+            })}
           </div>
 
           <button
@@ -1339,6 +1392,34 @@ export default function MafiaGame() {
           >
             {hasConfirmed ? 'Vote Confirmed' : 'Confirm'}
           </button>
+
+          {showMafiaCoordination && (
+            <div className="mt-6 rounded-xl border border-red-900/60 bg-black/20 p-4">
+              <p className="text-red-200/80 text-[11px] font-mono uppercase tracking-widest mb-3">
+                Look up to coordinate with your team
+              </p>
+              <div className="space-y-2">
+                {sortedMafiaPlayers.map((mafiaPlayer) => {
+                  const isEliminatedMafia = mafiaPlayer.isAlive === false;
+                  return (
+                    <div key={mafiaPlayer.uid} className="flex items-center gap-3">
+                      <div className={isEliminatedMafia ? 'opacity-30' : 'opacity-100'}>
+                        {renderPlayerAvatar(mafiaPlayer, 'w-9 h-9', 'text-xs')}
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`font-medium ${isEliminatedMafia ? 'text-red-100/30 line-through' : 'text-red-100'}`}>
+                          {mafiaPlayer.displayName}
+                        </span>
+                        {isEliminatedMafia && (
+                          <span className="text-[11px] uppercase tracking-wide text-red-300/60">eliminated</span>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
         </div>
       </div>
     );
