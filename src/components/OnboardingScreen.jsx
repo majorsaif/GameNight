@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useLocation } from 'react-router-dom';
 import { getInitials } from '../utils/avatar';
 import GameNightLogo from './GameNightLogo';
 import {
@@ -14,6 +14,7 @@ export default function OnboardingScreen() {
   const [photoBase64, setPhotoBase64] = useState(null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
+  const location = useLocation();
 
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
@@ -64,8 +65,9 @@ export default function OnboardingScreen() {
       console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', photoBase64.length);
     }
 
-    // Navigate to welcome screen
-    navigate('/');
+    // Return to an invite room when onboarding was triggered from a room link.
+    const redirectTo = location.state?.redirectTo;
+    navigate(typeof redirectTo === 'string' ? redirectTo : '/');
   };
 
   // Generate initials avatar color

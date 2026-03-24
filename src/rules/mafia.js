@@ -1,7 +1,7 @@
 const mafiaRules = {
   title: 'Mafia',
   summary:
-    'A social deduction game where the Mafia secretly eliminates players at night while the Town tries to identify and vote them out during the day.',
+    'A social deduction game where Mafia act at night and Town works together during the day to identify and eliminate them.',
 
   sections: [
     {
@@ -11,25 +11,25 @@ const mafiaRules = {
     {
       heading: 'Roles',
       items: [
-        { role: 'Mafia', text: 'Knows who the other Mafia members are. Each night, the Mafia collectively chooses one player to eliminate.' },
-        { role: 'Civilian', text: 'A regular townsperson with no special ability. Uses discussion and voting to find the Mafia.' },
-        { role: 'Doctor', text: 'Each night, secretly chooses one player to protect. If the Mafia targets that player, they survive.' },
-        { role: 'Detective', text: 'Each night, secretly investigates one player to learn whether they are Mafia or not.' },
+        { role: 'Mafia', text: 'Knows the other Mafia members and chooses one target each night.' },
+        { role: 'Civilian', text: 'No special night action. Uses discussion and voting to identify Mafia.' },
+        { role: 'Doctor', text: 'If enabled, chooses one player to protect each night.' },
+        { role: 'Detective', text: 'If enabled, investigates one player each night to learn if they are Mafia.' },
       ],
     },
     {
       heading: 'Night Phase',
-      text: 'Everyone "closes their eyes." The Mafia picks a target to eliminate. The Doctor picks someone to save. The Detective picks someone to investigate. All choices are made simultaneously and secretly.',
+      text: 'Players act in hidden night phases. Mafia selects a target, Doctor protects (if enabled), and Detective investigates (if enabled). Results are revealed at day start.',
     },
     {
       heading: 'Day Phase',
-      text: 'The results of the night are revealed — a player may have been eliminated. Surviving players discuss who they suspect is Mafia, then hold a vote to eliminate one player. The player with the most votes is removed from the game.',
+      text: 'Surviving players discuss, then vote to eliminate one suspect. Eliminated players no longer take actions but can still watch the game.',
     },
     {
       heading: 'Win Conditions',
       items: [
         { role: 'Town wins', text: 'All Mafia members have been eliminated.' },
-        { role: 'Mafia wins', text: 'Mafia members equal or outnumber the remaining Town players.' },
+        { role: 'Mafia wins', text: 'Mafia members equal or outnumber the remaining non-Mafia players.' },
       ],
     },
   ],

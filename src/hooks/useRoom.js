@@ -917,7 +917,7 @@ export function useRoom(roomId, userId = null, userDisplayName = null, userPhoto
         unsubscribe();
       }
     };
-  }, [roomId]);
+  }, [roomId, userId, userDisplayName, userPhoto]);
 
   const isHost = room && userId && room.hostId === userId;
 
