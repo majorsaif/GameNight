@@ -1902,6 +1902,8 @@ export default function MafiaGame() {
     const totalPlayers = gameState.players?.length || 0;
     const eliminatedCount = gameState.players?.filter((player) => player.isAlive === false).length || 0;
     const nightsCount = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : null;
+    const totalRoundsPlayed = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : 1;
+    const eliminatedForSummary = Array.isArray(gameState?.eliminatedPlayers) ? gameState.eliminatedPlayers : [];
     const rightMetaText = nightsCount !== null ? `NIGHTS: ${nightsCount}` : `ELIMINATED: ${eliminatedCount}`;
 
     return (
@@ -1979,22 +1981,39 @@ export default function MafiaGame() {
             {/* Player List */}
             <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
               <div>
-                {gameState.players.map((player, idx) => (
-                  <div key={player.uid}>
-                    <div
-                      className="relative flex items-center justify-between py-3"
-                      style={{
-                        backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
-                      }}
-                    >
-                      <div className="flex items-center gap-3">
-                        {renderPlayerAvatar(player, 'w-8 h-8', 'text-xs')}
-                        <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
-                          {player.displayName}
-                        </span>
-                      </div>
+                {gameState.players.map((player, idx) => {
+                  const eliminatedRound = eliminatedForSummary.indexOf(player.uid) + 1;
+                  const survivedRounds = eliminatedRound > 0
+                    ? Math.min(totalRoundsPlayed, eliminatedRound)
+                    : totalRoundsPlayed;
+                  const roundsLabel = `${survivedRounds} ${survivedRounds === 1 ? 'round' : 'rounds'}`;
+                  const roleRoundsColor = player.role === 'mafia'
+                    ? '#8b3a3a'
+                    : player.role === 'doctor'
+                      ? '#4a7c5a'
+                      : player.role === 'detective'
+                        ? '#8b6b3f'
+                        : '#5a7a9a';
 
-                      <div className="flex items-center gap-2">
+                  return (
+                    <div key={player.uid}>
+                      <div
+                        className="relative flex items-center justify-between py-3"
+                        style={{
+                          backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {renderPlayerAvatar(player, 'w-8 h-8', 'text-xs')}
+                          <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
+                            {player.displayName}
+                            <span style={{ marginLeft: '8px', fontSize: '12px', fontFamily: 'monospace', color: roleRoundsColor }}>
+                              {roundsLabel}
+                            </span>
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
                         {/* Mafia: stamp first, then emoji */}
                         {player.role === 'mafia' && (
                           <>
@@ -2067,29 +2086,30 @@ export default function MafiaGame() {
                           </>
                         )}
 
-                      </div>
-
-                      {!player.isAlive && (
-                        <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-20 z-10">
-                          <span
-                            className="border-2 px-3 py-1 text-sm font-black uppercase tracking-[0.18em]"
-                            style={{
-                              borderColor: '#dc2626',
-                              color: '#dc2626',
-                              backgroundColor: 'transparent',
-                              transform: 'rotate(0deg)'
-                            }}
-                          >
-                            ELIMINATED
-                          </span>
                         </div>
+
+                        {!player.isAlive && (
+                          <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-20 z-10">
+                            <span
+                              className="border-2 px-3 py-1 text-sm font-black uppercase tracking-[0.18em]"
+                              style={{
+                                borderColor: '#dc2626',
+                                color: '#dc2626',
+                                backgroundColor: 'transparent',
+                                transform: 'rotate(0deg)'
+                              }}
+                            >
+                              ELIMINATED
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {idx < gameState.players.length - 1 && (
+                        <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
                       )}
                     </div>
-                    {idx < gameState.players.length - 1 && (
-                      <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
-                    )}
-                  </div>
-                ))}
+                  );
+                })}
               </div>
             </div>
           </div>
