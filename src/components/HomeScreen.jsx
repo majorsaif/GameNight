@@ -26,6 +26,49 @@ export default function HomeScreen() {
   const navigate = useNavigate();
   const location = useLocation();
   const [showWheelSetup, setShowWheelSetup] = useState(false);
+  const [shareToast, setShareToast] = useState('');
+
+  useEffect(() => {
+    if (userLoading) return;
+    if (!user && roomId) {
+      navigate('/onboarding', {
+        replace: true,
+        state: { redirectTo: `/room/${roomId}` }
+      });
+    }
+  }, [userLoading, user, roomId, navigate]);
+
+  useEffect(() => {
+    if (!shareToast) return;
+    const timeoutId = setTimeout(() => setShareToast(''), 2200);
+    return () => clearTimeout(timeoutId);
+  }, [shareToast]);
+
+  const handleShareRoom = async () => {
+    const roomLink = `${window.location.origin}/room/${roomId}`;
+    const inviteText = `Join my GameNight room: ${roomLink}`;
+
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: 'Join my GameNight room',
+          text: inviteText,
+          url: roomLink
+        });
+        setShareToast('Invite shared');
+        return;
+      } catch (error) {
+        // Ignore cancel and continue to clipboard fallback.
+      }
+    }
+
+    try {
+      await navigator.clipboard.writeText(inviteText);
+      setShareToast('Invite copied');
+    } catch (error) {
+      setShareToast('Could not share invite');
+    }
+  };
 
   // Backfill avatar colors for existing players
   useEffect(() => {
@@ -142,17 +185,7 @@ export default function HomeScreen() {
           <div className="flex items-center gap-2">
             {/* Share Button */}
             <button
-              onClick={() => {
-                if (navigator.share) {
-                  navigator.share({
-                    title: 'Join my room on Its Games Night',
-                    text: `Join room ${room.code}`,
-                    url: window.location.href
-                  }).catch(() => {});
-                } else {
-                  navigator.clipboard.writeText(window.location.href);
-                }
-              }}
+              onClick={handleShareRoom}
               className="flex items-center justify-center w-11 h-11 bg-slate-800 border border-slate-700 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors"
               title="Share room"
             >
@@ -174,6 +207,12 @@ export default function HomeScreen() {
           </div>
         </div>
       </header>
+
+      {shareToast && (
+        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full text-sm font-semibold bg-slate-900/95 border border-slate-700 text-slate-200 shadow-lg">
+          {shareToast}
+        </div>
+      )}
 
       {/* Main Content */}
       <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 overflow-y-auto">
