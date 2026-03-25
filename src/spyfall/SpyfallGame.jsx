@@ -7,6 +7,7 @@ import { db } from '../firebase';
 import { getInitials } from '../utils/avatar';
 import LOCATIONS from './locations';
 import VotingPanel from '../components/VotingPanel';
+import gameNightIcon from '../assets/itsgamesnight-icon.png';
 
 export default function SpyfallGame() {
   const { roomId } = useParams();
@@ -85,31 +86,26 @@ export default function SpyfallGame() {
     };
 
     updateTimer();
-    timerRef.current = setInterval(updateTimer, 500);
+    timerRef.current = setInterval(updateTimer, 1000);
+
     return () => {
       if (timerRef.current) clearInterval(timerRef.current);
     };
-  }, [gameState?.phase, gameState?.phaseStartedAt, isHost]);
+  }, [gameState?.phase, gameState?.phaseStartedAt, gameState?.rules?.discussionTime, isHost]);
 
   // Auto-advance to voting when all active players are ready
   useEffect(() => {
-    if (!isHost || !gameState || gameState.phase !== 'questioning') return;
+    if (!isHost || gameState?.phase !== 'questioning-intro' || !gameState?.phaseStartedAt) return;
+
     const readyVotes = gameState.readyVotes || [];
     const allPlayerUids = getActivePlayers().map((player) => player.uid);
 
     if (allPlayerUids.length > 0 && allPlayerUids.every((uid) => readyVotes.includes(uid))) {
       handleStartVoting().catch(console.error);
+      return;
     }
-  }, [isHost, gameState?.phase, gameState?.readyVotes, gameState?.players, gameState?.eliminatedSpyIds]);
 
-  // Host auto-transition from intro screen to questioning after a short delay
-  useEffect(() => {
-    if (!isHost || !gameState || gameState.phase !== 'questioning-intro') return;
-
-    const startedAt = gameState.phaseStartedAt;
-    if (!startedAt) return;
-
-    const elapsed = Date.now() - startedAt;
+    const elapsed = Date.now() - gameState.phaseStartedAt;
     const remainingMs = Math.max(0, QUESTIONING_INTRO_MS - elapsed);
 
     const timeoutId = setTimeout(() => {
@@ -204,12 +200,15 @@ export default function SpyfallGame() {
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,
       'activeActivity.spyGuessing': null,
+      'activeActivity.declaringGuess': null,
+      'activeActivity.pausedFromPhase': null,
       lastActivity: serverTimestamp(),
     });
   };
 
   const handleEndVoting = async () => {
     if (!isHost || !gameState) return;
+    if (isGuessPaused) return;
     const votes = gameState.votes || {};
     const activePlayers = getActivePlayers();
 
@@ -243,6 +242,8 @@ export default function SpyfallGame() {
         'activeActivity.eliminatedUid': eliminated,
         'activeActivity.phase': 'ended',
         'activeActivity.winner': 'spy',
+        'activeActivity.declaringGuess': null,
+        'activeActivity.pausedFromPhase': null,
         lastActivity: serverTimestamp(),
       });
       return;
@@ -258,6 +259,8 @@ export default function SpyfallGame() {
         'activeActivity.eliminatedSpyIds': newEliminatedSpyIds,
         'activeActivity.phase': 'ended',
         'activeActivity.winner': 'town',
+        'activeActivity.declaringGuess': null,
+        'activeActivity.pausedFromPhase': null,
         lastActivity: serverTimestamp(),
       });
     } else {
@@ -273,12 +276,30 @@ export default function SpyfallGame() {
         'activeActivity.readyVotes': [],
         'activeActivity.votes': {},
         'activeActivity.currentAskerId': newAsker?.uid || null,
+        'activeActivity.declaringGuess': null,
+        'activeActivity.pausedFromPhase': null,
         lastActivity: serverTimestamp(),
       });
     }
   };
 
   // Spy guess actions
+  const handleDeclareGuess = async () => {
+    if (!user || !gameState) return;
+    if (gameState.phase !== 'voting') return;
+    if (!amSpy || !amActivePlayer || isGuessPaused) return;
+
+    const roomRef = doc(db, 'rooms', roomId);
+    await updateDoc(roomRef, {
+      'activeActivity.declaringGuess': {
+        uid: user.id,
+        displayName: user.displayName || getPlayerByUid(user.id)?.displayName || 'Unknown'
+      },
+      'activeActivity.pausedFromPhase': gameState.phase,
+      lastActivity: serverTimestamp(),
+    });
+  };
+
   const handleReadyToGuess = async () => {
     if (!isSpy() || !user) return;
     const roomRef = doc(db, 'rooms', roomId);
@@ -291,39 +312,25 @@ export default function SpyfallGame() {
   const handleSpyGuessResult = async (correct) => {
     if (!isHost) return;
     const roomRef = doc(db, 'rooms', roomId);
-    const spyUid = gameState.spyGuessing?.spyUid;
-    const eliminatedSpyIds = gameState?.eliminatedSpyIds || [];
-    const spyIds = gameState?.spyIds || [];
 
     if (correct) {
       await updateDoc(roomRef, {
         'activeActivity.phase': 'ended',
         'activeActivity.winner': 'spy',
         'activeActivity.spyGuessing': null,
+        'activeActivity.declaringGuess': null,
+        'activeActivity.pausedFromPhase': null,
         lastActivity: serverTimestamp(),
       });
     } else {
-      // Wrong guess — eliminate this spy
-      const newEliminatedSpyIds = [...eliminatedSpyIds, spyUid];
-      const remainingActiveSpies = spyIds.filter((uid) => !newEliminatedSpyIds.includes(uid));
-
-      if (remainingActiveSpies.length === 0) {
-        // Last spy guessed wrong → town wins
-        await updateDoc(roomRef, {
-          'activeActivity.eliminatedSpyIds': newEliminatedSpyIds,
-          'activeActivity.phase': 'ended',
-          'activeActivity.winner': 'town',
-          'activeActivity.spyGuessing': null,
-          lastActivity: serverTimestamp(),
-        });
-      } else {
-        // Other spies remain — continue
-        await updateDoc(roomRef, {
-          'activeActivity.eliminatedSpyIds': newEliminatedSpyIds,
-          'activeActivity.spyGuessing': null,
-          lastActivity: serverTimestamp(),
-        });
-      }
+      await updateDoc(roomRef, {
+        'activeActivity.phase': 'ended',
+        'activeActivity.winner': 'town',
+        'activeActivity.spyGuessing': null,
+        'activeActivity.declaringGuess': null,
+        'activeActivity.pausedFromPhase': null,
+        lastActivity: serverTimestamp(),
+      });
     }
   };
 
@@ -344,6 +351,9 @@ export default function SpyfallGame() {
   const handleConfirmVote = async (targetUid) => {
     if (!user || !targetUid) {
       throw new Error('Vote unavailable');
+    }
+    if (isGuessPaused) {
+      throw new Error('Voting is paused');
     }
     if (targetUid === user.id) {
       throw new Error('You cannot vote for yourself');
@@ -387,6 +397,8 @@ export default function SpyfallGame() {
       'activeActivity.votes': {},
       'activeActivity.eliminatedUid': null,
       'activeActivity.spyGuessing': null,
+      'activeActivity.declaringGuess': null,
+      'activeActivity.pausedFromPhase': null,
       'activeActivity.winner': null,
       'activeActivity.phaseStartedAt': null,
       'activeActivity.roundNumber': (gameState.roundNumber || 1) + 1,
@@ -407,7 +419,7 @@ export default function SpyfallGame() {
 
   if (authLoading || roomLoading || !gameStateLoaded) {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
         <div className="text-center">
           <div className="text-6xl mb-4 animate-pulse">⌛</div>
           <div className="text-white text-xl">Loading game...</div>
@@ -429,77 +441,165 @@ export default function SpyfallGame() {
   const myPlayer = getPlayerByUid(user?.id);
   const amSpy = isSpy();
   const amActivePlayer = isActivePlayer();
+  const declaringGuess = gameState?.declaringGuess || null;
+  const isGuessPaused = Boolean(declaringGuess);
+
+  const renderSpyGuessOverlay = (overlayPlayer, fallbackName = 'A spy') => (
+    <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
+      <div className="bg-[#1e2a3a] border-2 border-[#c9882a]/60 rounded-2xl p-6 max-w-sm w-full mx-auto overflow-hidden">
+        <p className="spy-mono uppercase text-[#c9882a] tracking-widest text-xs text-center mb-4">SPY DECLARATION IN PROGRESS</p>
+        <div className="border-t border-[#2e3f52] mb-4" />
+
+        {overlayPlayer && (
+          <div className="flex items-center justify-center mb-2">
+            {renderAvatar(overlayPlayer, 'w-14 h-14', 'text-lg')}
+          </div>
+        )}
+
+        <h2 className="spy-serif text-2xl font-bold text-white text-center mt-2">
+          {overlayPlayer?.displayName || fallbackName}
+        </h2>
+        <p className="spy-mono text-[#7a8c9e] text-xs tracking-wide text-center mt-1">
+          {(overlayPlayer?.displayName || fallbackName)} is declaring their location guess.
+        </p>
+        <p className="text-white/80 text-sm text-center mt-3">They will say the location out loud.</p>
+
+        {isHost ? (
+          <>
+            <button
+              onClick={() => handleSpyGuessResult(true)}
+              className="spy-mono bg-[#1a5c2a] hover:bg-[#156622] text-white w-full uppercase rounded-xl py-3 font-bold mt-4 transition-colors"
+            >
+              Correct
+            </button>
+            <button
+              onClick={() => handleSpyGuessResult(false)}
+              className="spy-mono bg-[#6b1515] hover:bg-[#8b1a1a] text-white w-full uppercase rounded-xl py-3 font-bold mt-2 transition-colors"
+            >
+              Incorrect
+            </button>
+            <p className="spy-mono text-[#7a8c9e]/60 text-xs text-center mt-2">Host only - confirm what the spy said out loud</p>
+          </>
+        ) : (
+          <div className="bg-[#2e3f52] rounded-xl px-4 py-3 mt-4">
+            <p className="spy-mono italic text-[#7a8c9e] text-sm text-center">Awaiting host confirmation...</p>
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   // ── LOCATION REVEAL PHASE ─────────────────────────────────────────────────
 
   if (gameState.phase === 'location-reveal') {
+    const passengerName = myPlayer?.displayName || user?.displayName || 'Passenger';
+    const locationName = gameState.location || 'UNKNOWN';
+    const locationSizeClass = locationName.length > 10 ? 'text-2xl' : 'text-4xl';
+    const isSealed = !showCard;
+
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <div className="text-center">
-            {!showCard ? (
-              <div>
-                <div className="text-6xl mb-6">🃏</div>
-                <h1 className="text-white text-2xl font-bold mb-4">Your card is face-down</h1>
-                <p className="text-slate-400 mb-8">Tap Reveal to see your role in private</p>
-                <button
-                  onClick={() => setShowCard(true)}
-                  className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-colors"
-                >
-                  Reveal 👁️
-                </button>
-              </div>
-            ) : amSpy ? (
-              <div>
-                <div className="bg-gradient-to-br from-slate-800 to-slate-700 border-2 border-indigo-500/50 rounded-2xl p-8 text-center mb-6">
-                  <div className="text-7xl mb-4">🕵️</div>
-                  <h1 className="text-white text-3xl font-black mb-2">You are the SPY</h1>
-                  <p className="text-slate-300 mt-3 text-sm">Try to figure out where everyone is!</p>
+          <div className="w-full max-w-sm min-h-[420px] mx-auto">
+            <div className={`relative rounded-2xl overflow-hidden border max-w-sm w-full mx-auto min-h-[420px] flex flex-col ${isSealed ? 'bg-[#1c2b20] border-[#3a4f3e]' : 'bg-white border-[#c9882a]/40'}`}>
+              <div className={`h-[320px] overflow-hidden px-5 pt-4 pb-5 flex flex-col gap-3 ${isSealed ? 'bg-[#2d3d2a]' : 'bg-[#ece9e1]'}`}>
+                <div className={`-mx-5 -mt-4 px-5 py-2 mb-4 flex items-center justify-between ${isSealed ? 'bg-[#b57a2f] border-b border-[#c9882a]/70' : 'bg-[#c9882a]'}`}>
+                  <span className="spy-mono uppercase font-bold text-xs tracking-widest text-white">BOARDING PASS</span>
+                  <span className="text-white text-sm">✈︎</span>
                 </div>
-                <button
-                  onClick={() => setShowCard(false)}
-                  className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-colors"
-                >
-                  Hide Card
-                </button>
-              </div>
-            ) : (
-              <div>
-                <div className="bg-gradient-to-br from-indigo-900 to-blue-800 border-2 border-indigo-500/50 rounded-2xl p-8 text-center mb-6">
-                  <div className="text-7xl mb-4">📍</div>
-                  <p className="text-indigo-200 text-sm mb-2 uppercase tracking-widest font-semibold">Location</p>
-                  <h1 className="text-white text-4xl font-black mb-4">{gameState.location}</h1>
-                  {gameState.rules?.showRoles && myPlayer?.role && (
-                    <div className="bg-indigo-800/60 border border-indigo-600/40 rounded-xl p-3 mt-2">
-                      <p className="text-indigo-200 text-xs mb-1">Your Role</p>
-                      <p className="text-white text-xl font-bold">{myPlayer.role}</p>
+
+                <div className="text-center py-2 h-[96px] flex flex-col items-center justify-center">
+                  <p className={`spy-mono uppercase text-[10px] tracking-widest mb-1 ${isSealed ? 'text-[#4a6650]' : 'text-[#7a8c9e]'}`}>DESTINATION</p>
+                  <div className="h-12 flex items-center justify-center">
+                    {isSealed ? (
+                      <span className="bg-[#d4c9a8] h-10 w-48 mx-auto rounded inline-block" />
+                    ) : amSpy ? (
+                      <p className={`spy-mono font-black ${locationSizeClass} text-[#cc3333] truncate`}>UNKNOWN</p>
+                    ) : (
+                      <p className={`spy-mono font-black ${locationSizeClass} text-[#2c1810] truncate`}>{locationName}</p>
+                    )}
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-x-6 gap-y-3 px-5 -mx-5">
+                  <div>
+                    <p className={`spy-mono uppercase text-[10px] tracking-widest ${isSealed ? 'text-[#4a6650]' : 'text-[#7a8c9e]'}`}>PASSENGER</p>
+                    <div className="h-8 mt-1 flex items-center">
+                      {isSealed ? (
+                        <span className="rounded h-3 w-20 inline-block bg-[#d4c9a8]" />
+                      ) : (
+                        <p className="spy-mono font-bold text-lg text-[#2c1810] truncate">{passengerName}</p>
+                      )}
                     </div>
-                  )}
+                  </div>
+
+                  <div>
+                    <p className={`spy-mono uppercase text-[10px] tracking-widest ${isSealed ? 'text-[#4a6650]' : 'text-[#7a8c9e]'}`}>ROLE</p>
+                    <div className="h-8 mt-1 flex items-center">
+                      {isSealed ? (
+                        <span className="bg-[#d4c9a8] rounded h-3 w-20 inline-block" />
+                      ) : (
+                        <p className="spy-mono font-bold text-lg text-[#2c1810] truncate">{myPlayer?.role || (amSpy ? 'SPY' : 'OPERATIVE')}</p>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className={`relative border-t-2 border-dashed ${isSealed ? 'border-[#3a4f3e]' : 'border-[#d4c9a8]'}`}>
+                <span className="w-6 h-6 rounded-full bg-[#0d1117] absolute -left-3 top-1/2 -translate-y-1/2" />
+                <span className="w-6 h-6 rounded-full bg-[#0d1117] absolute -right-3 top-1/2 -translate-y-1/2" />
+              </div>
+
+              <div className={`min-h-20 flex-1 px-5 py-3 flex items-center justify-between ${isSealed ? 'bg-[#d4c9a8]' : 'bg-[#e6e2d9]'}`}>
+                <div className="flex flex-col gap-1 text-left">
+                  <div className="flex gap-[2px]">
+                    {Array.from({ length: 24 }).map((_, index) => (
+                      <div
+                        key={`stub-barcode-${index}`}
+                        className={`${index % 2 === 0 ? 'w-[2px]' : 'w-[1px]'} h-8 rounded-sm ${isSealed ? 'bg-[#4a6650]' : 'bg-[#2c1810]'}`}
+                      />
+                    ))}
+                  </div>
+                  <p className={`spy-mono uppercase text-[9px] tracking-widest ${isSealed ? 'text-[#4a6650]' : 'text-[#2c1810]'}`}>ITS GAMES NIGHT</p>
                 </div>
 
-                <button
-                  onClick={() => setShowCard(false)}
-                  className="w-full bg-white/10 hover:bg-white/20 text-white font-bold py-3 rounded-xl transition-colors"
-                >
-                  Hide Card
-                </button>
+                <div className="flex flex-col items-end gap-1">
+                  <img
+                    src={gameNightIcon}
+                    alt="Its Games Night icon"
+                    className="w-10 h-10 rounded-lg object-cover"
+                    style={{ filter: isSealed ? 'grayscale(1) contrast(2.2) brightness(0.22) opacity(0.95)' : 'grayscale(1) contrast(1.8) brightness(0.45) opacity(0.9)' }}
+                  />
+                </div>
               </div>
-            )}
-          </div>
+            </div>
 
-          <div className="mt-6">
-            {isHost ? (
+            <div className="flex flex-col gap-3 w-full mt-4">
               <button
-                onClick={handleStartQuestioning}
-                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-colors"
+                onClick={() => setShowCard((prev) => !prev)}
+                className={`spy-mono w-full rounded-xl py-4 font-bold uppercase tracking-widest text-base transition-colors ${
+                  showCard
+                    ? 'bg-[#2e3f52] hover:bg-[#3a4f68] text-white'
+                    : 'bg-[#c9882a] hover:bg-[#b07520] text-white'
+                }`}
               >
-                Start Questioning 🗣️
+                {showCard ? 'Hide Pass' : 'Reveal Pass'}
               </button>
-            ) : (
-              <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-                <p className="text-slate-300">Waiting for host to start questioning...</p>
-              </div>
-            )}
+
+              {isHost ? (
+                <button
+                  onClick={handleStartQuestioning}
+                  className="spy-mono w-full rounded-xl py-4 font-bold uppercase tracking-widest text-base bg-violet-600 hover:bg-violet-700 text-white transition-colors"
+                >
+                  Start Questioning
+                </button>
+              ) : (
+                <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-xl p-4 text-center">
+                  <p className="spy-mono italic text-[#7a8c9e]">Waiting for host to start questioning...</p>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
@@ -512,21 +612,26 @@ export default function SpyfallGame() {
     const firstPlayer = getPlayerByUid(gameState.currentAskerId);
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
         <div className="w-full max-w-md">
-          <div className="bg-indigo-900/50 border border-indigo-700 rounded-2xl p-8 text-center">
-            <div className="text-4xl mb-4">🗣️</div>
+          <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-2xl p-8 text-center">
+            <p className="uppercase tracking-widest text-xs text-[#c9882a] text-center" style={{ fontFamily: "'Courier Prime', monospace" }}>NOW BOARDING - QUESTIONING BEGINS</p>
+            <div className="border-t border-[#2e3f52] mx-4 my-3" />
+            <p className="uppercase tracking-widest text-xs text-[#7a8c9e] text-center" style={{ fontFamily: "'Courier Prime', monospace" }}>FIRST TO QUESTION</p>
             {firstPlayer ? (
               <>
-                <div className="flex items-center justify-center mb-4">
+                <div className="flex items-center justify-center gap-3 my-3">
                   {renderAvatar(firstPlayer, 'w-16 h-16', 'text-xl')}
+                  <h2 className="text-2xl font-bold text-white" style={{ fontFamily: "'Playfair Display', serif" }}>{firstPlayer.displayName}</h2>
                 </div>
-                <h2 className="text-white text-3xl font-black mb-2">{firstPlayer.displayName} goes first!</h2>
               </>
             ) : (
-              <h2 className="text-white text-3xl font-black mb-2">A random player goes first!</h2>
+              <>
+                <h2 className="text-2xl font-bold text-white my-3" style={{ fontFamily: "'Playfair Display', serif" }}>A random player</h2>
+              </>
             )}
-            <p className="text-indigo-200 text-sm">Get ready to start questioning...</p>
+            <div className="border-t border-[#2e3f52] mx-4 my-3" />
+            <p className="spy-mono text-[#c9882a] text-xs tracking-wide mt-2">Prepare to identify the spy</p>
           </div>
         </div>
       </div>
@@ -543,71 +648,86 @@ export default function SpyfallGame() {
     const amActiveSpy = amSpy && amActivePlayer;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
 
         {/* Timer bar */}
         <div className="w-full max-w-md mx-auto px-4 pt-4">
-          <div className="bg-slate-800/80 border border-slate-700 rounded-xl px-4 py-3 flex items-center justify-between">
-            <span className="text-slate-400 text-sm font-semibold uppercase tracking-widest">Time Left</span>
-            <span className={`text-2xl font-black tabular-nums ${timerDisplay != null && timerDisplay <= 30 ? 'text-red-400' : 'text-white'}`}>
-              {timerDisplay != null ? formatTimer(timerDisplay) : '--:--'}
-            </span>
+          <div className="bg-[#1a1a1a] rounded-xl overflow-hidden border border-[#2e3f52]">
+            <div className="bg-[#1a1a1a] px-4 py-2 flex items-center justify-start">
+              <span className="font-mono uppercase text-white font-bold text-sm tracking-widest">FLIGHTS</span>
+            </div>
+            <div className="bg-[#111] px-4 py-4 flex items-center justify-between w-full">
+              {/* REMAINING label - character boxes */}
+              <div className="flex items-center gap-1">
+                {'TIME'.split('').map((char, idx) => (
+                  <div
+                    key={`label-${idx}`}
+                    className="inline-flex items-center justify-center bg-[#1a1a1a] border border-[#333] w-6 h-7 rounded-sm relative"
+                    style={{
+                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    <span className="font-bold text-sm text-[#e8e0c8]" style={{fontFamily: "OCR-A, 'Courier New', monospace"}}>{char}</span>
+                    <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-[#000]/40 pointer-events-none"></div>
+                  </div>
+                ))}
+              </div>
+              {/* Timer - character boxes */}
+              <div className="flex items-center gap-1">
+                {(timerDisplay != null ? formatTimer(timerDisplay) : '--:--').split('').map((char, idx) => (
+                  <div
+                    key={`timer-${idx}`}
+                    className="inline-flex items-center justify-center bg-[#111] border border-[#2a2a2a] w-6 h-7 rounded-sm relative"
+                    style={{
+                      boxShadow: 'inset 0 2px 4px rgba(0,0,0,0.5), inset 0 -2px 4px rgba(0,0,0,0.3)'
+                    }}
+                  >
+                    <span className="font-bold text-[#f5c842] text-sm" style={{fontFamily: "OCR-A, 'Courier New', monospace"}}>
+                      {char}
+                    </span>
+                    <div className="absolute left-0 right-0 top-1/2 h-[1px] bg-[#000]/40 pointer-events-none"></div>
+                  </div>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
 
         {/* Locations grid */}
         <div className="w-full max-w-md mx-auto px-4 pt-3 flex-1 overflow-y-auto">
-          <p className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-2">All Locations</p>
+          <p className="spy-mono uppercase tracking-widest text-xs text-[#7a8c9e] mb-3">ALL LOCATIONS</p>
           <div className="grid grid-cols-2 gap-1.5 pb-2">
             {allLocations.map((loc) => (
-              <div
+              <button
+                type="button"
                 key={loc}
                 className={`rounded-lg px-3 py-2 text-sm text-center font-medium transition-colors ${
                   loc === gameState.location && !amSpy
-                    ? 'bg-indigo-700 text-white border border-indigo-500'
-                    : 'bg-slate-800/60 text-slate-300'
+                    ? 'bg-[#c9882a]/15 border border-[#c9882a] text-[#c9882a] font-bold'
+                    : 'bg-[#1e2a3a] border border-[#2e3f52] text-[#d4c9a8]'
                 }`}
               >
-                {loc}
-              </div>
+                {loc === gameState.location && !amSpy ? '📍 ' : ''}{loc}
+              </button>
             ))}
           </div>
         </div>
 
         {/* Action buttons */}
         <div className="w-full max-w-md mx-auto px-4 py-4 space-y-2">
-          {amActiveSpy && (
-            <button
-              onClick={handleReadyToGuess}
-              disabled={!!spyGuessingData}
-              className="w-full bg-gradient-to-r from-amber-600 to-yellow-600 hover:from-amber-500 hover:to-yellow-500 disabled:from-slate-700 disabled:to-slate-700 text-white disabled:text-slate-400 font-bold py-3 rounded-xl transition-colors"
-            >
-              Ready to Guess 🕵️
-            </button>
-          )}
-
           {amActivePlayer && (
             <button
               onClick={handleReadyToVote}
               disabled={myReadyClicked}
-              className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 disabled:from-slate-700 disabled:to-slate-700 text-white disabled:text-slate-400 font-bold py-3 rounded-xl transition-colors"
+              className="spy-mono w-full bg-violet-600 hover:bg-violet-700 disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
             >
-              {myReadyClicked ? "You're ready ✅" : 'Ready to Vote ✋'}
-            </button>
-          )}
-
-          {isHost && (
-            <button
-              onClick={handleStartVoting}
-              className="w-full bg-white hover:bg-slate-200 text-slate-900 font-bold py-3 rounded-xl transition-colors"
-            >
-              Start Voting
+              {myReadyClicked ? 'Ready to Vote' : 'Ready to Vote'}
             </button>
           )}
 
           {/* Ready count */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-            <p className="text-slate-300 text-sm">
+          <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-xl p-4 text-center">
+            <p className="spy-mono text-[#7a8c9e] text-sm">
               Ready: {(gameState.readyVotes || []).length}/{activePlayers.length}
             </p>
             <div className="flex items-center justify-center mt-3">
@@ -638,46 +758,29 @@ export default function SpyfallGame() {
               })}
             </div>
           </div>
+
+          {isHost && (
+            <button
+              onClick={handleStartVoting}
+              className="spy-mono w-full bg-white hover:bg-slate-200 text-[#0d1117] font-bold uppercase tracking-widest py-4 rounded-xl transition-colors"
+            >
+              START VOTING
+            </button>
+          )}
+
+          {amActiveSpy && (
+            <button
+              onClick={handleReadyToGuess}
+              disabled={!!spyGuessingData}
+              className="spy-mono w-full bg-[#6b1515] hover:bg-[#8b1a1a] disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
+            >
+              Ready to Guess
+            </button>
+          )}
         </div>
 
         {/* Spy guessing overlay */}
-        {spyGuessingData && (
-          <div className="fixed inset-0 bg-black/80 flex items-center justify-center z-50 p-4">
-            <div className="bg-slate-800 border border-yellow-600/50 rounded-2xl p-8 max-w-sm w-full text-center">
-              <div className="text-6xl mb-4">🕵️</div>
-              {guessingPlayer && (
-                <div className="flex items-center justify-center mb-4">
-                  {renderAvatar(guessingPlayer, 'w-14 h-14', 'text-lg')}
-                </div>
-              )}
-              <h2 className="text-white text-2xl font-black mb-2">
-                {guessingPlayer?.displayName || 'A spy'} is making a guess!
-              </h2>
-              <p className="text-slate-300 text-sm mb-6">They will say the location out loud.</p>
-
-              {isHost ? (
-                <div className="space-y-3">
-                  <button
-                    onClick={() => handleSpyGuessResult(true)}
-                    className="w-full bg-green-600 hover:bg-green-500 text-white font-bold py-4 rounded-xl transition-colors"
-                  >
-                    Correct
-                  </button>
-                  <button
-                    onClick={() => handleSpyGuessResult(false)}
-                    className="w-full bg-red-600 hover:bg-red-500 text-white font-bold py-4 rounded-xl transition-colors"
-                  >
-                    Incorrect
-                  </button>
-                </div>
-              ) : (
-                <div className="bg-slate-700/50 border border-slate-600 rounded-xl p-4">
-                  <p className="text-slate-300">Waiting for host to confirm...</p>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
+        {spyGuessingData && renderSpyGuessOverlay(guessingPlayer)}
       </div>
     );
   }
@@ -689,25 +792,41 @@ export default function SpyfallGame() {
     const activePlayers = getActivePlayers();
     const totalVoters = activePlayers.length;
     const votedCount = Object.keys(votes).length;
+    const canDeclareGuess = Boolean(amSpy && amActivePlayer && !isGuessPaused);
+    const votingGuessingPlayer = declaringGuess ? getPlayerByUid(declaringGuess.uid) : null;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-6">
-            <div className="text-4xl mb-3">🗳️</div>
-            <h1 className="text-white text-2xl font-black mb-2">Who is the Spy?</h1>
-            <p className="text-slate-400 text-sm">Votes: {votedCount}/{totalVoters}</p>
+            <h1 className="text-white text-2xl font-bold mb-2" style={{fontFamily: "OCR-A, 'Courier New', monospace"}}>Who is the Spy?</h1>
+            <p className="spy-mono text-[#7a8c9e] text-xs uppercase tracking-widest">Votes: {votedCount}/{totalVoters}</p>
           </div>
 
-          <VotingPanel
-            players={activePlayers}
-            votes={votes}
-            currentUid={user?.id}
-            isHost={isHost}
-            onVote={handleConfirmVote}
-            onEndVoting={handleEndVoting}
-          />
+          <div style={isGuessPaused ? { pointerEvents: 'none', opacity: 0.55 } : undefined}>
+            <VotingPanel
+              players={activePlayers}
+              votes={votes}
+              currentUid={user?.id}
+              isHost={isHost}
+              onVote={handleConfirmVote}
+              onEndVoting={handleEndVoting}
+              theme="ballot"
+            />
+          </div>
+
+          {amActivePlayer && amSpy && (
+            <button
+              onClick={handleDeclareGuess}
+              disabled={!canDeclareGuess}
+              className="spy-mono w-full mt-3 bg-[#6b1515] hover:bg-[#8b1a1a] disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
+            >
+              Declare Guess
+            </button>
+          )}
         </div>
+
+        {declaringGuess && renderSpyGuessOverlay(votingGuessingPlayer, declaringGuess?.displayName || 'A spy')}
       </div>
     );
   }
@@ -716,48 +835,161 @@ export default function SpyfallGame() {
 
   if (gameState.phase === 'ended') {
     const winner = gameState.winner;
+    const townWon = winner === 'town';
     const spyIds = gameState.spyIds || [];
     const spyPlayers = spyIds.map((uid) => getPlayerByUid(uid)).filter(Boolean);
+    const endedLocationName = gameState.location || 'UNKNOWN';
+    const endedLocationSizeClass = endedLocationName.length > 10 ? 'text-2xl' : 'text-4xl';
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
-        <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-8">
-            <div className="text-8xl mb-4">{winner === 'town' ? '🎉' : '🕵️'}</div>
-            <h1 className="text-white text-4xl font-black mb-2">
-              {winner === 'town' ? 'Town wins!' : 'Spy wins!'}
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
+        <div className="w-full max-w-md mx-auto p-6">
+          <div className="mb-6 text-left">
+            <p className="uppercase text-xs tracking-widest text-[#7a8c9e] mb-2" style={{ fontFamily: "'Courier Prime', monospace" }}>OPERATION SPYFALL</p>
+            <h1
+              className={`font-bold text-3xl ${townWon ? 'text-[#c9882a]' : 'text-[#cc3333]'}`}
+              style={{ fontFamily: "'Playfair Display', serif" }}
+            >
+              {townWon ? 'SPY IDENTIFIED' : 'OPERATIVE UNDETECTED'}
             </h1>
+            <p
+              className={`uppercase text-xs tracking-widest mt-1 ${townWon ? 'text-[#2d5a3d]' : 'text-[#8b1a1a]'}`}
+              style={{ fontFamily: "'Courier Prime', monospace" }}
+            >
+              {townWon ? 'MISSION COMPLETE - OPERATIVE COMPROMISED' : 'THE SPY EVADED CAPTURE'}
+            </p>
           </div>
 
           {/* Reveal location */}
-          <div className="bg-indigo-900/50 border border-indigo-700 rounded-2xl p-6 text-center mb-4">
-            <p className="text-indigo-200 text-sm mb-1 uppercase tracking-widest font-semibold">The Location Was</p>
-            <h2 className="text-white text-3xl font-black">{gameState.location}</h2>
+          <div className="relative w-full mb-4 rotate-[-2deg]">
+            <div
+              className="relative h-[120px] overflow-visible flex items-center"
+              style={{
+                width: '100%'
+              }}
+            >
+              {/* Unified tag shape: one outer leather silhouette, one inner insert, one stitch perimeter */}
+              <svg
+                className="absolute inset-0 pointer-events-none"
+                viewBox="0 0 360 120"
+                preserveAspectRatio="none"
+              >
+                <path
+                  d="M 78 10 L 334 10 Q 346 10 346 22 L 346 98 Q 346 110 334 110 L 78 110 L 44 86 L 24 86 Q 20 86 20 82 L 20 38 Q 20 34 24 34 L 44 34 L 78 10 Z"
+                  fill="#6b4226"
+                />
+                <path
+                  d="M 86 20 L 326 20 Q 336 20 336 30 L 336 90 Q 336 100 326 100 L 86 100 L 58 80 L 38 80 Q 34 80 34 76 L 34 44 Q 34 40 38 40 L 58 40 L 86 20 Z"
+                  fill="#f0e6cc"
+                />
+                <path
+                  d="M 81 16 L 330 16 Q 341 16 341 27 L 341 93 Q 341 104 330 104 L 81 104 L 53 82 L 29 82 L 29 38 L 53 38 L 81 16 Z"
+                  fill="none"
+                  stroke="#8b7449"
+                  strokeWidth="2"
+                  strokeDasharray="5,3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  opacity="0.72"
+                />
+                <circle cx="48" cy="60" r="10" fill="#0d1117" stroke="#7a6a45" strokeWidth="2" />
+              </svg>
+
+              <div className="relative z-10 flex items-center justify-center w-full px-4 py-3 gap-3 pt-7">
+                <div className="flex-1 min-w-0 pl-24">
+                  <p
+                    className="uppercase tracking-widest text-[9px] text-[#2c1810]/80 leading-tight"
+                    style={{ fontFamily: "'Courier Prime', monospace" }}
+                  >
+                    DESTINATION
+                  </p>
+                  <h2
+                    className={`${endedLocationSizeClass} text-[#2c1810] font-black leading-none truncate`}
+                    style={{ fontFamily: "'Courier Prime', monospace" }}
+                  >
+                    {endedLocationName}
+                  </h2>
+                </div>
+
+                <div className="w-px h-12 bg-[#8b7449]/60" />
+
+                <div className="w-6 h-16 flex items-center justify-center flex-shrink-0 pr-5">
+                  <p className="uppercase tracking-widest text-[#2c1810]/75 whitespace-nowrap rotate-[-90deg] origin-center" style={{ fontFamily: "'Courier Prime', monospace", lineHeight: '1', fontSize: '6px' }}>
+                    ITS GAMES NIGHT
+                  </p>
+                </div>
+              </div>
+            </div>
           </div>
 
           {/* Reveal spies */}
-          <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-6 mb-6">
-            <h3 className="text-white font-semibold mb-4">
-              {spyPlayers.length === 1 ? 'The Spy was' : 'The Spies were'}
-            </h3>
-            <div className="space-y-3">
-              {(gameState.players || []).map((player) => {
-                const wasSpy = spyIds.includes(player.uid);
-                return (
-                  <div
-                    key={player.uid}
-                    className={`flex items-center justify-between rounded-lg p-3 ${wasSpy ? 'bg-amber-900/30' : 'bg-slate-700/50'}`}
-                  >
-                    <div className="flex items-center gap-3">
-                      {renderAvatar(player, 'w-10 h-10', 'text-sm')}
-                      <span className="text-white">{player.displayName}</span>
+          <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="font-mono font-bold uppercase tracking-widest text-sm" style={{ color: '#3a2a1a' }}>
+                CASE:
+              </span>
+              <span
+                className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                style={{
+                  borderColor: townWon ? '#5a7a9a' : '#8b3a3a',
+                  color: townWon ? '#5a7a9a' : '#8b3a3a',
+                  transform: 'rotate(-6deg)',
+                  fontSize: '10px'
+                }}
+              >
+                CLOSED
+              </span>
+            </div>
+
+            <div style={{ height: '1px', backgroundColor: '#4a3622', marginBottom: '16px', opacity: '0.45' }} />
+
+            <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
+              <p className="text-[#3a2a1a] text-[11px] font-mono uppercase tracking-widest mb-3">AGENTS ASSIGNED: {(gameState.players || []).length}</p>
+              <div className="border-t border-[#8b6b3f]/40 mb-3" />
+              <div>
+                {(gameState.players || []).map((player, idx) => {
+                  const wasSpy = spyIds.includes(player.uid);
+
+                  return (
+                    <div key={player.uid}>
+                      <div
+                        className="relative flex items-center justify-between py-3"
+                        style={{
+                          backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
+                        }}
+                      >
+                        <div className="flex items-center gap-3">
+                          {renderAvatar(player, 'w-8 h-8', 'text-xs')}
+                          <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
+                            {player.displayName}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                          {wasSpy && (
+                            <span
+                              className="border-2 rounded-sm px-2 py-0.5 text-xs font-bold uppercase tracking-widest opacity-80"
+                              style={{
+                                borderColor: '#cc3333',
+                                color: '#cc3333',
+                                transform: 'rotate(6deg)',
+                                fontSize: '10px',
+                                fontFamily: "'Courier Prime', monospace"
+                              }}
+                            >
+                              SPY
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {idx < (gameState.players || []).length - 1 && (
+                        <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
+                      )}
                     </div>
-                    {wasSpy && (
-                      <span className="text-sm font-bold uppercase text-amber-400">SPY</span>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
+              </div>
             </div>
           </div>
 
@@ -765,20 +997,20 @@ export default function SpyfallGame() {
             <div className="space-y-3">
               <button
                 onClick={handlePlayAgain}
-                className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-colors"
+                className="spy-mono w-full bg-violet-600 hover:bg-violet-700 text-white uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
               >
-                Play Again 🔄
+                Play Again
               </button>
               <button
                 onClick={handleEndGame}
-                className="w-full bg-slate-700 hover:bg-slate-600 text-white font-bold py-4 rounded-xl transition-colors"
+                className="spy-mono w-full bg-[#1e2a3a] hover:bg-[#26364a] border border-[#2e3f52] text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
               >
                 End Game
               </button>
             </div>
           ) : (
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 text-center">
-              <p className="text-slate-300">Thanks for playing!</p>
+            <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-xl p-4 text-center">
+              <p className="spy-mono italic text-[#7a8c9e]">Thanks for playing!</p>
             </div>
           )}
         </div>

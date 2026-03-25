@@ -23,8 +23,9 @@ export default function VotingPanel({
   const allPlayers = Array.isArray(players) ? players : [];
   const votesByVoter = votes && typeof votes === 'object' ? votes : {};
   const isBallotTheme = theme === 'ballot';
-  const panelTitle = title || (isBallotTheme ? 'OFFICIAL BALLOT' : 'Voting');
-  const panelSubtitle = subtitle || (isBallotTheme ? 'Cast your vote - mark one candidate' : null);
+  const isSpyfallTheme = theme === 'spyfall';
+  const panelTitle = title || (isBallotTheme ? 'OFFICIAL BALLOT' : isSpyfallTheme ? 'WHO IS THE SPY?' : 'Voting');
+  const panelSubtitle = subtitle || (isBallotTheme ? 'Cast your vote - mark one candidate' : isSpyfallTheme ? 'CAST YOUR VOTE - ONE SUSPECT ONLY' : null);
 
   const playersByUid = useMemo(() => {
     const entries = allPlayers
@@ -134,8 +135,8 @@ export default function VotingPanel({
         {hasConfirmed && (
           <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
             <div
-              className="border-4 border-red-700 px-6 py-2 text-red-700 text-5xl font-black uppercase tracking-[0.2em] opacity-35"
-              style={{ transform: 'rotate(-15deg)' }}
+              className="border-2 border-red-700 rounded-sm px-6 py-2 text-red-700 text-5xl font-bold uppercase tracking-[0.2em] opacity-80"
+              style={{ transform: 'rotate(-15deg)', fontFamily: "'Courier Prime', monospace" }}
             >
               VOTED
             </div>
@@ -288,6 +289,143 @@ export default function VotingPanel({
             CLOSE BALLOT
           </button>
         )}
+      </div>
+    );
+  }
+
+  if (isSpyfallTheme) {
+    return (
+      <div>
+        <div className="text-center mb-4">
+          <h3 className="spy-serif text-2xl font-bold text-white">{panelTitle}</h3>
+          {panelSubtitle && (
+            <p className="spy-mono mt-1 text-xs uppercase tracking-widest text-[#7a8c9e]">{panelSubtitle}</p>
+          )}
+        </div>
+
+        <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-2xl p-4">
+          <div className="flex items-center justify-between mb-4">
+            <h4 className="spy-mono text-[#7a8c9e] text-sm uppercase tracking-widest">Voting</h4>
+            {isHost && (
+              <button
+                onClick={onEndVoting}
+                className="spy-mono px-4 py-2 bg-[#c9882a] hover:bg-[#b07520] text-white text-sm font-bold uppercase rounded-lg transition-colors"
+              >
+                End Voting
+              </button>
+            )}
+          </div>
+
+          {allVotesConfirmed && autoEndSeconds != null && (
+            <div className="bg-[#243040] border border-[#2e3f52] rounded-xl p-3 text-center mb-4">
+              <p className="text-[#d4c9a8] text-sm font-semibold">
+                All votes confirmed. Ending in {autoEndSeconds}s...
+              </p>
+            </div>
+          )}
+
+          <div className="grid grid-cols-1 gap-3 mb-4">
+            {allPlayers.map((player) => {
+              const candidateUid = getPlayerUid(player);
+              if (!candidateUid) return null;
+
+              const candidateVotes = Object.entries(votesByVoter)
+                .filter(([, targetUid]) => targetUid === candidateUid)
+                .map(([voterUid]) => playersByUid.get(voterUid))
+                .filter(Boolean);
+
+              const candidateVoteCount = candidateVotes.length;
+              const candidatePhoto = getPlayerPhoto(player);
+              const isSelected = selectedTarget === candidateUid;
+              const isCurrentUser = candidateUid === currentUid;
+
+              return (
+                <button
+                  key={candidateUid}
+                  type="button"
+                  onClick={() => handleSelectTarget(candidateUid)}
+                  disabled={!canVote || hasConfirmed}
+                  className={`flex items-start gap-3 rounded-xl p-3 border transition-all ${
+                    isSelected
+                      ? 'bg-[#c9882a]/10 border-[#c9882a]/60'
+                      : 'bg-[#243040] border-transparent hover:border-[#c9882a]/40'
+                  } ${(!canVote || hasConfirmed) ? 'opacity-50 cursor-not-allowed' : ''}`}
+                >
+                  {candidatePhoto ? (
+                    <img
+                      src={candidatePhoto}
+                      alt={getPlayerName(player)}
+                      className="w-12 h-12 rounded-full object-cover"
+                    />
+                  ) : (
+                    <div className={`w-12 h-12 ${player.avatarColor || 'bg-slate-600'} rounded-full flex items-center justify-center text-white font-bold`}>
+                      {getInitials(getPlayerName(player))}
+                    </div>
+                  )}
+
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-white font-semibold truncate">
+                        {getPlayerName(player)} {isCurrentUser ? '(You)' : ''}
+                      </span>
+                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-[#1e2a3a] border border-[#2e3f52] text-[#c9882a] text-sm font-bold">
+                        {candidateVoteCount}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center mt-2">
+                      {candidateVotes.map((voter, index) => {
+                        const voterUid = getPlayerUid(voter);
+                        const voterPhoto = getPlayerPhoto(voter);
+                        const overlapClass = index > 0 ? '-ml-2' : '';
+                        const voterName = getPlayerName(voter);
+
+                        return voterPhoto ? (
+                          <img
+                            key={voterUid}
+                            src={voterPhoto}
+                            alt={voterName}
+                            className={`w-7 h-7 rounded-full border-2 border-[#0f172a] object-cover ${overlapClass}`}
+                            title={voterName}
+                          />
+                        ) : (
+                          <div
+                            key={voterUid}
+                            className={`w-7 h-7 ${voter.avatarColor || 'bg-slate-600'} rounded-full border-2 border-[#0f172a] flex items-center justify-center text-[10px] text-white font-bold ${overlapClass}`}
+                            title={voterName}
+                          >
+                            {getInitials(voterName)}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+
+          {canVote && !hasConfirmed && (
+            <>
+              <button
+                type="button"
+                onClick={handleConfirmVote}
+                disabled={!selectedTarget || isSubmitting}
+                className="spy-mono w-full bg-[#c9882a] hover:bg-[#b07520] disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] font-bold uppercase py-4 rounded-xl transition-colors"
+              >
+                {isSubmitting ? 'Submitting...' : 'Submit Vote'}
+              </button>
+
+              {voteError && <p className="text-red-400 text-sm text-center mt-2">{voteError}</p>}
+            </>
+          )}
+
+          {hasConfirmed && (
+            <div className="bg-[#243040] border border-[#2e3f52] rounded-xl p-4 text-center mt-3">
+              <p className="text-[#c9882a] font-semibold">Vote confirmed. Waiting for others...</p>
+            </div>
+          )}
+        </div>
       </div>
     );
   }

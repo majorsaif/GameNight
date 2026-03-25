@@ -1048,8 +1048,8 @@ export default function MafiaGame() {
       <h2 className="text-black font-serif font-black text-lg uppercase tracking-wide">
         YOU HAVE BEEN
         <span
-          className="inline-block align-middle ml-2 border-2 border-[#6d1010] px-2 py-1 text-[#6d1010] text-xs font-black uppercase tracking-widest opacity-95"
-          style={{ transform: 'rotate(10deg)' }}
+          className="inline-block align-middle ml-2 border-2 border-[#6d1010] rounded-sm px-2 py-1 text-[#6d1010] text-xs font-bold uppercase tracking-widest opacity-80"
+          style={{ transform: 'rotate(10deg)', fontFamily: "'Courier Prime', monospace" }}
         >
           ELIMINATED
         </span>
@@ -1900,6 +1900,7 @@ export default function MafiaGame() {
     const winner = gameState.winner;
     const townWon = winner === 'town';
     const totalPlayers = gameState.players?.length || 0;
+    const mafiaCount = gameState.players?.filter((player) => player.role === 'mafia').length || 0;
     const eliminatedCount = gameState.players?.filter((player) => player.isAlive === false).length || 0;
     const nightsCount = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : null;
     const totalRoundsPlayed = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : 1;
@@ -1914,7 +1915,7 @@ export default function MafiaGame() {
             {/* Top metadata bar */}
             <div className="border-t-2 border-[#e8e0d0]/40 mb-2" style={{ fontSize: '1px' }} />
             <div className="flex items-center justify-between py-1 mb-2 text-[15px] leading-none">
-              <span className="font-mono tracking-wider">PLAYERS: {totalPlayers}</span>
+              <span className="font-mono tracking-wider">MAFIAS: {mafiaCount}</span>
               <span className="font-mono text-center flex-1">THE GAMES NIGHT GAZETTE</span>
               <span className="font-mono tracking-wider">{rightMetaText}</span>
             </div>
@@ -1959,7 +1960,7 @@ export default function MafiaGame() {
           <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
             {/* CASE Header */}
             <div className="mb-4 flex items-center gap-2">
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#3a2a1a' }}>
+              <span className="font-mono font-bold uppercase tracking-widest text-sm" style={{ color: '#3a2a1a' }}>
                 CASE:
               </span>
               <span
@@ -1980,13 +1981,15 @@ export default function MafiaGame() {
 
             {/* Player List */}
             <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
+              <p className="text-[#3a2a1a] text-[11px] font-mono uppercase tracking-widest mb-3">AGENTS ASSIGNED: {gameState.players?.length || 0}</p>
+              <div className="border-t border-[#8b6b3f]/40 mb-3" />
               <div>
                 {gameState.players.map((player, idx) => {
                   const eliminatedRound = eliminatedForSummary.indexOf(player.uid) + 1;
                   const survivedRounds = eliminatedRound > 0
                     ? Math.min(totalRoundsPlayed, eliminatedRound)
                     : totalRoundsPlayed;
-                  const roundsLabel = `${survivedRounds} ${survivedRounds === 1 ? 'round' : 'rounds'}`;
+                  const roundsLabel = `Rounds: ${survivedRounds}`;
                   const roleRoundsColor = player.role === 'mafia'
                     ? '#8b3a3a'
                     : player.role === 'doctor'
@@ -2088,21 +2091,6 @@ export default function MafiaGame() {
 
                         </div>
 
-                        {!player.isAlive && (
-                          <div className="pointer-events-none absolute inset-0 flex items-center justify-start pl-20 z-10">
-                            <span
-                              className="border-2 px-3 py-1 text-sm font-black uppercase tracking-[0.18em]"
-                              style={{
-                                borderColor: '#dc2626',
-                                color: '#dc2626',
-                                backgroundColor: 'transparent',
-                                transform: 'rotate(0deg)'
-                              }}
-                            >
-                              ELIMINATED
-                            </span>
-                          </div>
-                        )}
                       </div>
                       {idx < gameState.players.length - 1 && (
                         <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />

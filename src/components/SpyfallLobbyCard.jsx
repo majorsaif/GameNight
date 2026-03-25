@@ -317,7 +317,7 @@ export default function SpyfallLobbyCard({
   const PlayerList = () => (
     <div className="relative z-10 bg-[#eadfca]/85 border border-[#8b6b3f]/45 rounded-xl p-4 mb-4">
       <p className="text-[#3a2a1a] text-[11px] font-mono uppercase tracking-widest mb-3">
-        Agents Assigned: ({lobbyPlayers.length})
+        AGENTS ASSIGNED: {lobbyPlayers.length}
       </p>
       <div className="space-y-2">
         {joinedPlayers.map((player) => {
