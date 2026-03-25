@@ -1208,16 +1208,17 @@ export default function WordImposterGame() {
           {/* Agents Assigned - Mafia Case Closed Style */}
           <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
             <div className="mb-4 flex items-center gap-2">
-              <span className="font-mono text-[11px] font-bold uppercase tracking-[0.22em]" style={{ color: '#3a2a1a' }}>
+              <span className="font-mono font-bold uppercase tracking-widest text-sm" style={{ color: '#3a2a1a' }}>
                 CASE:
               </span>
               <span
-                className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                className="border-2 rounded-sm px-2 py-0.5 text-xs font-bold uppercase tracking-widest opacity-80"
                 style={{
                   borderColor: caseClosedStampColor,
                   color: caseClosedStampColor,
                   transform: 'rotate(-6deg)',
-                  fontSize: '10px'
+                  fontSize: '10px',
+                  fontFamily: "'Courier Prime', monospace"
                 }}
               >
                 CLOSED
@@ -1227,6 +1228,8 @@ export default function WordImposterGame() {
             <div style={{ height: '1px', backgroundColor: '#4a3622', marginBottom: '16px', opacity: '0.45' }} />
 
             <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
+              <p className="text-[#3a2a1a] text-[11px] font-mono uppercase tracking-widest mb-3">AGENTS ASSIGNED: {gameState.players?.length || 0}</p>
+              <div className="border-t border-[#8b6b3f]/40 mb-3" />
               <div>
                 {gameState.players.map((player, idx) => {
                   const wasImposter = gameState.imposterIds?.includes(player.uid);
@@ -1235,7 +1238,7 @@ export default function WordImposterGame() {
                   const survivedRounds = eliminatedRound > 0
                     ? Math.min(roundsPlayed, eliminatedRound)
                     : roundsPlayed;
-                  const roundsLabel = `${survivedRounds} ${survivedRounds === 1 ? 'round' : 'rounds'}`;
+                  const roundsLabel = `Rounds: ${survivedRounds}`;
                   const roundsColor = wasImposter ? '#8b3a3a' : '#5a7a9a';
 
                   return (
@@ -1265,12 +1268,13 @@ export default function WordImposterGame() {
                         <div className="flex items-center gap-2">
                           {wasImposter && (
                             <span
-                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
+                              className="border-2 rounded-sm px-2 py-0.5 text-xs font-bold uppercase tracking-widest opacity-80"
                               style={{
                                 borderColor: '#8b3a3a',
                                 color: '#8b3a3a',
                                 transform: 'rotate(6deg)',
-                                fontSize: '10px'
+                                fontSize: '10px',
+                                fontFamily: "'Courier Prime', monospace"
                               }}
                             >
                               IMPOSTER
