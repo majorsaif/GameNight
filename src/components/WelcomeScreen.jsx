@@ -32,6 +32,10 @@ export default function WelcomeScreen() {
     }
   };
 
+  const handleOnePhoneMode = () => {
+    navigate('/one-phone');
+  };
+
   const handleDigitChange = (index, value) => {
     // Only allow alphanumeric characters
     const sanitized = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
@@ -246,6 +250,13 @@ export default function WelcomeScreen() {
                 Join
               </button>
             </form>
+
+            <button
+              onClick={handleOnePhoneMode}
+              className="w-full py-4 rounded-xl border border-violet-400/40 bg-violet-500/10 text-violet-200 font-bold transition-all hover:bg-violet-500/20 hover:border-violet-300/60 active:scale-[0.98]"
+            >
+              One Phone Mode
+            </button>
           </div>
 
         </div>

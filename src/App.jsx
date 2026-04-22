@@ -8,6 +8,8 @@ import WheelSpin from './components/ForfeitWheel';
 import MafiaGame from './components/MafiaGame';
 import WordImposterGame from './wordImposter/WordImposterGame';
 import SpyfallGame from './spyfall/SpyfallGame';
+import OnePhoneHome from './onephone/OnePhoneHome';
+import OnePhoneGames from './onephone/OnePhoneGames';
 
 function App() {
   return (
@@ -15,6 +17,8 @@ function App() {
       <Routes>
         <Route path="/onboarding" element={<OnboardingScreen />} />
         <Route path="/" element={<WelcomeScreen />} />
+        <Route path="/one-phone" element={<OnePhoneHome />} />
+        <Route path="/one-phone/games" element={<OnePhoneGames />} />
         <Route path="/room/:roomId" element={<HomeScreen />} />
         <Route path="/room/:roomId/games" element={<GamesScreen />} />
         <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />
