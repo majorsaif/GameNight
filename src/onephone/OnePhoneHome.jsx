@@ -1,6 +1,9 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GameNightLogo from '../components/GameNightLogo';
+import mafiaButtonImage from '../assets/mafia-button.png';
+import wordImposterButtonImage from '../assets/word-imposter-button.png';
+import spyfallButtonImage from '../assets/spyfall-button.png';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
 function createPlayerId() {
@@ -53,10 +56,6 @@ export default function OnePhoneHome() {
     setNarratorId((currentNarratorId) => (currentNarratorId === playerId ? '' : currentNarratorId));
   };
 
-  const handleStartGames = () => {
-    navigate('/one-phone/games');
-  };
-
   const visiblePlayers = players.slice(0, 6);
   const remainingCount = players.length - visiblePlayers.length;
 
@@ -80,11 +79,7 @@ export default function OnePhoneHome() {
 
       <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         <div className="text-center pt-2 pb-4">
-          <h1 className="text-5xl font-black leading-tight mb-2">
-            <span className="text-slate-400 italic text-2xl block">ONE PHONE</span>
-            <span className="text-violet-400 italic">MODE</span>
-          </h1>
-          <p className="text-slate-400 text-sm">Pass the phone around and play together locally.</p>
+          <h1 className="text-3xl font-semibold text-white">Pass &amp; Play</h1>
         </div>
 
         <section>
@@ -212,19 +207,49 @@ export default function OnePhoneHome() {
           </div>
         </section>
 
-        <button
-          type="button"
-          aria-label="Social Deduction"
-          onClick={handleStartGames}
-          style={{
-            backgroundImage: 'url("/images/cards/social-deduction.png")',
-            backgroundSize: '112%',
-            backgroundPosition: 'center'
-          }}
-          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-        >
-          <div className="absolute inset-0 bg-black/25" />
-        </button>
+        <section className="space-y-4">
+          <button
+            type="button"
+            aria-label="Mafia"
+            onClick={() => navigate('/one-phone/mafia')}
+            style={{
+              backgroundImage: `url(${mafiaButtonImage})`,
+              backgroundSize: '112%',
+              backgroundPosition: 'center'
+            }}
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+          >
+            <div className="absolute inset-0 bg-black/25" />
+          </button>
+
+          <button
+            type="button"
+            aria-label="Word Imposter"
+            onClick={() => navigate('/one-phone/word-imposter')}
+            style={{
+              backgroundImage: `url(${wordImposterButtonImage})`,
+              backgroundSize: '112%',
+              backgroundPosition: 'center'
+            }}
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+          >
+            <div className="absolute inset-0 bg-black/25" />
+          </button>
+
+          <button
+            type="button"
+            aria-label="Spyfall"
+            onClick={() => navigate('/one-phone/spyfall')}
+            style={{
+              backgroundImage: `url(${spyfallButtonImage})`,
+              backgroundSize: '112%',
+              backgroundPosition: 'center'
+            }}
+            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+          >
+            <div className="absolute inset-0 bg-black/25" />
+          </button>
+        </section>
       </main>
     </div>
   );

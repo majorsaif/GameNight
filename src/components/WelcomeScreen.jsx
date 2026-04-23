@@ -32,7 +32,7 @@ export default function WelcomeScreen() {
     }
   };
 
-  const handleOnePhoneMode = () => {
+  const handlePassAndPlay = () => {
     navigate('/one-phone');
   };
 
@@ -251,12 +251,23 @@ export default function WelcomeScreen() {
               </button>
             </form>
 
-            <button
-              onClick={handleOnePhoneMode}
-              className="w-full py-4 rounded-xl border border-violet-400/40 bg-violet-500/10 text-violet-200 font-bold transition-all hover:bg-violet-500/20 hover:border-violet-300/60 active:scale-[0.98]"
-            >
-              One Phone Mode
-            </button>
+            <div className="pt-8">
+              <button
+                onClick={handlePassAndPlay}
+                className="relative w-full bg-gradient-to-br from-sky-500 via-sky-600 to-sky-700 rounded-2xl p-8 overflow-hidden hover:shadow-xl hover:shadow-sky-900/50 active:scale-[0.98] transition-all"
+              >
+                <div className="absolute top-2 right-2 text-4xl opacity-20 rotate-12">📱</div>
+                <div className="absolute bottom-4 right-8 text-3xl opacity-15 -rotate-6">🎲</div>
+                <div className="absolute top-8 right-12 text-2xl opacity-10">✨</div>
+
+                <div className="relative text-left space-y-2">
+                  <h2 className="text-2xl font-bold text-white">Pass &amp; Play</h2>
+                  <p className="text-sky-100 text-sm leading-relaxed">
+                    Play together locally on one device.
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
 
         </div>
