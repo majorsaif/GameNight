@@ -1,6 +1,9 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import GameNightLogo from '../components/GameNightLogo';
+import mafiaButtonImage from '../assets/mafia-button.png';
+import wordImposterButtonImage from '../assets/word-imposter-button.png';
+import spyfallButtonImage from '../assets/spyfall-button.png';
 
 export default function OnePhoneGames() {
   const navigate = useNavigate();
@@ -22,17 +25,55 @@ export default function OnePhoneGames() {
         </div>
       </header>
 
-      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col items-center justify-center text-center gap-5">
-        <div className="text-6xl">🎮</div>
-        <h1 className="text-4xl font-black text-white">Social Deduction</h1>
-        <p className="text-slate-400 max-w-sm">
-          The local game library is coming next. For now, this screen is a placeholder for the One Phone flow.
-        </p>
+      <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 overflow-y-auto">
+        <div className="text-center pt-2 pb-4">
+          <h1 className="text-5xl font-black leading-tight mb-2">
+            <span className="text-slate-400 italic text-2xl block">SOCIAL</span>
+            <span className="text-violet-400 italic">DEDUCTION</span>
+          </h1>
+          <p className="text-slate-400 text-sm">Choose a game to continue.</p>
+        </div>
+
         <button
-          onClick={() => navigate('/one-phone')}
-          className="px-6 py-3 rounded-xl bg-violet-600 hover:bg-violet-700 text-white font-bold transition-colors"
+          type="button"
+          aria-label="Mafia"
+          onClick={() => {}}
+          style={{
+            backgroundImage: `url(${mafiaButtonImage})`,
+            backgroundSize: '112%',
+            backgroundPosition: 'center'
+          }}
+          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
         >
-          Back to One Phone
+          <div className="absolute inset-0 bg-black/25" />
+        </button>
+
+        <button
+          type="button"
+          aria-label="Word Imposter"
+          onClick={() => {}}
+          style={{
+            backgroundImage: `url(${wordImposterButtonImage})`,
+            backgroundSize: '112%',
+            backgroundPosition: 'center'
+          }}
+          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+        >
+          <div className="absolute inset-0 bg-black/25" />
+        </button>
+
+        <button
+          type="button"
+          aria-label="Spyfall"
+          onClick={() => {}}
+          style={{
+            backgroundImage: `url(${spyfallButtonImage})`,
+            backgroundSize: '112%',
+            backgroundPosition: 'center'
+          }}
+          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+        >
+          <div className="absolute inset-0 bg-black/25" />
         </button>
       </main>
     </div>

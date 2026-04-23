@@ -56,6 +56,14 @@ export default function OnePhoneHome() {
     setNarratorId((currentNarratorId) => (currentNarratorId === playerId ? '' : currentNarratorId));
   };
 
+  const handleSocialDeduction = () => {
+    navigate('/one-phone/games');
+  };
+
+  const handleSpinWheel = () => {
+    navigate('/wheel');
+  };
+
   const visiblePlayers = players.slice(0, 6);
   const remainingCount = players.length - visiblePlayers.length;
 
@@ -79,7 +87,7 @@ export default function OnePhoneHome() {
 
       <main className="relative z-0 flex-1 w-full max-w-md mx-auto px-4 sm:px-6 py-6 flex flex-col gap-6 overflow-y-auto">
         <div className="text-center pt-2 pb-4">
-          <h1 className="text-3xl font-semibold text-white">Pass &amp; Play</h1>
+          <h1 className="text-5xl font-black leading-tight mb-2 text-violet-400 italic">Pass &amp; Play</h1>
         </div>
 
         <section>
@@ -250,6 +258,34 @@ export default function OnePhoneHome() {
             <div className="absolute inset-0 bg-black/25" />
           </button>
         </section>
+
+        <button
+          type="button"
+          aria-label="Social Deduction"
+          onClick={handleSocialDeduction}
+          style={{
+            backgroundImage: 'url("/images/cards/social-deduction.png")',
+            backgroundSize: '112%',
+            backgroundPosition: 'center'
+          }}
+          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+        >
+          <div className="absolute inset-0 bg-black/25" />
+        </button>
+
+        <button
+          type="button"
+          aria-label="Spin Wheel"
+          onClick={handleSpinWheel}
+          style={{
+            backgroundImage: 'url("/images/cards/spin-wheel.png")',
+            backgroundSize: '112%',
+            backgroundPosition: 'center'
+          }}
+          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
+        >
+          <div className="absolute inset-0 bg-black/25" />
+        </button>
       </main>
     </div>
   );
