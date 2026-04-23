@@ -1,9 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import GameNightLogo from '../components/GameNightLogo';
-import mafiaButtonImage from '../assets/mafia-button.png';
-import wordImposterButtonImage from '../assets/word-imposter-button.png';
-import spyfallButtonImage from '../assets/spyfall-button.png';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
 function createPlayerId() {
@@ -213,50 +210,6 @@ export default function OnePhoneHome() {
               ))
             )}
           </div>
-        </section>
-
-        <section className="space-y-4">
-          <button
-            type="button"
-            aria-label="Mafia"
-            onClick={() => navigate('/one-phone/mafia')}
-            style={{
-              backgroundImage: `url(${mafiaButtonImage})`,
-              backgroundSize: '112%',
-              backgroundPosition: 'center'
-            }}
-            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-          >
-            <div className="absolute inset-0 bg-black/25" />
-          </button>
-
-          <button
-            type="button"
-            aria-label="Word Imposter"
-            onClick={() => navigate('/one-phone/word-imposter')}
-            style={{
-              backgroundImage: `url(${wordImposterButtonImage})`,
-              backgroundSize: '112%',
-              backgroundPosition: 'center'
-            }}
-            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-          >
-            <div className="absolute inset-0 bg-black/25" />
-          </button>
-
-          <button
-            type="button"
-            aria-label="Spyfall"
-            onClick={() => navigate('/one-phone/spyfall')}
-            style={{
-              backgroundImage: `url(${spyfallButtonImage})`,
-              backgroundSize: '112%',
-              backgroundPosition: 'center'
-            }}
-            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-          >
-            <div className="absolute inset-0 bg-black/25" />
-          </button>
         </section>
 
         <button
