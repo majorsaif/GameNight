@@ -61,9 +61,6 @@ export default function OnePhoneHome() {
     navigate('/wheel');
   };
 
-  const visiblePlayers = players.slice(0, 6);
-  const remainingCount = players.length - visiblePlayers.length;
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       <header className="relative z-40 w-full max-w-md mx-auto px-4 sm:px-6 py-4">
@@ -86,45 +83,6 @@ export default function OnePhoneHome() {
         <div className="text-center pt-2 pb-4">
           <h1 className="text-5xl font-black leading-tight mb-2 text-violet-400 italic">Pass &amp; Play</h1>
         </div>
-
-        <section>
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest">
-              Players in Room ({players.length})
-            </h3>
-          </div>
-
-          <div className="flex items-center gap-0">
-            {visiblePlayers.map((player, index) => (
-              <div
-                key={player.id}
-                className="relative"
-                style={{ marginLeft: index > 0 ? '-8px' : '0' }}
-              >
-                <div
-                  className={`w-11 h-11 rounded-full ${player.avatarColor} flex items-center justify-center text-white text-sm font-bold border-2 border-slate-900`}
-                  title={player.displayName}
-                >
-                  {getInitials(player.displayName)}
-                </div>
-                {player.id === narratorId && (
-                  <div className="absolute -bottom-0.5 -right-0.5 px-1.5 h-5 bg-violet-500 rounded-full flex items-center justify-center text-[10px] font-black uppercase tracking-wide text-white border-2 border-slate-900">
-                    Narrator
-                  </div>
-                )}
-              </div>
-            ))}
-            {remainingCount > 0 && (
-              <div
-                className="w-11 h-11 rounded-full bg-slate-700 flex items-center justify-center text-white text-sm font-bold border-2 border-slate-900"
-                style={{ marginLeft: '-8px' }}
-                title={`${remainingCount} more player${remainingCount > 1 ? 's' : ''}`}
-              >
-                +{remainingCount}
-              </div>
-            )}
-          </div>
-        </section>
 
         <section>
           <form onSubmit={handleAddPlayer}>
