@@ -301,7 +301,6 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
           <span className="text-slate-400 italic text-2xl block">ROOM</span>
           <span className="text-violet-400 italic">{room.code}</span>
         </h1>
-        <p className="text-slate-400 text-sm">Ready to play? Pick a challenge below!</p>
       </div>
       
       {/* Compact Players Section */}
@@ -506,6 +505,13 @@ function HostView({ room, getCurrentPlayerName, onOpenWheelSetup, onSpinWheel, o
           ) : null}
         </div>
       )}
+
+      <div>
+        <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">
+          GAMES
+        </h3>
+        <span className="block h-px w-full bg-[#2a3f5f] mb-4"></span>
+      </div>
 
       {/* Social Deduction - Large Full Width Card */}
       <button
