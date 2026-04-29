@@ -1,11 +1,13 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useLocation, useNavigate } from 'react-router-dom';
 import mafiaButtonImage from '../assets/mafia-button.png';
 import wordImposterButtonImage from '../assets/word-imposter-button.png';
 import spyfallButtonImage from '../assets/spyfall-button.png';
 
 export default function OnePhoneGames() {
+  const location = useLocation();
   const navigate = useNavigate();
+  const players = Array.isArray(location.state?.players) ? location.state.players : [];
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -34,7 +36,7 @@ export default function OnePhoneGames() {
           <button
             type="button"
             aria-label="Mafia"
-            onClick={() => {}}
+            onClick={() => navigate('/one-phone/mafia', { state: { players } })}
             style={{
               backgroundImage: `url(${mafiaButtonImage})`,
               backgroundSize: '108%',

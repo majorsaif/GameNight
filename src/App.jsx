@@ -10,6 +10,9 @@ import WordImposterGame from './wordImposter/WordImposterGame';
 import SpyfallGame from './spyfall/SpyfallGame';
 import OnePhoneHome from './onephone/OnePhoneHome';
 import OnePhoneGames from './onephone/OnePhoneGames';
+import OnePhoneMafia from './onephone/modes/OnePhoneMafia';
+import OnePhoneMafiaLobby from './onephone/modes/OnePhoneMafiaLobby';
+import { useLocation } from 'react-router-dom';
 
 function OnePhoneGamePlaceholder({ title }) {
   const navigate = useNavigate();
@@ -48,6 +51,25 @@ function OnePhoneGamePlaceholder({ title }) {
   );
 }
 
+function OnePhoneMafiaRoute() {
+  const location = useLocation();
+
+  const routeState = location.state || {};
+  if (!routeState.started) {
+    return <OnePhoneMafiaLobby players={Array.isArray(routeState.players) ? routeState.players : []} />;
+  }
+
+  const players = Array.isArray(routeState.players) ? routeState.players : [];
+  const narrator = routeState.narrator || null;
+  const rules = routeState.rules || {
+    mafiaCount: 1,
+    doctorEnabled: true,
+    detectiveEnabled: true
+  };
+
+  return <OnePhoneMafia players={players} narrator={narrator} rules={rules} />;
+}
+
 function App() {
   return (
     <Router>
@@ -56,7 +78,7 @@ function App() {
         <Route path="/" element={<WelcomeScreen />} />
         <Route path="/one-phone" element={<OnePhoneHome />} />
         <Route path="/one-phone/games" element={<OnePhoneGames />} />
-        <Route path="/one-phone/mafia" element={<OnePhoneGamePlaceholder title="Mafia" />} />
+        <Route path="/one-phone/mafia" element={<OnePhoneMafiaRoute />} />
         <Route path="/one-phone/word-imposter" element={<OnePhoneGamePlaceholder title="Word Imposter" />} />
         <Route path="/one-phone/spyfall" element={<OnePhoneGamePlaceholder title="Spyfall" />} />
         <Route path="/room/:roomId" element={<HomeScreen />} />

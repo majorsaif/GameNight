@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import React, { useState } from 'react';
+import { useLocation, useNavigate } from 'react-router-dom';
 import GameNightLogo from '../components/GameNightLogo';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
@@ -22,17 +22,10 @@ function createPlayer(displayName) {
 }
 
 export default function OnePhoneHome() {
+  const location = useLocation();
   const navigate = useNavigate();
-  const [players, setPlayers] = useState([]);
+  const [players, setPlayers] = useState(Array.isArray(location.state?.players) ? location.state.players : []);
   const [playerName, setPlayerName] = useState('');
-  const [narratorId, setNarratorId] = useState('');
-
-  useEffect(() => {
-    if (!narratorId) return;
-    if (!players.some((player) => player.id === narratorId)) {
-      setNarratorId('');
-    }
-  }, [players, narratorId]);
 
   const handleLeave = () => {
     navigate('/');
@@ -50,11 +43,10 @@ export default function OnePhoneHome() {
 
   const handleRemovePlayer = (playerId) => {
     setPlayers((currentPlayers) => currentPlayers.filter((player) => player.id !== playerId));
-    setNarratorId((currentNarratorId) => (currentNarratorId === playerId ? '' : currentNarratorId));
   };
 
   const handleSocialDeduction = () => {
-    navigate('/one-phone/games');
+    navigate('/one-phone/games', { state: { players } });
   };
 
   const handleSpinWheel = () => {
