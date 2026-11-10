@@ -1,4 +1,4 @@
-// Fixed color palette for player avatars
+// Fixed palette for player avatars. Classes are listed in full so Tailwind keeps them.
 const AVATAR_COLORS = [
   'bg-purple-600',
   'bg-pink-600',
@@ -9,97 +9,34 @@ const AVATAR_COLORS = [
   'bg-teal-600',
 ];
 
-/**
- * Get initials from a name
- */
 export function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(' ');
-  if (parts.length === 1) {
-    return parts[0].substring(0, 2).toUpperCase();
-  }
+  if (!name || typeof name !== 'string') return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
   return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
 }
 
-/**
- * Generate avatar color deterministically from UID
- */
-function generateAvatarColorFromUid(uid) {
-  if (!uid) return AVATAR_COLORS[0];
-  
-  // Simple hash function to get consistent color for same UID
+function hashString(value) {
   let hash = 0;
-  for (let i = 0; i < uid.length; i++) {
-    hash = ((hash << 5) - hash) + uid.charCodeAt(i);
-    hash = hash & hash; // Convert to 32bit integer
+  for (let i = 0; i < value.length; i += 1) {
+    hash = ((hash << 5) - hash) + value.charCodeAt(i);
+    hash |= 0;
   }
-  
-  const index = Math.abs(hash) % AVATAR_COLORS.length;
-  return AVATAR_COLORS[index];
+  return Math.abs(hash);
+}
+
+export function colorForUid(uid) {
+  if (!uid) return AVATAR_COLORS[0];
+  return AVATAR_COLORS[hashString(String(uid)) % AVATAR_COLORS.length];
 }
 
 /**
- * Get avatar color for a player - returns existing or generates and saves new one
- * This is the single source of truth for avatar colors
+ * Avatar colour for a player object ({ id } or { uid }). Deterministic per user,
+ * so it never needs to be written back to Firestore.
  */
-export function getAvatarColor(player, roomId = null) {
-  // If player already has a color, return it
-  if (player.avatarColor) {
-    return player.avatarColor;
-  }
-  
-  // Generate color from UID
-  const color = generateAvatarColorFromUid(player.id || player.uid);
-  
-  // If we have a roomId, save the color back to localStorage
-  if (roomId) {
-    const rooms = JSON.parse(localStorage.getItem('gamesnight_rooms') || '{}');
-    if (rooms[roomId]) {
-      const playerIndex = rooms[roomId].players.findIndex(p => p.id === player.id || p.uid === player.uid);
-      if (playerIndex !== -1) {
-        rooms[roomId].players[playerIndex].avatarColor = color;
-        localStorage.setItem('gamesnight_rooms', JSON.stringify(rooms));
-        
-        // Trigger storage event for cross-tab sync
-        window.dispatchEvent(new StorageEvent('storage', {
-          key: 'gamesnight_rooms',
-          newValue: JSON.stringify(rooms),
-          url: window.location.href,
-          storageArea: localStorage
-        }));
-      }
-    }
-  }
-  
-  return color;
-}
-
-/**
- * Backfill avatar colors for existing players in a room
- */
-export function backfillAvatarColors(roomId) {
-  const rooms = JSON.parse(localStorage.getItem('gamesnight_rooms') || '{}');
-  if (!rooms[roomId]) return;
-  
-  let updated = false;
-  rooms[roomId].players = rooms[roomId].players.map(player => {
-    if (!player.avatarColor) {
-      updated = true;
-      return {
-        ...player,
-        avatarColor: generateAvatarColorFromUid(player.id || player.uid)
-      };
-    }
-    return player;
-  });
-  
-  if (updated) {
-    localStorage.setItem('gamesnight_rooms', JSON.stringify(rooms));
-    window.dispatchEvent(new StorageEvent('storage', {
-      key: 'gamesnight_rooms',
-      newValue: JSON.stringify(rooms),
-      url: window.location.href,
-      storageArea: localStorage
-    }));
-  }
+export function getAvatarColor(player) {
+  if (!player) return AVATAR_COLORS[0];
+  if (player.avatarColor) return player.avatarColor;
+  return colorForUid(player.id || player.uid);
 }

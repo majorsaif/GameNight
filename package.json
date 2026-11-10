@@ -1,35 +1,44 @@
 {
-  "name": "gamesnight",
+  "name": "itsgamesnight",
   "version": "1.0.0",
-  "description": "Its Games Night - A React app for party game nights",
+  "description": "Its Games Night - free party games (Mafia, Word Imposter, Spyfall, Spin the Wheel) played together on your phones",
   "type": "module",
   "scripts": {
     "dev": "vite",
+    "dev:staging": "vite --mode staging",
     "build": "vite build",
-    "preview": "vite preview"
+    "build:staging": "vite build --mode staging",
+    "preview": "vite preview",
+    "test": "vitest run",
+    "lint": "eslint src"
   },
   "repository": {
     "type": "git",
     "url": "git+https://github.com/majorsaif/GameNight.git"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
   "bugs": {
     "url": "https://github.com/majorsaif/GameNight/issues"
   },
-  "homepage": "https://github.com/majorsaif/GameNight#readme",
+  "homepage": "https://www.itsgamesnight.com",
   "dependencies": {
+    "canvas-confetti": "^1.9.4",
     "firebase": "^12.10.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-router-dom": "^7.13.1"
   },
   "devDependencies": {
+    "@eslint/js": "^9.39.5",
     "@vitejs/plugin-react": "^5.1.4",
     "autoprefixer": "^10.4.24",
+    "eslint": "^9.39.5",
+    "eslint-plugin-react": "^7.37.5",
+    "eslint-plugin-react-hooks": "^7.1.1",
+    "globals": "^17.14.0",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.19",
-    "vite": "^7.3.1"
-  }
+    "vite": "^7.3.1",
+    "vitest": "^5.1.0"
+  },
+  "private": true
 }

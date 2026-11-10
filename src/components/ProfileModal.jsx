@@ -1,17 +1,19 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
+import { useToast } from './Toast';
+import { MAX_NAME_LENGTH } from '../lib/profiles';
+import { colorForUid, getInitials } from '../utils/avatar';
 import {
   compressProfilePhotoFile,
   PROFILE_PHOTO_MAX_BYTES,
   PROFILE_PHOTO_MAX_UPLOAD_BYTES
 } from '../utils/photoCompression';
 
-const PHOTO_KEY = 'gamenight_photo';
-
 export default function ProfileModal({ isOpen, onClose }) {
   const navigate = useNavigate();
   const { user, updateProfile, logout } = useAuth();
+  const toast = useToast();
   const fileInputRef = useRef(null);
 
   const [isEditingName, setIsEditingName] = useState(false);
@@ -25,32 +27,13 @@ export default function ProfileModal({ isOpen, onClose }) {
     }
   }, [isOpen, user?.displayName]);
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
     onClose();
-    logout();
+    await logout();
     navigate('/onboarding');
   };
 
-  const getInitials = (name) => {
-    if (!name) return '?';
-    const parts = name.trim().split(' ');
-    if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
-  const getAvatarColor = (name) => {
-    if (!name) return 'bg-purple-600';
-    const colors = [
-      'bg-purple-600',
-      'bg-blue-600',
-      'bg-pink-600',
-      'bg-indigo-600',
-      'bg-violet-600',
-      'bg-fuchsia-600',
-      'bg-cyan-600',
-    ];
-    return colors[name.charCodeAt(0) % colors.length];
-  };
+  const getAvatarColor = () => colorForUid(user?.id);
 
   const handleNameSave = () => {
     if (nameInput.trim()) {
@@ -69,7 +52,7 @@ export default function ProfileModal({ isOpen, onClose }) {
     if (!file) return;
 
     if (file.size > PROFILE_PHOTO_MAX_UPLOAD_BYTES) {
-      alert('Photo size must be less than 15MB');
+      toast.error('That photo is too big. Pick one under 15MB.');
       return;
     }
 
@@ -78,12 +61,11 @@ export default function ProfileModal({ isOpen, onClose }) {
         maxBytes: PROFILE_PHOTO_MAX_BYTES
       });
 
-      localStorage.setItem(PHOTO_KEY, dataUrl);
-      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', dataUrl.length);
       updateProfile({ photo: dataUrl });
+      toast.success('Photo updated. It shows in rooms you join from now on.');
     } catch (error) {
       console.error('Error compressing profile modal photo:', error);
-      alert('Failed to process photo. Please choose a different image.');
+      toast.error("Couldn't use that photo. Try a different image.");
     }
 
     // Clear the input so the same file can be re-selected
@@ -175,6 +157,7 @@ export default function ProfileModal({ isOpen, onClose }) {
                     if (e.key === 'Enter') handleNameSave();
                     if (e.key === 'Escape') handleNameCancel();
                   }}
+                  maxLength={MAX_NAME_LENGTH}
                   className="w-full bg-slate-800 border border-violet-600 rounded-xl px-4 py-2 text-white text-center text-xl font-bold focus:outline-none focus:ring-2 focus:ring-violet-500/50"
                   autoFocus
                 />
@@ -217,6 +200,10 @@ export default function ProfileModal({ isOpen, onClose }) {
             <span className="material-symbols-outlined text-xl leading-none">logout</span>
             Log Out
           </button>
+          <p className="text-center text-xs text-slate-500">
+            Logging out clears your name and photo from this device.{' '}
+            <a href="/privacy" className="underline hover:text-slate-300">Privacy</a>
+          </p>
         </div>
       </div>
     </div>

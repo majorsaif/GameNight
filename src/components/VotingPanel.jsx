@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { getInitials } from '../utils/avatar';
+import React, { useEffect, useMemo, useState } from 'react';
+import { getAvatarColor, getInitials } from '../utils/avatar';
+import { useAutoAdvance } from '../lib/activity';
 
 const getPlayerUid = (player) => player?.uid || player?.id || null;
 
@@ -9,9 +10,11 @@ const getPlayerPhoto = (player) => player?.photo || player?.photoURL || null;
 
 export default function VotingPanel({
   players,
+  requiredVoterUids = null,
   votes,
   currentUid,
   isHost,
+  fallbackRank = 0,
   onVote,
   onEndVoting,
   theme = 'default',
@@ -40,24 +43,20 @@ export default function VotingPanel({
   const [voteError, setVoteError] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [localConfirmed, setLocalConfirmed] = useState(Boolean(confirmedTarget));
-  const [autoEndSeconds, setAutoEndSeconds] = useState(null);
-  const autoEndTriggeredRef = useRef(false);
-  const onEndVotingRef = useRef(onEndVoting);
+  const [autoEndAt, setAutoEndAt] = useState(null);
+  const [nowTick, setNowTick] = useState(() => Date.now());
 
   const canVote = allPlayers.some((player) => getPlayerUid(player) === currentUid);
   const hasConfirmed = localConfirmed || confirmedTarget != null;
-  const votableUids = useMemo(
-    () => allPlayers.map((player) => getPlayerUid(player)).filter(Boolean),
-    [allPlayers]
-  );
+  const votableUids = useMemo(() => (
+    Array.isArray(requiredVoterUids)
+      ? requiredVoterUids
+      : allPlayers.map((player) => getPlayerUid(player)).filter(Boolean)
+  ), [allPlayers, requiredVoterUids]);
   const allVotesConfirmed = useMemo(() => {
     if (votableUids.length === 0) return false;
     return votableUids.every((uid) => votesByVoter[uid] != null);
   }, [votableUids, votesByVoter]);
-
-  useEffect(() => {
-    onEndVotingRef.current = onEndVoting;
-  }, [onEndVoting]);
 
   useEffect(() => {
     if (confirmedTarget != null) {
@@ -65,41 +64,29 @@ export default function VotingPanel({
       setLocalConfirmed(true);
       return;
     }
-
     setLocalConfirmed(false);
   }, [confirmedTarget]);
 
+  // Once everyone has voted, close the ballot after a 5s countdown
   useEffect(() => {
-    if (!allVotesConfirmed) {
-      setAutoEndSeconds(null);
-      autoEndTriggeredRef.current = false;
-      return;
-    }
-
-    setAutoEndSeconds(5);
-    autoEndTriggeredRef.current = false;
+    setAutoEndAt(allVotesConfirmed ? Date.now() + 5000 : null);
   }, [allVotesConfirmed]);
 
   useEffect(() => {
-    if (!allVotesConfirmed || autoEndSeconds == null || autoEndSeconds <= 0) return;
+    if (!autoEndAt) return undefined;
+    const id = setInterval(() => setNowTick(Date.now()), 250);
+    return () => clearInterval(id);
+  }, [autoEndAt]);
 
-    const timeoutId = setTimeout(() => {
-      setAutoEndSeconds((seconds) => {
-        if (seconds == null) return null;
-        return Math.max(0, seconds - 1);
-      });
-    }, 1000);
+  const autoEndSeconds = autoEndAt ? Math.max(0, Math.ceil((autoEndAt - nowTick) / 1000)) : null;
 
-    return () => clearTimeout(timeoutId);
-  }, [allVotesConfirmed, autoEndSeconds]);
-
-  useEffect(() => {
-    if (!isHost || !allVotesConfirmed || autoEndSeconds !== 0) return;
-    if (autoEndTriggeredRef.current) return;
-
-    autoEndTriggeredRef.current = true;
-    Promise.resolve(onEndVotingRef.current?.()).catch(() => {});
-  }, [isHost, allVotesConfirmed, autoEndSeconds]);
+  useAutoAdvance({
+    key: autoEndAt,
+    dueAt: autoEndAt,
+    isHost,
+    fallbackRank,
+    advance: () => onEndVoting?.()
+  });
 
   const handleSelectTarget = (targetUid) => {
     if (!canVote || hasConfirmed) return;
@@ -215,7 +202,7 @@ export default function VotingPanel({
                         className="w-11 h-11 rounded-full object-cover"
                       />
                     ) : (
-                      <div className="w-11 h-11 rounded-full border border-[#bfae95] bg-[#decfb8] flex items-center justify-center text-[#3f3127] font-bold">
+                      <div className={`w-11 h-11 rounded-full border border-[#bfae95] ${getAvatarColor(player)} flex items-center justify-center text-white font-bold`}>
                         {getInitials(getPlayerName(player))}
                       </div>
                     )}

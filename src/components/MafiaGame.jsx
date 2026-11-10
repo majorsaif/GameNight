@@ -1,82 +1,139 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
-import { useRoom } from '../hooks/useRoom';
-import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
-import { getInitials, getAvatarColor } from '../utils/avatar';
-import { throttledUpdate } from '../utils/firestoreThrottle';
-import { MAFIA_SOUNDS, playSound } from '../mafia/sounds';
+import { endActivity, useRoom } from '../hooks/useRoom';
+import { transitionActivity, updateActivity, useAutoAdvance, useCountdown } from '../lib/activity';
+import { getInitials } from '../utils/avatar';
+import { MAFIA_SOUNDS, playSound, preloadMafiaSounds } from '../mafia/sounds';
 import VotingPanel from './VotingPanel';
-import mafiaRoleCardImage from '../assets/mafia/mafia-card.png';
-import detectiveRoleCardImage from '../assets/mafia/detective-card.png';
-import doctorRoleCardImage from '../assets/mafia/doctor-card.png';
-import civilianRoleCardImage from '../assets/mafia/civilian-card.png';
-import cardBackImage from '../assets/mafia/card-back.png';
-import { KILL_CAUSES, SAVE_CAUSES, KILL_NOTE, SAVE_NOTE } from '../mafia/causes';
+import GameShell, { GameLoading } from './GameShell';
+import { useToast } from './Toast';
+import mafiaRoleCardImage from '../assets/mafia/mafia-card.webp';
+import detectiveRoleCardImage from '../assets/mafia/detective-card.webp';
+import doctorRoleCardImage from '../assets/mafia/doctor-card.webp';
+import civilianRoleCardImage from '../assets/mafia/civilian-card.webp';
+import cardBackImage from '../assets/mafia/card-back.webp';
+import { KILL_NOTE, SAVE_NOTE } from '../mafia/causes';
+import {
+  activeActorUids,
+  advanceMafia,
+  allConfirmedJump,
+  allReadyToVote,
+  resolveDayVote,
+  selectableTargets,
+  startDayVoteUpdates,
+  startNightUpdates
+} from '../games/mafia/logic';
+
+const PHASE_SOUNDS = {
+  'night-eyes-closed': MAFIA_SOUNDS.NIGHT_START,
+  'night-mafia': MAFIA_SOUNDS.MAFIA_WAKE,
+  'night-doctor': MAFIA_SOUNDS.DOCTOR_WAKE,
+  'night-detective': MAFIA_SOUNDS.DETECTIVE_WAKE,
+  'day-discussion': MAFIA_SOUNDS.DAY_START
+};
 
 export default function MafiaGame() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.photo || null);
-  
-  const [gameState, setGameState] = useState(null);
-  const [gameStateLoaded, setGameStateLoaded] = useState(false);
-  const [myRole, setMyRole] = useState(null);
+  const { room, isHost, loading: roomLoading, error: roomError } = useRoom(roomId, user);
+
+  const gameState = room?.activeActivity?.type === 'mafia' ? room.activeActivity : null;
+  const phase = gameState?.phase || null;
+  const phaseId = gameState?.phaseId ?? 0;
+
   const [showRole, setShowRole] = useState(false);
   const [isRoleCardFrontVisible, setIsRoleCardFrontVisible] = useState(false);
   const [isCardFlipping, setIsCardFlipping] = useState(false);
   const [cardRotationY, setCardRotationY] = useState(0);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
-  const [hasConfirmed, setHasConfirmed] = useState(false);
-  const [readyClicked, setReadyClicked] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(null);
-  const phaseTimerRef = useRef(null);
+  const [busy, setBusy] = useState(false);
   const flipTimeoutsRef = useRef([]);
-  const phaseTimeoutTriggeredRef = useRef(false);
-  const timerJumpedRef = useRef(false);
-  const previousPhaseRef = useRef(null);
-  const handlePhaseTimeoutRef = useRef(null);
+  const lastSoundPhaseRef = useRef(null);
 
-  // DIAGNOSIS FINDINGS:
-  // FIX 1: checkAllConfirmed (timer skip) only runs when the HOST confirms via handleConfirmVote.
-  //   Ready-to-vote auto-advance works because it has a useEffect watching gameState.readyVotes on the host.
-  //   Confirm vote has NO equivalent useEffect — so if the host is not an active player
-  //   (e.g. host is civilian during night-mafia), checkAllConfirmed is never called.
-  //   FIX: Add a useEffect mirroring the skip discussion pattern that watches confirmedVotes.
-  //
-  // FIX 2: Doctor timer expiry IS handled in handlePhaseTimeout (calls advanceFromDoctorPhase).
-  //   But the timer setInterval(100ms) can call handlePhaseTimeout repeatedly before the
-  //   Firestore update propagates back. This race condition affects ALL phases.
-  //   FIX: Add phaseTimeoutTriggeredRef guard to prevent multiple handlePhaseTimeout calls.
-  //
-  // FIX 3: Inconsistent messaging — night-eyes-closed shows "Close your eyes 🤫" while
-  //   post-vote transitions show "Close your eyes... 😴". Non-active player screens during
-  //   voting show "Shhh..." variants. Detective-result non-detective has no countdown.
-  //   FIX: Unify all to "Close your eyes 😴" and add countdown where missing.
-  //
-  // FIX 4: advanceFromDoctorPhase uses undefined for doctorSave when doctor hasn't voted
-  //   (gameState.nightVotes?.[uid] returns undefined). Firestore ignores undefined fields.
-  //   FIX: Explicitly coalesce to null.
+  const timeLeft = useCountdown(gameState?.phaseEndsAt || null);
+  const activeRules = gameState?.rules || {};
 
-  // Rules form state
-  const [rules, setRules] = useState({
-    mafiaCount: 1,
-    doctor: true,
-    detective: true,
-    discussionTime: 3,
-    votingTime: 1
+  const me = gameState?.players?.find((p) => p.uid === user?.id) || null;
+  const myRole = me?.role || null;
+  const confirmedVotes = gameState?.confirmedVotes || [];
+  const hasConfirmed = Boolean(user?.id && confirmedVotes.includes(user.id));
+  const readyClicked = Boolean(user?.id && (gameState?.readyVotes || []).includes(user.id));
+
+  // Order of living players (by uid) decides who acts as fallback when the host is away
+  const fallbackRank = useMemo(() => {
+    const ids = (gameState?.players || []).map((p) => p.uid).filter((uid) => room?.playerIds?.includes(uid)).sort();
+    const index = ids.indexOf(user?.id);
+    return index < 0 ? 99 : index;
+  }, [gameState?.players, room?.playerIds, user?.id]);
+
+  useEffect(() => {
+    preloadMafiaSounds();
+  }, []);
+
+  // ── Sounds on phase change ──────────────────────────────────────────────
+  useEffect(() => {
+    if (!phase || lastSoundPhaseRef.current === `${phaseId}`) return;
+    lastSoundPhaseRef.current = `${phaseId}`;
+    if (PHASE_SOUNDS[phase]) playSound(PHASE_SOUNDS[phase]);
+  }, [phase, phaseId]);
+
+  // Reset local selection whenever the phase changes
+  useEffect(() => {
+    if (!gameState) return;
+    const own = gameState.nightVotes?.[user?.id] || gameState.dayVotes?.[user?.id] || null;
+    setSelectedPlayer(own);
+  }, [phaseId]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => () => flipTimeoutsRef.current.forEach((id) => clearTimeout(id)), []);
+
+  useEffect(() => {
+    if (phase === 'roles') return;
+    flipTimeoutsRef.current.forEach((id) => clearTimeout(id));
+    flipTimeoutsRef.current = [];
+    setShowRole(false);
+    setIsRoleCardFrontVisible(false);
+    setIsCardFlipping(false);
+    setCardRotationY(0);
+  }, [phase]);
+
+  const guard = { type: 'mafia', phaseId };
+
+  // ── Timed phases: host advances, others step in if the host is away ─────
+  useAutoAdvance({
+    key: gameState?.phaseEndsAt ? `${phaseId}:${gameState.phaseEndsAt}` : null,
+    dueAt: gameState?.phaseEndsAt || null,
+    isHost,
+    fallbackRank,
+    advance: () => transitionActivity(roomId, guard, (activity) => advanceMafia(activity))
   });
-  const activeRules = gameState?.rules || rules;
 
-  const getCurrentPlayer = () => gameState?.players?.find((player) => player.uid === user?.id);
+  // Everyone who needs to act has confirmed -> shorten timer to 5s
+  const jumpDue = Boolean(gameState && allConfirmedJump(gameState));
+  useAutoAdvance({
+    key: jumpDue ? `jump:${phaseId}` : null,
+    due: jumpDue,
+    isHost,
+    fallbackRank,
+    advance: () => transitionActivity(roomId, guard, (activity) => allConfirmedJump(activity))
+  });
 
-  const getPlayerPhoto = (player) => {
-    if (!player?.uid) return null;
-    const matchingRoomPlayer = room?.players?.find((roomPlayer) => roomPlayer.id === player.uid);
-    return player.photo || matchingRoomPlayer?.photo || null;
-  };
+  // Everyone alive is ready to vote -> start voting
+  const readyDue = Boolean(gameState && allReadyToVote(gameState));
+  useAutoAdvance({
+    key: readyDue ? `ready:${phaseId}` : null,
+    due: readyDue,
+    isHost,
+    fallbackRank,
+    advance: () => transitionActivity(roomId, { ...guard, phase: 'day-discussion' }, (activity) => (
+      allReadyToVote(activity) ? startDayVoteUpdates(activity) : null
+    ))
+  });
+
+  const getPlayerPhoto = (player) => player?.photo || room?.players?.find((p) => p.id === player?.uid)?.photo || null;
 
   const renderPlayerAvatar = (player, sizeClasses, textSizeClasses = 'text-sm', extraClasses = '') => {
     const playerPhoto = getPlayerPhoto(player);
@@ -89,367 +146,31 @@ export default function MafiaGame() {
         />
       );
     }
-
     return (
-      <div className={`${sizeClasses} ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold ${textSizeClasses} ${extraClasses}`.trim()}>
+      <div className={`${sizeClasses} ${player.avatarColor || 'bg-slate-600'} rounded-full flex items-center justify-center text-white font-bold ${textSizeClasses} ${extraClasses}`.trim()}>
         {getInitials(player.displayName)}
       </div>
     );
   };
 
-  const isCurrentUserAlive = () => {
-    const currentPlayer = getCurrentPlayer();
-    return Boolean(currentPlayer && currentPlayer.isAlive);
-  };
-
-  const getLivingPlayers = (players = gameState?.players || []) => {
-    return players.filter((player) => player.isAlive);
-  };
-
-  const getWinnerFromPlayers = (players) => {
-    const livingMafia = players.filter((player) => player.role === 'mafia' && player.isAlive).length;
-    const livingInnocent = players.filter((player) => player.role !== 'mafia' && player.isAlive).length;
-
-    if (livingMafia === 0) return 'town';
-    if (livingMafia >= livingInnocent) return 'mafia';
-    return null;
-  };
-
-  const getRandomCause = (causes) => {
-    if (!Array.isArray(causes) || causes.length === 0) return null;
-    return causes[Math.floor(Math.random() * causes.length)];
-  };
-
-  // Subscribe to game state and detect phase changes for sounds
-  useEffect(() => {
-    if (!roomId) return;
-
-    const roomRef = doc(db, 'rooms', roomId);
-    const unsubscribe = onSnapshot(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        console.log('[MafiaGame] Firestore update received:', {
-          phase: data.activeActivity?.phase,
-          phaseEndsAt: data.activeActivity?.phaseEndsAt,
-          confirmedVotes: data.activeActivity?.confirmedVotes,
-          players: data.activeActivity?.players,
-        });
-
-        if (data.activeActivity && data.activeActivity.type === 'mafia') {
-          const roomPlayersByUid = new Map((Array.isArray(data.players) ? data.players : []).map((player) => [player.id, player]));
-          const normalizedActivityPlayers = Array.isArray(data.activeActivity.players)
-            ? data.activeActivity.players.map((player) => ({
-                ...player,
-                photo: player.photo || roomPlayersByUid.get(player.uid)?.photo || null
-              }))
-            : data.activeActivity.players;
-
-          const normalizedActivity = Array.isArray(data.activeActivity.players)
-            ? { ...data.activeActivity, players: normalizedActivityPlayers }
-            : data.activeActivity;
-
-          setGameState(normalizedActivity);
-          setGameStateLoaded(true); // Ensure gameStateLoaded is updated when valid data is received
-
-          const newPhase = data.activeActivity.phase;
-          if (newPhase !== previousPhaseRef.current) {
-            // Play sound for phase transition
-            switch (newPhase) {
-              case 'night-eyes-closed':
-                playSound(MAFIA_SOUNDS.NIGHT_START);
-                break;
-              case 'night-mafia':
-                playSound(MAFIA_SOUNDS.MAFIA_WAKE);
-                break;
-              case 'night-doctor':
-                playSound(MAFIA_SOUNDS.DOCTOR_WAKE);
-                break;
-              case 'night-detective':
-                playSound(MAFIA_SOUNDS.DETECTIVE_WAKE);
-                break;
-              case 'day-discussion':
-                console.log('[MafiaGame] Playing rooster sound for day start');
-                playSound(MAFIA_SOUNDS.DAY_START);
-                break;
-            }
-            
-            previousPhaseRef.current = newPhase;
-            timerJumpedRef.current = false; // Reset timer jump guard on phase change
-          }
-        } else {
-          console.log('[MafiaGame] No active Mafia game found');
-          setGameState(null);
-        }
-      }
-    });
-
-    return () => unsubscribe();
-  }, [roomId]);
-
-  // Set my role when game state changes
-  useEffect(() => {
-    if (gameState && gameState.players && user) {
-      const myPlayer = gameState.players.find(p => p.uid === user.id);
-      if (myPlayer) {
-        console.log('[MafiaGame] Setting myRole:', myPlayer.role);
-        setMyRole(myPlayer.role);
-      }
-    }
-  }, [gameState, user]);
-
-  useEffect(() => {
-    return () => {
-      flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
-    };
-  }, []);
-
-  useEffect(() => {
-    if (gameState?.phase === 'roles') return;
-
-    flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
-    flipTimeoutsRef.current = [];
-    setShowRole(false);
-    setIsRoleCardFrontVisible(false);
-    setIsCardFlipping(false);
-    setCardRotationY(0);
-  }, [gameState?.phase]);
-
-  // Host auto-advances discussion if all living players are ready to vote
-  useEffect(() => {
-    if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
-
-    const readyVotes = gameState.readyVotes || [];
-    const livingUids = gameState.players
-      .filter((player) => player.isAlive && player.role !== 'narrator')
-      .map((player) => player.uid);
-
-    if (livingUids.length > 0 && livingUids.every((uid) => readyVotes.includes(uid))) {
-      const roomRef = doc(db, 'rooms', roomId);
-      startDayVotePhase(roomRef);
-    }
-  }, [isHost, gameState?.phase, gameState?.readyVotes, gameState?.players, roomId]);
-
-  // FIX 1: Host auto-shortens timer if all active players have confirmed votes
-  // Mirrors the skip discussion useEffect pattern — reacts to Firestore state changes
-  // so it works even when the host is NOT one of the active/voting players.
-  useEffect(() => {
-    if (!isHost || !gameState) return;
-    const phase = gameState.phase;
-    if (phase !== 'night-mafia' && phase !== 'night-doctor' && phase !== 'night-detective' && phase !== 'day-vote') return;
-
-    if (timerJumpedRef.current) return; // Prevent repeated timer jumps
-
-    // Inline getActivePlayers logic to avoid stale closure issues
-    let activePlayerUids = [];
-    switch (phase) {
-      case 'night-mafia':
-        activePlayerUids = gameState.players.filter(p => p.role === 'mafia' && p.isAlive).map(p => p.uid);
-        break;
-      case 'night-doctor':
-        const doctor = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-        activePlayerUids = doctor ? [doctor.uid] : [];
-        break;
-      case 'night-detective':
-        const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
-        activePlayerUids = detective ? [detective.uid] : [];
-        break;
-      case 'day-vote':
-        activePlayerUids = gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator').map(p => p.uid);
-        break;
-      default:
-        activePlayerUids = [];
-    }
-    
-    const confirmed = gameState.confirmedVotes || [];
-
-    if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
-      console.log(`[MafiaGame] All players confirmed for ${phase}, jumping timer via useEffect`);
-      timerJumpedRef.current = true; // Mark timer jump as fired
-      const roomRef = doc(db, 'rooms', roomId);
-      throttledUpdate(
-        `timer-jump-${phase}`,
-        () => updateDoc(roomRef, {
-          'activeActivity.phaseEndsAt': Date.now() + 5000,
-          lastActivity: serverTimestamp()
-        }),
-        2000
-      ).catch(error => {
-        console.error(`Error jumping timer for ${phase}:`, error);
-      });
-    }
-  }, [isHost, gameState?.phase, gameState?.confirmedVotes, gameState?.players, roomId]);
-
-  // Store the latest gameState in a ref to prevent stale closures
-  const gameStateRef = useRef(gameState);
-  useEffect(() => {
-    gameStateRef.current = gameState;
-  }, [gameState]);
-
-  // Handle phase timer countdown using Firestore phaseEndsAt with fallback
-  useEffect(() => {
-    if (!gameState || (!gameState.phaseEndsAt && (!gameState.phaseStartedAt || !gameState.phaseDurationMs))) {
-      setTimeLeft(null);
-      return;
-    }
-
-    const updateTimer = () => {
-      const now = Date.now();
-      const currentGameState = gameStateRef.current;
-      const phaseEndsAt = currentGameState.phaseEndsAt?.toMillis ? currentGameState.phaseEndsAt.toMillis() : currentGameState.phaseEndsAt;
-      const phaseStarted = currentGameState.phaseStartedAt?.toMillis ? currentGameState.phaseStartedAt.toMillis() : currentGameState.phaseStartedAt;
-
-      let remaining = 0;
-      if (phaseEndsAt) {
-        remaining = Math.max(0, phaseEndsAt - now);
-      } else if (phaseStarted && currentGameState.phaseDurationMs) {
-        const elapsed = now - phaseStarted;
-        remaining = Math.max(0, currentGameState.phaseDurationMs - elapsed);
-      }
-
-      const remainingSeconds = Math.max(0, Math.ceil(remaining / 1000));
-      setTimeLeft(remainingSeconds);
-
-      // Only host auto-advances phases — guard prevents multiple calls during
-      // the gap between Firestore write and snapshot propagation (FIX 2)
-      if (remainingSeconds <= 0) {
-        console.log('[MafiaGame] Timer hit zero, attempting phase transition for:', currentGameState.phase);
-        console.log('[MafiaGame] isHost check:', isHost);
-        console.log('[MafiaGame] phaseTimeoutTriggeredRef:', phaseTimeoutTriggeredRef.current);
-      }
-      
-      if (isHost && remainingSeconds <= 0 && !phaseTimeoutTriggeredRef.current) {
-        console.log('[MafiaGame] Triggering handlePhaseTimeout:', { remainingSeconds });
-        phaseTimeoutTriggeredRef.current = true;
-        handlePhaseTimeoutRef.current();
-      }
-    };
-
-    updateTimer();
-    phaseTimerRef.current = setInterval(updateTimer, 1000);
-
-    return () => {
-      if (phaseTimerRef.current) {
-        clearInterval(phaseTimerRef.current);
-      }
-    };
-  }, [isHost, gameState?.phaseEndsAt, gameState?.phase]);
-
-  useEffect(() => {
-    const phaseEndsAt = gameState?.phaseEndsAt?.toMillis ? gameState.phaseEndsAt.toMillis() : gameState?.phaseEndsAt;
-    console.log('[MafiaGame] phaseEndsAt updated:', { phase: gameState?.phase, phaseEndsAt });
-  }, [gameState?.phaseEndsAt, gameState?.phase]);
-
-  // Reset confirmed status and timeout guard when phase changes
-  useEffect(() => {
-    phaseTimeoutTriggeredRef.current = false;
-    if (gameState) {
-      setHasConfirmed(gameState.confirmedVotes?.includes(user?.id) || false);
-      setReadyClicked(gameState.readyVotes?.includes(user?.id) || false);
-      if (gameState.phase === 'night-mafia' || gameState.phase === 'night-doctor' || 
-          gameState.phase === 'night-detective' || gameState.phase === 'day-vote') {
-        setSelectedPlayer(gameState.nightVotes?.[user?.id] || gameState.dayVotes?.[user?.id] || null);
-      } else {
-        setSelectedPlayer(null);
-      }
-    }
-  }, [gameState?.phase]);
-
-  const handlePhaseTimeout = async () => {
-    console.log('[handlePhaseTimeout] Called with phase:', gameState?.phase, 'isHost:', isHost, 'gameState exists:', !!gameState);
-    
-    if (!isHost || !gameState) return;
-
-    const roomRef = doc(db, 'rooms', roomId);
-
-    try {
-      switch (gameState.phase) {
-        case 'night-mafia':
-          console.log('HOST writing phase transition to: night-eyes-closed-2');
-          await advanceFromMafiaPhase(roomRef);
-          break;
-        case 'night-eyes-closed-2':
-          console.log('HOST advancing from night-eyes-closed-2');
-          if (activeRules.doctor) {
-            await startDoctorPhase(roomRef);
-          } else if (activeRules.detective) {
-            await startDetectivePhase(roomRef);
-          } else {
-            await startDayPhase(roomRef);
-          }
-          break;
-        case 'night-doctor':
-          console.log('HOST writing phase transition to: night-eyes-closed-3');
-          await advanceFromDoctorPhase(roomRef);
-          break;
-        case 'night-eyes-closed-3':
-          console.log('HOST advancing from night-eyes-closed-3');
-          if (activeRules.detective) {
-            await startDetectivePhase(roomRef);
-          } else {
-            await startDayPhase(roomRef);
-          }
-          break;
-        case 'night-detective':
-          console.log('HOST writing phase transition to: night-detective-result');
-          await advanceFromDetectivePhase(roomRef);
-          break;
-        case 'night-detective-result':
-          console.log('HOST advancing from night-detective-result to night-eyes-closed-4');
-          await updateDoc(roomRef, {
-            'activeActivity.phase': 'night-eyes-closed-4',
-            'activeActivity.phaseStartedAt': serverTimestamp(),
-            'activeActivity.phaseDurationMs': 3000,
-            'activeActivity.phaseEndsAt': Date.now() + 3000,
-            lastActivity: serverTimestamp()
-          });
-          break;
-        case 'night-eyes-closed-4':
-          console.log('HOST advancing from night-eyes-closed-4 to day');
-          await startDayPhase(roomRef);
-          break;
-        case 'day-discussion':
-          console.log('HOST writing phase transition to: day-vote');
-          await startDayVotePhase(roomRef);
-          break;
-        case 'day-vote':
-          console.log('HOST writing phase transition to: end-game');
-          await processVoteAndCheckWin(roomRef);
-          break;
-        default:
-          console.warn('[handlePhaseTimeout] Unhandled phase:', gameState.phase);
-          break;
-      }
-    } catch (error) {
-      console.error('Error in handlePhaseTimeout:', error);
-    }
-  };
-
-  // Keep ref always pointing to the latest handlePhaseTimeout so the
-  // setInterval closure (which depends only on [isHost]) never calls a
-  // stale version that sees gameState === null.
-  handlePhaseTimeoutRef.current = handlePhaseTimeout;
+  const isCurrentUserAlive = () => Boolean(me && me.isAlive);
+  const getSelectablePlayers = () => selectableTargets(gameState, user?.id);
 
   const runRoleCardFlip = (nextFrontVisible) => {
     if (isCardFlipping) return;
-
-    flipTimeoutsRef.current.forEach((timeoutId) => clearTimeout(timeoutId));
-    flipTimeoutsRef.current = [];
-
+    flipTimeoutsRef.current.forEach((id) => clearTimeout(id));
     setIsCardFlipping(true);
     setCardRotationY(90);
-
-    const halfwayTimeout = setTimeout(() => {
+    const halfway = setTimeout(() => {
       setIsRoleCardFrontVisible(nextFrontVisible);
       setCardRotationY(0);
     }, 300);
-
-    const completeTimeout = setTimeout(() => {
+    const complete = setTimeout(() => {
       setShowRole(nextFrontVisible);
       setIsCardFlipping(false);
       flipTimeoutsRef.current = [];
     }, 600);
-
-    flipTimeoutsRef.current = [halfwayTimeout, completeTimeout];
+    flipTimeoutsRef.current = [halfway, complete];
   };
 
   const handleRevealRole = () => {
@@ -462,586 +183,83 @@ export default function MafiaGame() {
     runRoleCardFlip(false);
   };
 
-  const startNightPhase = async () => {
-    if (!isHost) return;
-    
-    const roomRef = doc(db, 'rooms', roomId);
-
-    // First night includes a 7s volume prompt + 5s eyes-closed. Later nights stay 5s.
-    const isFirstNight = (gameState?.roundNumber ?? 1) === 1;
-    const nightEyesClosedDurationMs = isFirstNight ? 12000 : 5000;
-
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'night-eyes-closed',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': nightEyesClosedDurationMs,
-      'activeActivity.phaseEndsAt': Date.now() + nightEyesClosedDurationMs,
-      'activeActivity.nightVotes': {},
-      'activeActivity.mafiaSelections': {},
-      'activeActivity.confirmedVotes': [],
-      'activeActivity.pendingVictim': null,
-      'activeActivity.doctorSave': null,
-      'activeActivity.detectiveResult': null,
-      lastActivity: serverTimestamp()
-    });
-
-    // Advance to mafia turn after the current night-eyes-closed duration.
-    setTimeout(async () => {
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'night-mafia',
-        'activeActivity.phaseStartedAt': serverTimestamp(),
-        'activeActivity.phaseDurationMs': 30000,
-        'activeActivity.phaseEndsAt': Date.now() + 30000,
-        'activeActivity.confirmedVotes': [],
-        'activeActivity.nightVotes': {},
-        'activeActivity.mafiaSelections': {},
-        lastActivity: serverTimestamp()
-      });
-    }, nightEyesClosedDurationMs);
+  const withBusy = async (fn) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } catch (error) {
+      console.error(error);
+      toast.error('Something went wrong. Check your connection and try again.');
+    } finally {
+      setBusy(false);
+    }
   };
+
+  const startNightPhase = () => withBusy(() => (
+    transitionActivity(roomId, { ...guard, phase: 'roles' }, (activity) => startNightUpdates(activity))
+  ));
 
   const handleVotePlayer = async (targetUid) => {
-    if (!user || hasConfirmed || !gameState) return;
-    if (!isCurrentUserAlive()) return;
-    if (myRole === 'narrator') return;
-    
+    if (!user || hasConfirmed || !gameState || !isCurrentUserAlive()) return;
     setSelectedPlayer(targetUid);
-
-    if (gameState.phase === 'night-mafia' && myRole === 'mafia' && !isHost) {
-      const roomRef = doc(db, 'rooms', roomId);
-      await updateDoc(roomRef, {
-        [`activeActivity.mafiaSelections.${user.id}`]: {
-          targetUid,
-          confirmed: false
-        }
-      });
+    if (phase === 'night-mafia' && myRole === 'mafia') {
+      // Let fellow mafia see who you're leaning towards
+      updateActivity(roomId, {
+        [`mafiaSelections.${user.id}`]: { targetUid, confirmed: false }
+      }).catch(() => {});
     }
   };
 
-  const handleConfirmVote = async () => {
-    if (!user || !selectedPlayer || hasConfirmed || !gameState) return;
-    if (!isCurrentUserAlive()) return;
-    if (myRole === 'narrator') return;
-
-    const roomRef = doc(db, 'rooms', roomId);
-    const voteField = gameState.phase === 'day-vote' ? 'dayVotes' : 'nightVotes';
-    const confirmedVotes = Array.from(new Set([...(gameState.confirmedVotes || []), user.id]));
+  const handleConfirmVote = () => withBusy(async () => {
+    if (!user || !selectedPlayer || hasConfirmed || !gameState || !isCurrentUserAlive()) return;
+    if (!activeActorUids(gameState).includes(user.id)) return;
     const updates = {
-      [`activeActivity.${voteField}.${user.id}`]: selectedPlayer,
-      'activeActivity.confirmedVotes': confirmedVotes,
-      lastActivity: serverTimestamp()
+      [`nightVotes.${user.id}`]: selectedPlayer,
+      confirmedVotes: arrayUnion(user.id)
     };
-
-    if (gameState.phase === 'night-mafia' && myRole === 'mafia' && !isHost) {
-      updates[`activeActivity.mafiaSelections.${user.id}`] = {
-        targetUid: selectedPlayer,
-        confirmed: true
-      };
+    if (phase === 'night-mafia') {
+      updates[`mafiaSelections.${user.id}`] = { targetUid: selectedPlayer, confirmed: true };
     }
-
-    await updateDoc(roomRef, updates);
-
-    setHasConfirmed(true);
-
-    if (isHost) {
-      await checkAllConfirmed(confirmedVotes);
-    }
-  };
+    await updateActivity(roomId, updates);
+  });
 
   const handleSubmitDayVote = async (targetUid) => {
-    if (!user || !targetUid || hasConfirmed || !gameState) {
-      throw new Error('Vote unavailable');
-    }
-    if (!isCurrentUserAlive()) {
-      throw new Error('Only alive players can vote');
-    }
-    if (myRole === 'narrator') {
-      throw new Error('Narrator cannot vote');
-    }
-
-    const roomRef = doc(db, 'rooms', roomId);
-    const confirmedVotes = Array.from(new Set([...(gameState.confirmedVotes || []), user.id]));
-
-    await updateDoc(roomRef, {
-      [`activeActivity.dayVotes.${user.id}`]: targetUid,
-      'activeActivity.confirmedVotes': confirmedVotes,
-      lastActivity: serverTimestamp()
+    if (!user || !targetUid || !gameState || phase !== 'day-vote') throw new Error('Vote unavailable');
+    if (!isCurrentUserAlive()) throw new Error('Only alive players can vote');
+    await updateActivity(roomId, {
+      [`dayVotes.${user.id}`]: targetUid,
+      confirmedVotes: arrayUnion(user.id)
     });
-
     setSelectedPlayer(targetUid);
-    setHasConfirmed(true);
-
-    if (isHost) {
-      await checkAllConfirmed(confirmedVotes);
-    }
   };
 
-  const handleEndDayVoting = async () => {
-    if (!isHost || !gameState || gameState.phase !== 'day-vote') return;
-    const roomRef = doc(db, 'rooms', roomId);
-    await processVoteAndCheckWin(roomRef);
-  };
+  const handleEndDayVoting = () => transitionActivity(
+    roomId,
+    { ...guard, phase: 'day-vote' },
+    (activity) => resolveDayVote(activity)
+  );
 
-  const checkAllConfirmed = async (confirmedVotesOverride) => {
-    if (!isHost || !gameState) return;
-    if (timerJumpedRef.current) {
-      console.log('[checkAllConfirmed] Timer already jumped for this phase, skipping');
-      return;
-    }
+  const handleReadyToVote = () => withBusy(async () => {
+    if (!gameState || !user || phase !== 'day-discussion' || readyClicked || !isCurrentUserAlive()) return;
+    await updateActivity(roomId, { readyVotes: arrayUnion(user.id) });
+  });
 
-    const roomRef = doc(db, 'rooms', roomId);
-    
-    // Inline getActivePlayers logic
-    let activePlayerUids = [];
-    const phase = gameState.phase;
-    switch (phase) {
-      case 'night-mafia':
-        activePlayerUids = gameState.players.filter(p => p.role === 'mafia' && p.isAlive).map(p => p.uid);
-        break;
-      case 'night-doctor':
-        const doctor = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-        activePlayerUids = doctor ? [doctor.uid] : [];
-        break;
-      case 'night-detective':
-        const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
-        activePlayerUids = detective ? [detective.uid] : [];
-        break;
-      case 'day-vote':
-        activePlayerUids = gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator').map(p => p.uid);
-        break;
-      default:
-        activePlayerUids = [];
-    }
-    
-    const confirmed = confirmedVotesOverride || gameState.confirmedVotes || [];
+  const handleStartVotingNow = () => withBusy(() => (
+    transitionActivity(roomId, { ...guard, phase: 'day-discussion' }, (activity) => startDayVoteUpdates(activity))
+  ));
 
-    if (activePlayerUids.length > 0 && activePlayerUids.every(uid => confirmed.includes(uid))) {
-      // All confirmed, shorten timer to 5 seconds for synchronized clients
-      timerJumpedRef.current = true; // Mark timer jump as fired
-      switch (gameState.phase) {
-        case 'night-mafia':
-          try {
-            console.log('Jumping timer for phase night-mafia');
-            await throttledUpdate(
-              'timer-jump-night-mafia',
-              () => updateDoc(roomRef, {
-                'activeActivity.phaseEndsAt': Date.now() + 5000,
-                lastActivity: serverTimestamp()
-              }),
-              2000
-            );
-          } catch (error) {
-            console.error('Error jumping timer for night-mafia:', error);
-          }
-          break;
-        case 'night-doctor':
-          try {
-            console.log('Jumping timer for phase night-doctor');
-            await throttledUpdate(
-              'timer-jump-night-doctor',
-              () => updateDoc(roomRef, {
-                'activeActivity.phaseEndsAt': Date.now() + 5000,
-                lastActivity: serverTimestamp()
-              }),
-              2000
-            );
-          } catch (error) {
-            console.error('Error jumping timer for night-doctor:', error);
-          }
-          break;
-        case 'night-detective':
-          try {
-            console.log('Jumping timer for phase night-detective');
-            await throttledUpdate(
-              'timer-jump-night-detective',
-              () => updateDoc(roomRef, {
-                'activeActivity.phaseEndsAt': Date.now() + 5000,
-                lastActivity: serverTimestamp()
-              }),
-              2000
-            );
-          } catch (error) {
-            console.error('Error jumping timer for night-detective:', error);
-          }
-          break;
-        case 'day-vote':
-          try {
-            console.log('Jumping timer for phase day-vote');
-            await throttledUpdate(
-              'timer-jump-day-vote',
-              () => updateDoc(roomRef, {
-                'activeActivity.phaseEndsAt': Date.now() + 5000,
-                lastActivity: serverTimestamp()
-              }),
-              2000
-            );
-          } catch (error) {
-            console.error('Error jumping timer for day-vote:', error);
-          }
-          break;
-      }
-    }
-  };
-
-  const advanceFromMafiaPhase = async (roomRef, closeEyesMs = 2000) => {
-    if (!isHost) return;
-
-    // Count votes
-    const votes = gameState.nightVotes || {};
-    const voteCounts = {};
-    Object.values(votes).forEach(targetUid => {
-      voteCounts[targetUid] = (voteCounts[targetUid] || 0) + 1;
-    });
-
-    // Find most voted
-    let maxVotes = 0;
-    let victims = [];
-    Object.entries(voteCounts).forEach(([uid, count]) => {
-      if (count > maxVotes) {
-        maxVotes = count;
-        victims = [uid];
-      } else if (count === maxVotes) {
-        victims.push(uid);
-      }
-    });
-
-    // Random tiebreak
-    const victim = victims.length > 0 ? victims[Math.floor(Math.random() * victims.length)] : null;
-
-    await updateDoc(roomRef, {
-      'activeActivity.pendingVictim': victim,
-      'activeActivity.phase': 'night-eyes-closed-2',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': closeEyesMs,
-      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
-      'activeActivity.confirmedVotes': [],
-      'activeActivity.nightVotes': {},
-      'activeActivity.mafiaSelections': {},
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const startDoctorPhase = async (roomRef) => {
-    const doctorPlayer = gameState.players.find(p => p.role === 'doctor');
-    const phaseDuration = doctorPlayer && doctorPlayer.isAlive ? 30000 : 10000;
-    
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'night-doctor',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': phaseDuration,
-      'activeActivity.phaseEndsAt': Date.now() + phaseDuration,
-      'activeActivity.confirmedVotes': [],
-      lastActivity: serverTimestamp(),
-      'activeActivity.doctorEmoji': '🩺' // Updated emoji for doctor role
-    });
-  };
-
-  const advanceFromDoctorPhase = async (roomRef, closeEyesMs = 2000) => {
-    if (!isHost) return;
-
-    const doctorPlayer = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-    const save = doctorPlayer ? (gameState.nightVotes?.[doctorPlayer.uid] ?? null) : null;
-
-    if (!doctorPlayer) {
-      await updateDoc(roomRef, {
-        'activeActivity.doctorSave': null,
-        'activeActivity.confirmedVotes': [],
-        'activeActivity.nightVotes': {},
-        lastActivity: serverTimestamp()
-      });
-
-      if (activeRules.detective) {
-        await startDetectivePhase(roomRef);
-      } else {
-        await startDayPhase(roomRef);
-      }
-      return;
-    }
-
-    await updateDoc(roomRef, {
-      'activeActivity.doctorSave': save,
-      'activeActivity.confirmedVotes': [],
-      'activeActivity.phase': 'night-eyes-closed-3',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': closeEyesMs,
-      'activeActivity.phaseEndsAt': Date.now() + closeEyesMs,
-      'activeActivity.nightVotes': {},
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const startDetectivePhase = async (roomRef) => {
-    const detectivePlayer = gameState.players.find(p => p.role === 'detective');
-    const phaseDuration = detectivePlayer && detectivePlayer.isAlive ? 30000 : 10000;
-    
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'night-detective',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': phaseDuration,
-      'activeActivity.phaseEndsAt': Date.now() + phaseDuration,
-      'activeActivity.confirmedVotes': [],
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const advanceFromDetectivePhase = async (roomRef) => {
-    if (!isHost) return;
-
-    const detectivePlayer = gameState.players.find(p => p.role === 'detective' && p.isAlive);
-    const investigateUid = detectivePlayer ? gameState.nightVotes?.[detectivePlayer.uid] : null;
-    
-    let result = null;
-    if (investigateUid) {
-      const target = gameState.players.find(p => p.uid === investigateUid);
-      result = {
-        targetUid: investigateUid,
-        targetName: target?.displayName,
-        isMafia: target?.role === 'mafia'
-      };
-    }
-
-    await updateDoc(roomRef, {
-      'activeActivity.detectiveResult': result,
-      'activeActivity.confirmedVotes': [],
-      'activeActivity.phase': 'night-detective-result',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': 5000,
-      'activeActivity.phaseEndsAt': Date.now() + 5000,
-      'activeActivity.nightVotes': {},
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const startDayPhase = async (roomRef) => {
-    const currentPlayers = [...(gameState?.players || [])];
-    const pendingVictim = gameState?.pendingVictim || null;
-    const doctorAlive = currentPlayers.some((player) => player.role === 'doctor' && player.isAlive);
-    const isSaved = Boolean(activeRules.doctor && doctorAlive && pendingVictim && gameState?.doctorSave === pendingVictim);
-    const victimPlayer = pendingVictim ? currentPlayers.find((player) => player.uid === pendingVictim) : null;
-
-    let nightReportCause = null;
-    let nightReportNote = null;
-
-    if (victimPlayer) {
-      if (isSaved) {
-        nightReportCause = getRandomCause(SAVE_CAUSES);
-        nightReportNote = SAVE_NOTE.replace('[Name]', victimPlayer.displayName);
-      } else {
-        nightReportCause = getRandomCause(KILL_CAUSES);
-        nightReportNote = KILL_NOTE;
-      }
-    }
-
-    const updatedPlayers = currentPlayers.map((player) => {
-      if (!pendingVictim || isSaved) return player;
-      if (player.uid === pendingVictim) {
-        return { ...player, isAlive: false };
-      }
-      return player;
-    });
-
-    const winner = getWinnerFromPlayers(updatedPlayers);
-    if (winner) {
-      await updateDoc(roomRef, {
-        'activeActivity.players': updatedPlayers,
-        'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
-        'activeActivity.lastSaved': isSaved ? pendingVictim : null,
-        'activeActivity.nightReportCause': nightReportCause,
-        'activeActivity.nightReportNote': nightReportNote,
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': winner,
-        'activeActivity.phaseEndsAt': null,
-        'activeActivity.phaseStartedAt': null,
-        'activeActivity.phaseDurationMs': null,
-        lastActivity: serverTimestamp()
-      });
-      return;
-    }
-
-    const discussionDurationMs = activeRules.discussionTime * 60 * 1000;
-
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'day-discussion',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': discussionDurationMs,
-      'activeActivity.phaseEndsAt': Date.now() + discussionDurationMs,
-      'activeActivity.players': updatedPlayers,
-      'activeActivity.lastEliminated': !isSaved ? pendingVictim : null,
-      'activeActivity.lastSaved': isSaved ? pendingVictim : null,
-      'activeActivity.nightReportCause': nightReportCause,
-      'activeActivity.nightReportNote': nightReportNote,
-      'activeActivity.readyVotes': [],
-      'activeActivity.nightVotes': {},
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const startDayVotePhase = async (roomRef) => {
-    const votingDurationMs = activeRules.votingTime * 60 * 1000;
-    
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'day-vote',
-      'activeActivity.phaseStartedAt': serverTimestamp(),
-      'activeActivity.phaseDurationMs': votingDurationMs,
-      'activeActivity.phaseEndsAt': Date.now() + votingDurationMs,
-      'activeActivity.dayVotes': {},
-      'activeActivity.readyVotes': [],
-      'activeActivity.confirmedVotes': [],
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const processVoteAndCheckWin = async (roomRef) => {
-    if (!isHost) return;
-
-    // Count votes
-    const votes = gameState.dayVotes || {};
-    const voteCounts = {};
-    Object.values(votes).forEach(targetUid => {
-      voteCounts[targetUid] = (voteCounts[targetUid] || 0) + 1;
-    });
-
-    // Find most voted
-    let maxVotes = 0;
-    let candidates = [];
-    Object.entries(voteCounts).forEach(([uid, count]) => {
-      if (count > maxVotes) {
-        maxVotes = count;
-        candidates = [uid];
-      } else if (count === maxVotes) {
-        candidates.push(uid);
-      }
-    });
-
-    // Random tiebreak
-    const eliminated = candidates.length > 0 ? candidates[Math.floor(Math.random() * candidates.length)] : null;
-
-    // Update player as dead
-    const updatedPlayers = gameState.players.map(p => 
-      p.uid === eliminated ? { ...p, isAlive: false } : p
-    );
-
-    await updateDoc(roomRef, {
-      'activeActivity.players': updatedPlayers,
-      'activeActivity.lastEliminated': eliminated,
-      lastActivity: serverTimestamp()
-    });
-
-    // Check win condition
-    const winner = getWinnerFromPlayers(updatedPlayers);
-
-    if (winner) {
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': winner,
-        'activeActivity.phaseEndsAt': null,
-        'activeActivity.phaseStartedAt': null,
-        'activeActivity.phaseDurationMs': null,
-        lastActivity: serverTimestamp()
-      });
-    } else {
-      // Continue to next round
-      await updateDoc(roomRef, {
-        'activeActivity.roundNumber': gameState.roundNumber + 1,
-        'activeActivity.phaseEndsAt': null,
-        'activeActivity.phaseStartedAt': null,
-        'activeActivity.phaseDurationMs': null,
-        lastActivity: serverTimestamp()
-      });
-
-      // Wait 5 seconds then start next night
-      setTimeout(async () => {
-        await startNightPhase();
-      }, 5000);
-    }
-  };
-
-  const handleReadyToVote = async () => {
-    if (!gameState || !user || gameState.phase !== 'day-discussion' || readyClicked) return;
-    if (!isCurrentUserAlive() || myRole === 'narrator') return;
-
-    setReadyClicked(true);
-
-    const roomRef = doc(db, 'rooms', roomId);
-    const currentReadyVotes = gameState.readyVotes || [];
-    const updatedReadyVotes = [...new Set([...currentReadyVotes, user.id])];
-
-    await updateDoc(roomRef, {
-      'activeActivity.readyVotes': updatedReadyVotes,
-      lastActivity: serverTimestamp()
-    });
-  };
-
-  const handleStartVotingNow = async () => {
-    if (!isHost || !gameState || gameState.phase !== 'day-discussion') return;
-    const roomRef = doc(db, 'rooms', roomId);
-    await startDayVotePhase(roomRef);
-  };
-
-  const handleReturnToGamesNight = async () => {
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      activeActivity: null,
-      lastActivity: serverTimestamp()
-    });
+  const handleReturnToGamesNight = () => withBusy(async () => {
+    if (isHost) await endActivity(roomId);
     navigate(`/room/${roomId}`);
-  };
-
-  const handleCancelGame = async () => {
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      activeActivity: null,
-      lastActivity: serverTimestamp()
-    });
-    navigate(`/room/${roomId}`);
-  };
-
-  const getActivePlayers = () => {
-    if (!gameState) return [];
-    
-    switch (gameState.phase) {
-      case 'night-mafia':
-        return gameState.players.filter(p => p.role === 'mafia' && p.isAlive);
-      case 'night-doctor':
-        const doctor = gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-        return doctor ? [doctor] : [];
-      case 'night-detective':
-        const detective = gameState.players.find(p => p.role === 'detective' && p.isAlive);
-        return detective ? [detective] : [];
-      case 'day-vote':
-        return gameState.players.filter(p => p.isAlive === true && p.role !== 'narrator');
-      default:
-        return [];
-    }
-  };
-
-  const getSelectablePlayers = () => {
-    if (!gameState) return [];
-
-    switch (gameState.phase) {
-      case 'night-mafia':
-        return gameState.players.filter(p => p.role !== 'mafia' && p.isAlive);
-      case 'night-doctor':
-        return gameState.players.filter(p => p.isAlive);
-      case 'night-detective':
-        return gameState.players.filter(p => p.isAlive && p.uid !== user?.id);
-      case 'day-vote':
-        return gameState.players.filter(p => p.isAlive === true);
-      default:
-        return [];
-    }
-  };
+  });
 
   const isSpectator = () => {
     if (!myRole) return true;
-    const me = gameState?.players?.find(p => p.uid === user?.id);
     return Boolean(me && !me.isAlive);
   };
 
-  const isDeadSpectator = () => {
-    const me = gameState?.players?.find((player) => player.uid === user?.id);
-    return Boolean(me && !me.isAlive && me.role !== 'narrator');
-  };
+  const isDeadSpectator = () => Boolean(me && !me.isAlive);
 
   const renderEliminatedBanner = () => (
     <div className="relative overflow-hidden bg-[#e3d2ad] border border-[#c4ab78] rounded-lg p-4 mb-6 text-center shadow-lg">
@@ -1059,31 +277,21 @@ export default function MafiaGame() {
 
   const getRoleIcon = (role) => {
     switch (role) {
-      case 'mafia':
-        return '🔪';
-      case 'civilian':
-        return '👤';
-      case 'doctor':
-        return '🩺';
-      case 'detective':
-        return '🔍';
-      default:
-        return '❓';
+      case 'mafia': return '🔪';
+      case 'civilian': return '👤';
+      case 'doctor': return '🩺';
+      case 'detective': return '🔍';
+      default: return '❓';
     }
   };
 
   const getRoleCardImage = (role) => {
     switch (role) {
-      case 'mafia':
-        return mafiaRoleCardImage;
-      case 'detective':
-        return detectiveRoleCardImage;
-      case 'doctor':
-        return doctorRoleCardImage;
-      case 'civilian':
-        return civilianRoleCardImage;
-      default:
-        return cardBackImage;
+      case 'mafia': return mafiaRoleCardImage;
+      case 'detective': return detectiveRoleCardImage;
+      case 'doctor': return doctorRoleCardImage;
+      case 'civilian': return civilianRoleCardImage;
+      default: return cardBackImage;
     }
   };
 
@@ -1093,40 +301,18 @@ export default function MafiaGame() {
     return `${mins}:${secs.toString().padStart(2, '0')}`;
   };
 
-  // Show loading screen while waiting for auth and room data to load
-  const isLoading = authLoading || roomLoading || !gameStateLoaded;
-  console.log('[MafiaGame] Render state', { phase: gameState?.phase, isHost, isLoading });
-  
-  if (isLoading) {
-    console.log('[MafiaGame] Still loading...', { authLoading, roomLoading, gameStateLoaded });
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4 animate-pulse">⌛</div>
-          <div className="text-white text-xl">Loading game...</div>
-          <p className="text-slate-400 text-sm mt-2">Please wait</p>
-        </div>
-      </div>
-    );
-  }
+  if (authLoading || roomLoading) return <GameLoading />;
+  if (!user) return <Navigate to="/onboarding" replace state={{ redirectTo: `/room/${roomId}/games/mafia` }} />;
+  if (roomError || !room) return <Navigate to={`/room/${roomId}`} replace />;
+  if (!gameState || phase === 'lobby') return <Navigate to={`/room/${roomId}`} replace />;
 
-  // All data loaded - now safe to check redirect conditions
-  
-  // Phase 1: No active game - redirect to home
-  if (!gameState) {
-    console.log('[MafiaGame] No gameState found - redirecting to room');
-    navigate(`/room/${roomId}`);
-    return null;
-  }
+  return (
+    <GameShell roomId={roomId} isHost={isHost} gameName="Mafia" onEndGame={() => endActivity(roomId)}>
+      {renderPhase()}
+    </GameShell>
+  );
 
-  // Phase 2: Lobby - should be handled on HomeScreen, redirect if accessed directly
-  if (gameState?.phase === 'lobby') {
-    console.log('[MafiaGame] User accessed lobby directly - redirecting to room', { isHost });
-    // Redirect non-hosts and hosts back to HomeScreen to manage lobby there
-    navigate(`/room/${roomId}`);
-    return null;
-  }
-
+  function renderPhase() {
   // Phase 3: Role reveal
   if (gameState?.phase === 'roles') {
     console.log('[MafiaGame] Rendering roles phase', { myRole, user: user?.id });
@@ -1198,6 +384,7 @@ export default function MafiaGame() {
             {isHost ? (
               <button
                 onClick={startNightPhase}
+                disabled={busy}
                 className="w-full max-w-[18rem] mx-auto h-14 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold rounded-xl transition-colors"
               >
                 Start Night
@@ -1329,7 +516,7 @@ export default function MafiaGame() {
       return a.isAlive ? -1 : 1;
     });
     const mafiaSelections = gameState.mafiaSelections || {};
-    const showMafiaCoordination = !isHost;
+    const showMafiaCoordination = true;
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-red-950 via-red-900 to-red-950 p-6">
@@ -1438,13 +625,6 @@ export default function MafiaGame() {
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
           <div className="w-full max-w-md mx-auto">
             {isDeadSpectator() && renderEliminatedBanner()}
-
-            {myRole === 'narrator' && (
-              <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
-                <div className="text-4xl mb-2">🎙️</div>
-                <h2 className="text-white font-bold text-xl">NARRATOR</h2>
-              </div>
-            )}
 
             <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
               <div className="text-center mb-4">
@@ -1698,9 +878,9 @@ export default function MafiaGame() {
       ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
       : '';
     const nightReportNote = gameState.nightReportNote || defaultReportNote;
-    const livingPlayers = gameState.players.filter((p) => p.isAlive && p.role !== 'narrator');
+    const livingPlayers = gameState.players.filter((p) => p.isAlive);
     const readyVotes = gameState.readyVotes || [];
-    const canReadyToVote = !spectator && isCurrentUserAlive() && myRole !== 'narrator';
+    const canReadyToVote = !spectator && isCurrentUserAlive();
     const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
 
     return (
@@ -1714,13 +894,6 @@ export default function MafiaGame() {
 
         <div className="relative z-10 w-full max-w-md mx-auto">
           {isDeadSpectator() && renderEliminatedBanner()}
-
-          {spectator && myRole === 'narrator' && (
-            <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">🎙️</div>
-              <h2 className="text-white font-bold text-xl">NARRATOR</h2>
-            </div>
-          )}
 
           <div className="text-center mb-6">
             {victim && (
@@ -1861,8 +1034,7 @@ export default function MafiaGame() {
 
   // Day phase - Voting
   if (gameState?.phase === 'day-vote') {
-    const spectator = isSpectator();
-    const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true && player.role !== 'narrator');
+    const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true);
     const dayVotes = gameState.dayVotes || {};
     const formattedTimeLeft = timeLeft !== null ? formatTime(timeLeft) : null;
 
@@ -1870,13 +1042,6 @@ export default function MafiaGame() {
       <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
         <div className="w-full max-w-md mx-auto">
           {isDeadSpectator() && renderEliminatedBanner()}
-
-          {spectator && myRole === 'narrator' && (
-            <div className="bg-purple-900/50 border border-purple-700 rounded-xl p-4 mb-6 text-center">
-              <div className="text-4xl mb-2">🎙️</div>
-              <h2 className="text-white font-bold text-xl">NARRATOR</h2>
-            </div>
-          )}
 
           <VotingPanel
             players={selectablePlayers}
@@ -1894,17 +1059,52 @@ export default function MafiaGame() {
     );
   }
 
+  // Day result - who was voted out
+  if (gameState?.phase === 'day-result') {
+    const eliminatedPlayer = gameState.lastEliminated
+      ? gameState.players.find((p) => p.uid === gameState.lastEliminated)
+      : null;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-[#020817] via-[#0b1325] to-[#020817] flex items-center justify-center p-6">
+        <div className="w-full max-w-md text-center">
+          {isDeadSpectator() && gameState.lastEliminated !== user?.id && renderEliminatedBanner()}
+          <div className="relative overflow-hidden bg-[#e8dcc8] border border-[#c1ab89] rounded-xl p-6 text-left shadow-lg">
+            <p className="font-mono text-[#3f3127] text-xs font-bold tracking-[0.2em]">THE TOWN HAS SPOKEN</p>
+            <div className="border-t border-[#665341] my-3" />
+            {eliminatedPlayer ? (
+              <div className="flex items-center gap-4">
+                {renderPlayerAvatar(eliminatedPlayer, 'w-14 h-14', 'text-lg')}
+                <div>
+                  <p className="font-mono text-[#2f241c] text-lg font-bold uppercase">{eliminatedPlayer.displayName}</p>
+                  <p className="font-mono text-[#5a4837] text-sm">
+                    {eliminatedPlayer.uid === user?.id ? 'You were voted out.' : 'was voted out.'}
+                    {gameState.dayVoteTie ? ' (tie broken at random)' : ''}
+                  </p>
+                </div>
+              </div>
+            ) : (
+              <p className="font-mono text-[#2f241c] text-base">No votes were cast. Nobody was eliminated.</p>
+            )}
+            <div className="border-t border-[#665341] my-3" />
+            <p className="font-mono text-[#5a4837] text-sm text-center">Night falls again soon...</p>
+            {timeLeft !== null && (
+              <p className="font-serif text-3xl font-black text-[#3f3127] text-center mt-2">{timeLeft}</p>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // End game
   if (gameState?.phase === 'ended') {
     console.log('[MafiaGame] Rendering end game phase', { winner: gameState.winner, playersCount: gameState.players?.length });
     const winner = gameState.winner;
     const townWon = winner === 'town';
-    const totalPlayers = gameState.players?.length || 0;
     const mafiaCount = gameState.players?.filter((player) => player.role === 'mafia').length || 0;
     const eliminatedCount = gameState.players?.filter((player) => player.isAlive === false).length || 0;
     const nightsCount = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : null;
     const totalRoundsPlayed = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : 1;
-    const eliminatedForSummary = Array.isArray(gameState?.eliminatedPlayers) ? gameState.eliminatedPlayers : [];
     const rightMetaText = nightsCount !== null ? `NIGHTS: ${nightsCount}` : `ELIMINATED: ${eliminatedCount}`;
 
     return (
@@ -1985,9 +1185,8 @@ export default function MafiaGame() {
               <div className="border-t border-[#8b6b3f]/40 mb-3" />
               <div>
                 {gameState.players.map((player, idx) => {
-                  const eliminatedRound = eliminatedForSummary.indexOf(player.uid) + 1;
-                  const survivedRounds = eliminatedRound > 0
-                    ? Math.min(totalRoundsPlayed, eliminatedRound)
+                  const survivedRounds = Number.isInteger(player.eliminatedRound)
+                    ? Math.min(totalRoundsPlayed, player.eliminatedRound)
                     : totalRoundsPlayed;
                   const roundsLabel = `Rounds: ${survivedRounds}`;
                   const roleRoundsColor = player.role === 'mafia'
@@ -2105,9 +1304,10 @@ export default function MafiaGame() {
           {/* Return Button */}
           <button
             onClick={handleReturnToGamesNight}
+            disabled={busy}
             className="w-full bg-[#e8dcc8] hover:bg-[#f0e5cf] border border-[#c1ab89] text-[#3f3127] font-mono font-bold py-3 rounded-lg transition-colors tracking-wide"
           >
-            Return to Its Games Night
+            {isHost ? 'Return to Its Games Night' : 'Back to room'}
           </button>
         </div>
       </div>
@@ -2115,4 +1315,5 @@ export default function MafiaGame() {
   }
 
   return null;
+}
 }

@@ -1,7 +1,10 @@
-import React, { useState, useRef } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
-import { getInitials } from '../utils/avatar';
+import React, { useEffect, useRef, useState } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { colorForUid, getInitials } from '../utils/avatar';
 import GameNightLogo from './GameNightLogo';
+import { useAuth } from '../hooks/useAuth';
+import { useToast } from './Toast';
+import { MAX_NAME_LENGTH } from '../lib/profiles';
 import {
   compressProfilePhotoFile,
   PROFILE_PHOTO_MAX_BYTES,
@@ -9,82 +12,53 @@ import {
 } from '../utils/photoCompression';
 
 export default function OnboardingScreen() {
-  const [name, setName] = useState('');
-  const [photoPreview, setPhotoPreview] = useState(null);
-  const [photoBase64, setPhotoBase64] = useState(null);
+  const { user, updateProfile } = useAuth();
+  const toast = useToast();
+  const [name, setName] = useState(user?.displayName || '');
+  const [photoPreview, setPhotoPreview] = useState(user?.photo || null);
   const fileInputRef = useRef(null);
   const navigate = useNavigate();
   const location = useLocation();
+  const redirectTo = typeof location.state?.redirectTo === 'string' ? location.state.redirectTo : '/';
+
+  useEffect(() => {
+    document.title = 'Get started | Its Games Night';
+  }, []);
 
   const handlePhotoChange = async (e) => {
     const file = e.target.files?.[0];
     if (!file) return;
 
     if (file.size > PROFILE_PHOTO_MAX_UPLOAD_BYTES) {
-      alert('Photo size must be less than 15MB');
+      toast.error('That photo is too big. Pick one under 15MB.');
       return;
     }
 
     try {
-      const { dataUrl } = await compressProfilePhotoFile(file, {
-        maxBytes: PROFILE_PHOTO_MAX_BYTES
-      });
-
-      localStorage.setItem('gamenight_photo', dataUrl);
-      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', dataUrl.length);
-
+      const { dataUrl } = await compressProfilePhotoFile(file, { maxBytes: PROFILE_PHOTO_MAX_BYTES });
       setPhotoPreview(dataUrl);
-      setPhotoBase64(dataUrl);
     } catch (error) {
       console.error('Error compressing onboarding photo:', error);
-      alert('Failed to process photo. Please choose a different image.');
+      toast.error("Couldn't use that photo. Try a different image.");
     } finally {
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
+      if (fileInputRef.current) fileInputRef.current.value = '';
     }
   };
 
   const handleRemovePhoto = () => {
     setPhotoPreview(null);
-    setPhotoBase64(null);
-    localStorage.removeItem('gamenight_photo');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
-    }
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!name.trim()) return;
-
-    // Save to localStorage
-    localStorage.setItem('gamenight_nickname', name.trim());
-    if (photoBase64) {
-      localStorage.setItem('gamenight_photo', photoBase64);
-      console.log('[Profile] Saved photo to localStorage, key: gamenight_photo, length:', photoBase64.length);
-    }
-
-    // Return to an invite room when onboarding was triggered from a room link.
-    const redirectTo = location.state?.redirectTo;
-    navigate(typeof redirectTo === 'string' ? redirectTo : '/');
+    updateProfile({ displayName: name, photo: photoPreview || null });
+    // Back to the invite link that brought them here, if any
+    navigate(redirectTo, { replace: true });
   };
 
-  // Generate initials avatar color
-  const getAvatarColor = (name) => {
-    if (!name) return 'bg-purple-600';
-    const colors = [
-      'bg-purple-600',
-      'bg-blue-600',
-      'bg-pink-600',
-      'bg-indigo-600',
-      'bg-violet-600',
-      'bg-fuchsia-600',
-      'bg-cyan-600',
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
-  };
+  const getAvatarColor = () => colorForUid(name.trim().toLowerCase());
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center px-4 py-12">
@@ -109,6 +83,7 @@ export default function OnboardingScreen() {
                     />
                     <button
                       type="button"
+                      aria-label="Remove photo"
                       onClick={handleRemovePhoto}
                       className="absolute -top-2 -right-2 bg-red-600 hover:bg-red-700 text-white rounded-full p-1.5 shadow-lg transition-colors"
                     >
@@ -158,7 +133,7 @@ export default function OnboardingScreen() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Enter your name"
-                maxLength={20}
+                maxLength={MAX_NAME_LENGTH}
                 autoFocus
                 className="w-full px-6 py-4 bg-slate-800 border-2 border-slate-700 hover:border-slate-600 focus:border-violet-500 focus:ring-2 focus:ring-violet-500/20 rounded-xl text-white placeholder-slate-500 text-center text-lg font-semibold outline-none transition-all"
               />
@@ -174,6 +149,10 @@ export default function OnboardingScreen() {
             </button>
           </form>
         </div>
+        <p className="text-center text-slate-500 text-xs mt-6">
+          No sign-up needed. Your name and photo stay on this device and in the rooms you join.{' '}
+          <Link to="/privacy" className="underline hover:text-slate-300">Privacy</Link>
+        </p>
       </div>
     </div>
   );

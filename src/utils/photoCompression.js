@@ -1,5 +1,5 @@
-export const PROFILE_PHOTO_MAX_BYTES = 50 * 1024;
-export const PROFILE_PHOTO_MAX_DIMENSION = 200;
+export const PROFILE_PHOTO_MAX_BYTES = 24 * 1024;
+export const PROFILE_PHOTO_MAX_DIMENSION = 192;
 export const PROFILE_PHOTO_MAX_UPLOAD_BYTES = 15 * 1024 * 1024;
 
 function getBase64Payload(value) {

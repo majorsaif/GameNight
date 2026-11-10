@@ -1,449 +1,231 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
+import { arrayUnion } from 'firebase/firestore';
 import { useAuth } from '../hooks/useAuth';
-import { useRoom } from '../hooks/useRoom';
-import { doc, updateDoc, serverTimestamp, onSnapshot } from 'firebase/firestore';
-import { db } from '../firebase';
+import { endActivity, useRoom } from '../hooks/useRoom';
+import { transitionActivity, updateActivity, useAutoAdvance, useCountdown } from '../lib/activity';
+import { participantsFromRoom } from '../lib/lobby';
 import { getInitials } from '../utils/avatar';
 import LOCATIONS from './locations';
 import VotingPanel from '../components/VotingPanel';
-import gameNightIcon from '../assets/itsgamesnight-icon.png';
+import GameShell, { GameLoading } from '../components/GameShell';
+import { useToast } from '../components/Toast';
+import gameNightIcon from '../assets/itsgamesnight-icon.webp';
+import {
+  activeSpyfallPlayers,
+  allSpyfallReady,
+  canSpyGuess,
+  dealSpyfall,
+  declareSpyGuessUpdates,
+  enterQuestioningUpdates,
+  remainingSpies,
+  resolveSpyGuess,
+  resolveSpyfallVote,
+  startQuestioningIntroUpdates,
+  startSpyfallVotingUpdates
+} from '../games/spyfall/logic';
+
+const allLocations = LOCATIONS.map((l) => l.name);
 
 export default function SpyfallGame() {
   const { roomId } = useParams();
   const navigate = useNavigate();
+  const toast = useToast();
   const { user, loading: authLoading } = useAuth();
-  const { room, isHost, loading: roomLoading } = useRoom(roomId, user?.id, user?.displayName, user?.photo || null);
+  const { room, isHost, loading: roomLoading, error: roomError } = useRoom(roomId, user);
 
-  const [gameState, setGameState] = useState(null);
-  const [gameStateLoaded, setGameStateLoaded] = useState(false);
+  const gameState = room?.activeActivity?.type === 'spyfall' ? room.activeActivity : null;
+  const phase = gameState?.phase || null;
+  const phaseId = gameState?.phaseId ?? 0;
+  const guard = { type: 'spyfall', phaseId };
   const [showCard, setShowCard] = useState(false);
-  const [readyClicked, setReadyClicked] = useState(false);
-  const [timerDisplay, setTimerDisplay] = useState(null);
-  const timerRef = useRef(null);
-  const timerExpiredRef = useRef(false);
-  const QUESTIONING_INTRO_MS = 4000;
+  const [busy, setBusy] = useState(false);
+  const [crossedOut, setCrossedOut] = useState(() => new Set());
 
-  // Subscribe to game state via onSnapshot
+  // New deal -> hide the boarding pass and reset notes
   useEffect(() => {
-    if (!roomId) return;
-    const roomRef = doc(db, 'rooms', roomId);
-    const unsubscribe = onSnapshot(roomRef, (snapshot) => {
-      if (snapshot.exists()) {
-        const data = snapshot.data();
-        if (data.activeActivity && data.activeActivity.type === 'spyfall') {
-          setGameState(data.activeActivity);
-          setGameStateLoaded(true);
-        } else {
-          setGameState(null);
-        }
-      }
-    });
-    return () => unsubscribe();
-  }, [roomId]);
-
-  // Reset vote/ready state on phase change
-  useEffect(() => {
-    if (gameState) {
-      setReadyClicked(gameState.readyVotes?.includes(user?.id) || false);
-    }
-  }, [gameState?.phase]);
-
-  // Hide card on new location-reveal phase
-  useEffect(() => {
-    if (gameState?.phase === 'location-reveal') {
+    if (phase === 'location-reveal') {
       setShowCard(false);
+      setCrossedOut(new Set());
     }
-  }, [gameState?.phase]);
+  }, [phase, gameState?.location]);
 
-  // Questioning phase countdown timer
-  useEffect(() => {
-    if (gameState?.phase !== 'questioning') {
-      setTimerDisplay(null);
-      timerExpiredRef.current = false;
-      if (timerRef.current) clearInterval(timerRef.current);
-      return;
-    }
-
-    const startedAt = gameState.phaseStartedAt;
-    const durationMs = (gameState.rules?.discussionTime || 8) * 60 * 1000;
-    if (!startedAt) return;
-
-    timerExpiredRef.current = false;
-
-    const updateTimer = () => {
-      const elapsed = Date.now() - startedAt;
-      const remaining = Math.max(0, durationMs - elapsed);
-      const secs = Math.ceil(remaining / 1000);
-      setTimerDisplay(secs);
-
-      if (remaining <= 0 && !timerExpiredRef.current) {
-        timerExpiredRef.current = true;
-        if (isHost) {
-          handleStartVoting().catch(console.error);
-        }
-      }
-    };
-
-    updateTimer();
-    timerRef.current = setInterval(updateTimer, 1000);
-
-    return () => {
-      if (timerRef.current) clearInterval(timerRef.current);
-    };
-  }, [gameState?.phase, gameState?.phaseStartedAt, gameState?.rules?.discussionTime, isHost]);
-
-  // Auto-advance to voting when all active players are ready
-  useEffect(() => {
-    if (!isHost || gameState?.phase !== 'questioning-intro' || !gameState?.phaseStartedAt) return;
-
-    const readyVotes = gameState.readyVotes || [];
-    const allPlayerUids = getActivePlayers().map((player) => player.uid);
-
-    if (allPlayerUids.length > 0 && allPlayerUids.every((uid) => readyVotes.includes(uid))) {
-      handleStartVoting().catch(console.error);
-      return;
-    }
-
-    const elapsed = Date.now() - gameState.phaseStartedAt;
-    const remainingMs = Math.max(0, QUESTIONING_INTRO_MS - elapsed);
-
-    const timeoutId = setTimeout(() => {
-      handleEnterQuestioningPhase().catch((err) => console.error('Error entering questioning phase:', err));
-    }, remainingMs);
-
-    return () => clearTimeout(timeoutId);
-  }, [isHost, gameState?.phase, gameState?.phaseStartedAt]);
-
-  // ── Helpers ──────────────────────────────────────────────────────────────
+  const timerDisplay = useCountdown(phase === 'questioning' ? gameState?.phaseEndsAt : null);
+  const presentUids = room?.playerIds || [];
+  const spyGuessing = gameState?.spyGuessing || null;
+  const isGuessPaused = Boolean(spyGuessing);
 
   const getPlayerByUid = (uid) => gameState?.players?.find((p) => p.uid === uid);
+  const getActivePlayers = () => activeSpyfallPlayers(gameState);
+  const activeUids = getActivePlayers().map((p) => p.uid);
+
+  const fallbackRank = useMemo(() => {
+    const ids = activeUids.filter((uid) => presentUids.includes(uid)).sort();
+    const index = ids.indexOf(user?.id);
+    return index < 0 ? 99 : index;
+  }, [activeUids.join(','), presentUids.join(','), user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // questioning-intro (4s) -> questioning, and questioning timer -> voting.
+  // While a spy is declaring a guess the clock is held.
+  const timedDue = phase === 'questioning-intro' || (phase === 'questioning' && !isGuessPaused);
+  useAutoAdvance({
+    key: timedDue && gameState?.phaseEndsAt ? `${phaseId}:${gameState.phaseEndsAt}` : null,
+    dueAt: timedDue ? gameState?.phaseEndsAt : null,
+    isHost,
+    fallbackRank,
+    advance: () => transitionActivity(roomId, guard, (activity) => {
+      if (activity.phase === 'questioning-intro') return enterQuestioningUpdates(activity);
+      if (activity.phase === 'questioning' && !activity.spyGuessing) return startSpyfallVotingUpdates(activity);
+      return null;
+    })
+  });
+
+  // Everyone ready -> voting
+  const readyDue = Boolean(phase === 'questioning' && !isGuessPaused && allSpyfallReady(gameState, presentUids));
+  useAutoAdvance({
+    key: readyDue ? `ready:${phaseId}` : null,
+    due: readyDue,
+    isHost,
+    fallbackRank,
+    advance: () => transitionActivity(roomId, { ...guard, phase: 'questioning' }, (activity) => (
+      activity.spyGuessing ? null : startSpyfallVotingUpdates(activity)
+    ))
+  });
 
   const getPlayerPhoto = (playerOrUid) => {
     const uid = typeof playerOrUid === 'string' ? playerOrUid : playerOrUid?.uid;
     if (!uid) return null;
     const activityPlayer = typeof playerOrUid === 'object' ? playerOrUid : getPlayerByUid(uid);
-    const roomPlayer = room?.players?.find((p) => p.id === uid);
-    return activityPlayer?.photo || activityPlayer?.photoURL || roomPlayer?.photo || null;
+    return activityPlayer?.photo || room?.players?.find((p) => p.id === uid)?.photo || null;
   };
 
   const renderAvatar = (player, sizeClass = 'w-10 h-10', textClass = 'text-sm', extra = '') => {
     const photo = getPlayerPhoto(player);
     if (photo) return <img src={photo} alt={player.displayName} className={`${sizeClass} rounded-full object-cover ${extra}`} />;
     return (
-      <div className={`${sizeClass} ${player.avatarColor} rounded-full flex items-center justify-center text-white font-bold ${textClass} ${extra}`}>
+      <div className={`${sizeClass} ${player.avatarColor || 'bg-slate-600'} rounded-full flex items-center justify-center text-white font-bold ${textClass} ${extra}`}>
         {getInitials(player.displayName)}
       </div>
     );
   };
 
-  const isSpy = () => (gameState?.spyIds || []).includes(user?.id);
-
-  const isActivePlayer = () => !(gameState?.eliminatedSpyIds || []).includes(user?.id);
-
-  // Active spies (not yet eliminated)
-  const getActiveSpies = () => {
-    const eliminatedSpyIds = gameState?.eliminatedSpyIds || [];
-    return (gameState?.spyIds || []).filter((uid) => !eliminatedSpyIds.includes(uid));
-  };
-
-  // All active (non-eliminated) players
-  const getActivePlayers = () => {
-    const eliminatedSpyIds = gameState?.eliminatedSpyIds || [];
-    return (gameState?.players || []).filter((p) => !eliminatedSpyIds.includes(p.uid));
-  };
-
   const formatTimer = (secs) => {
     if (secs == null) return '';
     const m = Math.floor(secs / 60);
-    const s = secs % 60;
-    return `${m}:${String(s).padStart(2, '0')}`;
+    const sec = secs % 60;
+    return `${m}:${String(sec).padStart(2, '0')}`;
   };
 
-  const allLocations = LOCATIONS.map((l) => l.name);
-
-  // ── Host Actions ──────────────────────────────────────────────────────────
-
-  const handleStartQuestioning = async () => {
-    if (!isHost) return;
-    const activePlayers = getActivePlayers();
-    if (activePlayers.length === 0) return;
-
-    const firstAsker = activePlayers[Math.floor(Math.random() * activePlayers.length)];
-
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'questioning-intro',
-      'activeActivity.phaseStartedAt': Date.now(),
-      'activeActivity.currentAskerId': firstAsker.uid,
-      'activeActivity.readyVotes': [],
-      lastActivity: serverTimestamp(),
-    });
-  };
-
-  const handleEnterQuestioningPhase = async () => {
-    if (!isHost || !gameState || gameState.phase !== 'questioning-intro') return;
-
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'questioning',
-      'activeActivity.phaseStartedAt': Date.now(),
-      'activeActivity.readyVotes': [],
-      lastActivity: serverTimestamp(),
-    });
-  };
-
-  const handleStartVoting = async () => {
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'voting',
-      'activeActivity.votes': {},
-      'activeActivity.eliminatedUid': null,
-      'activeActivity.spyGuessing': null,
-      'activeActivity.declaringGuess': null,
-      'activeActivity.pausedFromPhase': null,
-      lastActivity: serverTimestamp(),
-    });
-  };
-
-  const handleEndVoting = async () => {
-    if (!isHost || !gameState) return;
-    if (isGuessPaused) return;
-    const votes = gameState.votes || {};
-    const activePlayers = getActivePlayers();
-
-    const voteCounts = {};
-    Object.values(votes).forEach((uid) => {
-      voteCounts[uid] = (voteCounts[uid] || 0) + 1;
-    });
-
-    let maxVotes = 0;
-    let candidates = [];
-    Object.entries(voteCounts).forEach(([uid, count]) => {
-      if (count > maxVotes) { maxVotes = count; candidates = [uid]; }
-      else if (count === maxVotes) candidates.push(uid);
-    });
-
-    const eliminated = candidates.length > 0
-      ? candidates[Math.floor(Math.random() * candidates.length)]
-      : activePlayers[Math.floor(Math.random() * activePlayers.length)]?.uid;
-
-    if (!eliminated) return;
-
-    const spyIds = gameState.spyIds || [];
-    const eliminatedSpyIds = gameState.eliminatedSpyIds || [];
-    const isEliminatedSpy = spyIds.includes(eliminated);
-
-    const roomRef = doc(db, 'rooms', roomId);
-
-    if (!isEliminatedSpy) {
-      // Non-spy voted out → spy wins
-      await updateDoc(roomRef, {
-        'activeActivity.eliminatedUid': eliminated,
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': 'spy',
-        'activeActivity.declaringGuess': null,
-        'activeActivity.pausedFromPhase': null,
-        lastActivity: serverTimestamp(),
-      });
-      return;
-    }
-
-    const newEliminatedSpyIds = [...eliminatedSpyIds, eliminated];
-    const remainingActiveSpies = spyIds.filter((uid) => !newEliminatedSpyIds.includes(uid));
-
-    if (remainingActiveSpies.length === 0) {
-      // Last spy eliminated → town wins
-      await updateDoc(roomRef, {
-        'activeActivity.eliminatedUid': eliminated,
-        'activeActivity.eliminatedSpyIds': newEliminatedSpyIds,
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': 'town',
-        'activeActivity.declaringGuess': null,
-        'activeActivity.pausedFromPhase': null,
-        lastActivity: serverTimestamp(),
-      });
-    } else {
-      // More spies → continue questioning
-      // Pick a new asker from remaining active players
-      const remainingActivePlayers = activePlayers.filter((p) => p.uid !== eliminated);
-      const newAsker = remainingActivePlayers[Math.floor(Math.random() * remainingActivePlayers.length)];
-      await updateDoc(roomRef, {
-        'activeActivity.eliminatedUid': eliminated,
-        'activeActivity.eliminatedSpyIds': newEliminatedSpyIds,
-        'activeActivity.phase': 'questioning',
-        'activeActivity.phaseStartedAt': Date.now(),
-        'activeActivity.readyVotes': [],
-        'activeActivity.votes': {},
-        'activeActivity.currentAskerId': newAsker?.uid || null,
-        'activeActivity.declaringGuess': null,
-        'activeActivity.pausedFromPhase': null,
-        lastActivity: serverTimestamp(),
-      });
+  const withBusy = async (fn) => {
+    if (busy) return;
+    setBusy(true);
+    try {
+      await fn();
+    } catch (error) {
+      console.error(error);
+      toast.error(error?.message && !error.code ? error.message : 'Something went wrong. Try again.');
+    } finally {
+      setBusy(false);
     }
   };
 
-  // Spy guess actions
-  const handleDeclareGuess = async () => {
-    if (!user || !gameState) return;
-    if (gameState.phase !== 'voting') return;
-    if (!amSpy || !amActivePlayer || isGuessPaused) return;
+  // ── Actions ─────────────────────────────────────────────────────────────
+  const handleStartQuestioning = () => withBusy(() => (
+    transitionActivity(roomId, { ...guard, phase: 'location-reveal' }, (activity) => startQuestioningIntroUpdates(activity))
+  ));
 
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      'activeActivity.declaringGuess': {
-        uid: user.id,
-        displayName: user.displayName || getPlayerByUid(user.id)?.displayName || 'Unknown'
-      },
-      'activeActivity.pausedFromPhase': gameState.phase,
-      lastActivity: serverTimestamp(),
-    });
-  };
+  const handleStartVoting = () => withBusy(() => (
+    transitionActivity(roomId, { ...guard, phase: 'questioning' }, (activity) => (
+      activity.spyGuessing ? null : startSpyfallVotingUpdates(activity)
+    ))
+  ));
 
-  const handleReadyToGuess = async () => {
-    if (!isSpy() || !user) return;
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      'activeActivity.spyGuessing': { spyUid: user.id, status: 'guessing' },
-      lastActivity: serverTimestamp(),
-    });
-  };
+  const handleEndVoting = () => transitionActivity(roomId, { ...guard, phase: 'voting' }, (activity) => (
+    activity.spyGuessing ? null : resolveSpyfallVote(activity)
+  ));
 
-  const handleSpyGuessResult = async (correct) => {
-    if (!isHost) return;
-    const roomRef = doc(db, 'rooms', roomId);
+  const handleReadyToGuess = () => withBusy(() => (
+    transitionActivity(roomId, { ...guard, phase: ['questioning', 'voting'] }, (activity) => declareSpyGuessUpdates(activity, user.id))
+  ));
+  const handleDeclareGuess = handleReadyToGuess;
 
-    if (correct) {
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': 'spy',
-        'activeActivity.spyGuessing': null,
-        'activeActivity.declaringGuess': null,
-        'activeActivity.pausedFromPhase': null,
-        lastActivity: serverTimestamp(),
-      });
-    } else {
-      await updateDoc(roomRef, {
-        'activeActivity.phase': 'ended',
-        'activeActivity.winner': 'town',
-        'activeActivity.spyGuessing': null,
-        'activeActivity.declaringGuess': null,
-        'activeActivity.pausedFromPhase': null,
-        lastActivity: serverTimestamp(),
-      });
-    }
-  };
+  const handleSpyGuessResult = (correct) => withBusy(() => (
+    transitionActivity(roomId, guard, (activity) => resolveSpyGuess(activity, correct))
+  ));
 
-  // Ready to vote
-  const handleReadyToVote = async () => {
-    if (!user || readyClicked) return;
-    setReadyClicked(true);
-    const roomRef = doc(db, 'rooms', roomId);
-    const current = gameState.readyVotes || [];
-    const updated = [...new Set([...current, user.id])];
-    await updateDoc(roomRef, {
-      'activeActivity.readyVotes': updated,
-      lastActivity: serverTimestamp(),
-    });
-  };
+  const handleReadyToVote = () => withBusy(async () => {
+    if (!user || readyClicked || !amActivePlayer) return;
+    await updateActivity(roomId, { readyVotes: arrayUnion(user.id) });
+  });
 
-  // Voting
   const handleConfirmVote = async (targetUid) => {
-    if (!user || !targetUid) {
-      throw new Error('Vote unavailable');
-    }
-    if (isGuessPaused) {
-      throw new Error('Voting is paused');
-    }
-    if (targetUid === user.id) {
-      throw new Error('You cannot vote for yourself');
-    }
-
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      [`activeActivity.votes.${user.id}`]: targetUid,
-      lastActivity: serverTimestamp(),
-    });
+    if (!user || !targetUid) throw new Error('Vote unavailable');
+    if (isGuessPaused) throw new Error('Voting is paused');
+    if (targetUid === user.id) throw new Error('You cannot vote for yourself');
+    if (!activeUids.includes(user.id)) throw new Error('Vote unavailable');
+    await updateActivity(roomId, { [`votes.${user.id}`]: targetUid });
   };
 
-  const handlePlayAgain = async () => {
-    if (!isHost) return;
-
-    const players = [...(gameState.players || [])];
-    const locationData = LOCATIONS[Math.floor(Math.random() * LOCATIONS.length)];
-    const spyCount = gameState.rules?.spyCount || 1;
-    const showRoles = gameState.rules?.showRoles !== false;
-
-    const shuffled = [...players].sort(() => Math.random() - 0.5);
-    const spyIds = shuffled.slice(0, spyCount).map((p) => p.uid);
-
-    const playersWithRoles = players.map((player) => {
-      if (spyIds.includes(player.uid)) return { ...player, role: null };
-      const nonSpyIndex = players.filter((p) => !spyIds.includes(p.uid)).findIndex((p) => p.uid === player.uid);
-      const role = showRoles ? locationData.roles[nonSpyIndex % locationData.roles.length] : null;
-      return { ...player, role };
+  const handlePlayAgain = () => withBusy(async () => {
+    const started = await transitionActivity(roomId, { ...guard, phase: 'ended' }, (activity, latestRoom) => {
+      const players = participantsFromRoom(latestRoom);
+      if (players.length < 3) throw new Error('Need at least 3 players in the room to play again.');
+      return dealSpyfall(players, activity.rules || {}, activity);
     });
+    if (!started) toast.info('The game was already restarted.');
+  });
 
-    const roomRef = doc(db, 'rooms', roomId);
-
-    await updateDoc(roomRef, {
-      'activeActivity.phase': 'location-reveal',
-      'activeActivity.location': locationData.name,
-      'activeActivity.spyIds': spyIds,
-      'activeActivity.eliminatedSpyIds': [],
-      'activeActivity.players': playersWithRoles,
-      'activeActivity.currentAskerId': null,
-      'activeActivity.readyVotes': [],
-      'activeActivity.votes': {},
-      'activeActivity.eliminatedUid': null,
-      'activeActivity.spyGuessing': null,
-      'activeActivity.declaringGuess': null,
-      'activeActivity.pausedFromPhase': null,
-      'activeActivity.winner': null,
-      'activeActivity.phaseStartedAt': null,
-      'activeActivity.roundNumber': (gameState.roundNumber || 1) + 1,
-      lastActivity: serverTimestamp(),
-    });
-  };
-
-  const handleEndGame = async () => {
-    const roomRef = doc(db, 'rooms', roomId);
-    await updateDoc(roomRef, {
-      activeActivity: null,
-      lastActivity: serverTimestamp(),
-    });
+  const handleEndGame = () => withBusy(async () => {
+    await endActivity(roomId);
     navigate(`/room/${roomId}`);
+  });
+
+  const toggleCrossOut = (loc) => {
+    setCrossedOut((prev) => {
+      const next = new Set(prev);
+      if (next.has(loc)) next.delete(loc);
+      else next.add(loc);
+      return next;
+    });
   };
 
-  // ── Loading ───────────────────────────────────────────────────────────────
+  if (authLoading || roomLoading) return <GameLoading />;
+  if (!user) return <Navigate to="/onboarding" replace state={{ redirectTo: `/room/${roomId}` }} />;
+  if (roomError || !room || !gameState || phase === 'lobby') return <Navigate to={`/room/${roomId}`} replace />;
 
-  if (authLoading || roomLoading || !gameStateLoaded) {
+  const myPlayer = getPlayerByUid(user?.id);
+  const isParticipant = Boolean(myPlayer);
+  const amSpy = (gameState.spyIds || []).includes(user?.id);
+  const amActivePlayer = isParticipant && activeUids.includes(user?.id);
+  const readyClicked = (gameState.readyVotes || []).includes(user?.id);
+  const amActiveSpy = amSpy && remainingSpies(gameState).includes(user?.id);
+  const canGuessNow = canSpyGuess(gameState, user?.id);
+  const guessingPlayer = spyGuessing ? getPlayerByUid(spyGuessing.spyUid) : null;
+
+  const lastResult = gameState.lastResult;
+  const lastResultPlayer = lastResult?.uid ? getPlayerByUid(lastResult.uid) : null;
+  const renderLastResult = () => {
+    if (!lastResult || phase !== 'questioning') return null;
+    let text = null;
+    if (lastResult.type === 'spy-caught') text = `${lastResultPlayer?.displayName || 'A spy'} was caught! Another spy is still among you.`;
+    if (lastResult.type === 'wrong-guess') text = `${lastResultPlayer?.displayName || 'A spy'} guessed the wrong location and is out. Another spy remains.`;
+    if (!text) return null;
     return (
-      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4 animate-pulse">⌛</div>
-          <div className="text-white text-xl">Loading game...</div>
+      <div className="w-full max-w-md mx-auto px-4 pt-3">
+        <div className="bg-[#c9882a]/10 border border-[#c9882a]/50 rounded-xl px-4 py-3 text-center">
+          <p className="spy-mono text-[#e7c27d] text-sm">{text}</p>
         </div>
       </div>
     );
-  }
+  };
 
-  if (!gameState) {
-    navigate(`/room/${roomId}`);
-    return null;
-  }
+  return (
+    <GameShell roomId={roomId} isHost={isHost} gameName="Spyfall" onEndGame={() => endActivity(roomId)}>
+      {renderPhase()}
+    </GameShell>
+  );
 
-  if (gameState.phase === 'lobby') {
-    navigate(`/room/${roomId}`);
-    return null;
-  }
-
-  const myPlayer = getPlayerByUid(user?.id);
-  const amSpy = isSpy();
-  const amActivePlayer = isActivePlayer();
-  const declaringGuess = gameState?.declaringGuess || null;
-  const isGuessPaused = Boolean(declaringGuess);
-
+  function renderPhase() {
   const renderSpyGuessOverlay = (overlayPlayer, fallbackName = 'A spy') => (
     <div className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center px-4">
       <div className="bg-[#1e2a3a] border-2 border-[#c9882a]/60 rounded-2xl p-6 max-w-sm w-full mx-auto overflow-hidden">
@@ -467,12 +249,14 @@ export default function SpyfallGame() {
         {isHost ? (
           <>
             <button
+              disabled={busy}
               onClick={() => handleSpyGuessResult(true)}
               className="spy-mono bg-[#1a5c2a] hover:bg-[#156622] text-white w-full uppercase rounded-xl py-3 font-bold mt-4 transition-colors"
             >
               Correct
             </button>
             <button
+              disabled={busy}
               onClick={() => handleSpyGuessResult(false)}
               className="spy-mono bg-[#6b1515] hover:bg-[#8b1a1a] text-white w-full uppercase rounded-xl py-3 font-bold mt-2 transition-colors"
             >
@@ -490,6 +274,17 @@ export default function SpyfallGame() {
   );
 
   // ── LOCATION REVEAL PHASE ─────────────────────────────────────────────────
+
+  if (gameState.phase === 'location-reveal' && !isParticipant) {
+    return (
+      <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
+        <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-2xl p-8 text-center max-w-md w-full">
+          <p className="spy-mono text-white">You&apos;re spectating this round.</p>
+          <p className="spy-mono text-[#7a8c9e] text-sm mt-2">Players are checking their boarding passes...</p>
+        </div>
+      </div>
+    );
+  }
 
   if (gameState.phase === 'location-reveal') {
     const passengerName = myPlayer?.displayName || user?.displayName || 'Passenger';
@@ -590,6 +385,7 @@ export default function SpyfallGame() {
               {isHost ? (
                 <button
                   onClick={handleStartQuestioning}
+                  disabled={busy}
                   className="spy-mono w-full rounded-xl py-4 font-bold uppercase tracking-widest text-base bg-violet-600 hover:bg-violet-700 text-white transition-colors"
                 >
                   Start Questioning
@@ -642,10 +438,9 @@ export default function SpyfallGame() {
 
   if (gameState.phase === 'questioning') {
     const activePlayers = getActivePlayers();
-    const spyGuessingData = gameState.spyGuessing;
-    const guessingPlayer = spyGuessingData ? getPlayerByUid(spyGuessingData.spyUid) : null;
-    const myReadyClicked = readyClicked || (gameState.readyVotes || []).includes(user?.id);
-    const amActiveSpy = amSpy && amActivePlayer;
+    const spyGuessingData = spyGuessing;
+    const myReadyClicked = readyClicked;
+    const readyCount = (gameState.readyVotes || []).filter((uid) => activeUids.includes(uid)).length;
 
     return (
       <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
@@ -693,23 +488,34 @@ export default function SpyfallGame() {
           </div>
         </div>
 
-        {/* Locations grid */}
+        {renderLastResult()}
+
+        {/* Locations grid - tap to cross out locations you've ruled out (only you see this) */}
         <div className="w-full max-w-md mx-auto px-4 pt-3 flex-1 overflow-y-auto">
-          <p className="spy-mono uppercase tracking-widest text-xs text-[#7a8c9e] mb-3">ALL LOCATIONS</p>
+          <div className="flex items-baseline justify-between mb-3">
+            <p className="spy-mono uppercase tracking-widest text-xs text-[#7a8c9e]">ALL LOCATIONS</p>
+            <p className="spy-mono text-[10px] text-[#55677a]">Tap to cross out</p>
+          </div>
           <div className="grid grid-cols-2 gap-1.5 pb-2">
-            {allLocations.map((loc) => (
-              <button
-                type="button"
-                key={loc}
-                className={`rounded-lg px-3 py-2 text-sm text-center font-medium transition-colors ${
-                  loc === gameState.location && !amSpy
-                    ? 'bg-[#c9882a]/15 border border-[#c9882a] text-[#c9882a] font-bold'
-                    : 'bg-[#1e2a3a] border border-[#2e3f52] text-[#d4c9a8]'
-                }`}
-              >
-                {loc === gameState.location && !amSpy ? '📍 ' : ''}{loc}
-              </button>
-            ))}
+            {allLocations.map((loc) => {
+              const isMine = loc === gameState.location && !amSpy && isParticipant;
+              const isCrossed = crossedOut.has(loc);
+              return (
+                <button
+                  type="button"
+                  key={loc}
+                  onClick={() => toggleCrossOut(loc)}
+                  aria-pressed={isCrossed}
+                  className={`rounded-lg px-3 py-2 text-sm text-center font-medium transition-colors ${
+                    isMine
+                      ? 'bg-[#c9882a]/15 border border-[#c9882a] text-[#c9882a] font-bold'
+                      : 'bg-[#1e2a3a] border border-[#2e3f52] text-[#d4c9a8]'
+                  } ${isCrossed ? 'line-through opacity-40' : ''}`}
+                >
+                  {isMine ? '📍 ' : ''}{loc}
+                </button>
+              );
+            })}
           </div>
         </div>
 
@@ -718,17 +524,17 @@ export default function SpyfallGame() {
           {amActivePlayer && (
             <button
               onClick={handleReadyToVote}
-              disabled={myReadyClicked}
+              disabled={myReadyClicked || busy}
               className="spy-mono w-full bg-violet-600 hover:bg-violet-700 disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
             >
-              {myReadyClicked ? 'Ready to Vote' : 'Ready to Vote'}
+              {myReadyClicked ? 'Ready ✓ waiting for others' : 'Ready to Vote'}
             </button>
           )}
 
           {/* Ready count */}
           <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-xl p-4 text-center">
             <p className="spy-mono text-[#7a8c9e] text-sm">
-              Ready: {(gameState.readyVotes || []).length}/{activePlayers.length}
+              Ready: {readyCount}/{activePlayers.length}
             </p>
             <div className="flex items-center justify-center mt-3">
               {activePlayers.map((player, index) => {
@@ -771,7 +577,7 @@ export default function SpyfallGame() {
           {amActiveSpy && (
             <button
               onClick={handleReadyToGuess}
-              disabled={!!spyGuessingData}
+              disabled={!canGuessNow || busy}
               className="spy-mono w-full bg-[#6b1515] hover:bg-[#8b1a1a] disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
             >
               Ready to Guess
@@ -791,9 +597,8 @@ export default function SpyfallGame() {
     const votes = gameState.votes || {};
     const activePlayers = getActivePlayers();
     const totalVoters = activePlayers.length;
-    const votedCount = Object.keys(votes).length;
-    const canDeclareGuess = Boolean(amSpy && amActivePlayer && !isGuessPaused);
-    const votingGuessingPlayer = declaringGuess ? getPlayerByUid(declaringGuess.uid) : null;
+    const votedCount = Object.keys(votes).filter((uid) => activeUids.includes(uid)).length;
+    const canDeclareGuess = canGuessNow;
 
     return (
       <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
@@ -806,19 +611,21 @@ export default function SpyfallGame() {
           <div style={isGuessPaused ? { pointerEvents: 'none', opacity: 0.55 } : undefined}>
             <VotingPanel
               players={activePlayers}
-              votes={votes}
+              requiredVoterUids={activeUids.filter((uid) => presentUids.includes(uid))}
+              votes={Object.fromEntries(Object.entries(votes).filter(([voter]) => activeUids.includes(voter)))}
               currentUid={user?.id}
               isHost={isHost}
+              fallbackRank={fallbackRank}
               onVote={handleConfirmVote}
               onEndVoting={handleEndVoting}
               theme="ballot"
             />
           </div>
 
-          {amActivePlayer && amSpy && (
+          {amActiveSpy && (
             <button
               onClick={handleDeclareGuess}
-              disabled={!canDeclareGuess}
+              disabled={!canDeclareGuess || busy}
               className="spy-mono w-full mt-3 bg-[#6b1515] hover:bg-[#8b1a1a] disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
             >
               Declare Guess
@@ -826,7 +633,7 @@ export default function SpyfallGame() {
           )}
         </div>
 
-        {declaringGuess && renderSpyGuessOverlay(votingGuessingPlayer, declaringGuess?.displayName || 'A spy')}
+        {spyGuessing && renderSpyGuessOverlay(guessingPlayer)}
       </div>
     );
   }
@@ -837,7 +644,6 @@ export default function SpyfallGame() {
     const winner = gameState.winner;
     const townWon = winner === 'town';
     const spyIds = gameState.spyIds || [];
-    const spyPlayers = spyIds.map((uid) => getPlayerByUid(uid)).filter(Boolean);
     const endedLocationName = gameState.location || 'UNKNOWN';
     const endedLocationSizeClass = endedLocationName.length > 10 ? 'text-2xl' : 'text-4xl';
 
@@ -858,6 +664,21 @@ export default function SpyfallGame() {
             >
               {townWon ? 'MISSION COMPLETE - OPERATIVE COMPROMISED' : 'THE SPY EVADED CAPTURE'}
             </p>
+            {(() => {
+              const name = lastResultPlayer?.displayName || 'A player';
+              const reasons = {
+                'innocent-voted-out': `${name} was voted out but wasn't a spy.`,
+                'spy-caught': `${name} was voted out and was a spy.`,
+                'correct-guess': `${name} worked out the location.`,
+                'wrong-guess': `${name} guessed the wrong location.`
+              };
+              const reason = reasons[lastResult?.type];
+              return reason ? (
+                <p className="spy-mono text-[#d4c9a8] text-sm mt-3">
+                  {reason}{lastResult?.tieBroken ? ' (tie broken at random)' : ''}
+                </p>
+              ) : null;
+            })()}
           </div>
 
           {/* Reveal location */}
@@ -997,12 +818,14 @@ export default function SpyfallGame() {
             <div className="space-y-3">
               <button
                 onClick={handlePlayAgain}
+                disabled={busy}
                 className="spy-mono w-full bg-violet-600 hover:bg-violet-700 text-white uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
               >
                 Play Again
               </button>
               <button
                 onClick={handleEndGame}
+                disabled={busy}
                 className="spy-mono w-full bg-[#1e2a3a] hover:bg-[#26364a] border border-[#2e3f52] text-[#7a8c9e] uppercase tracking-widest font-bold py-4 rounded-xl transition-colors"
               >
                 End Game
@@ -1010,7 +833,7 @@ export default function SpyfallGame() {
             </div>
           ) : (
             <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-xl p-4 text-center">
-              <p className="spy-mono italic text-[#7a8c9e]">Thanks for playing!</p>
+              <p className="spy-mono italic text-[#7a8c9e]">Thanks for playing! Waiting for the host to play again.</p>
             </div>
           )}
         </div>
@@ -1019,4 +842,6 @@ export default function SpyfallGame() {
   }
 
   return null;
+}
+
 }

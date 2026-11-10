@@ -1,0 +1,6 @@
+{
+  "projects": {
+    "default": "gamenight-a9307",
+    "staging": "gamenight-ca21d"
+  }
+}
