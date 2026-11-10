@@ -63,7 +63,7 @@ export default function SpyfallGame() {
     const ids = activeUids.filter((uid) => presentUids.includes(uid)).sort();
     const index = ids.indexOf(user?.id);
     return index < 0 ? 99 : index;
-  }, [activeUids.join(','), presentUids.join(','), user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activeUids.join(','), presentUids.join(','), user?.id]);  
 
   // questioning-intro (4s) -> questioning, and questioning timer -> voting.
   // While a spy is declaring a guess the clock is held.

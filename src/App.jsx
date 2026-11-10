@@ -8,6 +8,7 @@ import WelcomeScreen from './components/WelcomeScreen';
 import OnboardingScreen from './components/OnboardingScreen';
 import HomeScreen from './components/HomeScreen';
 import NotFound from './components/NotFound';
+import { isStagingBuild } from './firebase';
 
 // Game screens are loaded on demand so the first page loads fast
 const GamesScreen = lazy(() => import('./components/GamesScreen'));
@@ -20,6 +21,11 @@ const JoinByCode = lazy(() => import('./components/JoinByCode'));
 function App() {
   return (
     <ErrorBoundary>
+      {isStagingBuild && (
+        <div className="fixed bottom-2 left-2 z-[200] px-2 py-1 rounded bg-amber-500 text-black text-[10px] font-bold uppercase tracking-wider pointer-events-none">
+          Staging
+        </div>
+      )}
       <ToastProvider>
         <AuthProvider>
           <Router>

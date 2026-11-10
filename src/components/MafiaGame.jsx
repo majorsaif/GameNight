@@ -86,7 +86,7 @@ export default function MafiaGame() {
     if (!gameState) return;
     const own = gameState.nightVotes?.[user?.id] || gameState.dayVotes?.[user?.id] || null;
     setSelectedPlayer(own);
-  }, [phaseId]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phaseId]);  
 
   useEffect(() => () => flipTimeoutsRef.current.forEach((id) => clearTimeout(id)), []);
 

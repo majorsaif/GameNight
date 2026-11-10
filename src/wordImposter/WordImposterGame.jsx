@@ -37,7 +37,7 @@ export default function WordImposterGame() {
 
   useEffect(() => {
     setShowWord(false);
-  }, [phaseId === 1, gameState?.word]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [phaseId === 1, gameState?.word]);  
 
   // 5-second "get ready" countdown at the start of each describing round
   const describeStartedAt = gameState?.phase === 'describing' ? gameState.phaseStartedAt : null;
@@ -69,7 +69,7 @@ export default function WordImposterGame() {
     const ids = activePlayerUids.filter((uid) => presentUids.includes(uid)).sort();
     const index = ids.indexOf(user?.id);
     return index < 0 ? 99 : index;
-  }, [activePlayerUids.join(','), presentUids.join(','), user?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [activePlayerUids.join(','), presentUids.join(','), user?.id]);  
 
   // Everyone ready -> voting
   const readyDue = Boolean(gameState?.phase === 'describing' && !isGuessPaused && allActiveReady(gameState, presentUids));

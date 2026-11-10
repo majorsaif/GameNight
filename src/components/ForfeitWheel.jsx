@@ -192,7 +192,7 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
       drawWheel(currentRotation);
     }
     return undefined;
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [activity.state, activity.spinStartTime, activity.spinDuration, activity.resultId, activity.spinCount, options.length]);
 
   // Redraw on resize
@@ -201,7 +201,7 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
     const handleResize = () => drawWheel(currentRotation);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [currentRotation, options]);
 
   const canSpin = isHost && !isAnimating && (activity.state === 'idle' || isFinished);

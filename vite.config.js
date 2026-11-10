@@ -4,6 +4,10 @@ import react from '@vitejs/plugin-react';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  define: {
+    // 'production' | 'preview' | 'development' on Vercel, undefined locally
+    __VERCEL_ENV__: JSON.stringify(process.env.VERCEL_ENV || '')
+  },
   build: {
     rollupOptions: {
       output: {

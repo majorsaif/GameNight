@@ -319,7 +319,7 @@ export function usePlayerPhotos(players) {
       if (retryTimer) clearTimeout(retryTimer);
     };
     // wantedKey captures the relevant content of `wanted`
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+     
   }, [wantedKey]);
 
   return photos;
