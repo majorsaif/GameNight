@@ -75,6 +75,7 @@ export function useCountdown(endsAt) {
  */
 export function useAutoAdvance({ key, due, dueAt = null, isHost, fallbackRank = 0, advance, fallbackDelayMs = 4000 }) {
   const firedRef = useRef(null);
+  const attemptsRef = useRef({ key: null, count: 0 });
   const advanceRef = useRef(advance);
   const [retryTick, setRetryTick] = useState(0);
   advanceRef.current = advance;
@@ -82,19 +83,32 @@ export function useAutoAdvance({ key, due, dueAt = null, isHost, fallbackRank = 
   useEffect(() => {
     if (key == null) return undefined;
     if (firedRef.current === key) return undefined;
+    if (attemptsRef.current.key !== key) attemptsRef.current = { key, count: 0 };
 
-    const delayForRole = isHost ? 0 : fallbackDelayMs + Math.max(0, fallbackRank) * 1500;
+    const isRetry = attemptsRef.current.count > 0;
+    const delayForRole = isHost || isRetry ? 0 : fallbackDelayMs + Math.max(0, fallbackRank) * 1500;
     let timer = null;
+    let retryTimer = null;
+
+    const scheduleRetry = () => {
+      // e.g. our own vote hadn't reached the server when the transaction read it
+      if (attemptsRef.current.count >= 6) return;
+      firedRef.current = null;
+      retryTimer = setTimeout(() => setRetryTick((n) => n + 1), 1500);
+    };
 
     const fire = () => {
       if (firedRef.current === key) return;
       firedRef.current = key;
-      Promise.resolve(advanceRef.current?.()).catch((error) => {
-        console.warn('Auto-advance failed:', error?.code || error);
-        // Try again shortly (e.g. after a network blip)
-        firedRef.current = null;
-        setTimeout(() => setRetryTick((n) => n + 1), 3000);
-      });
+      attemptsRef.current.count += 1;
+      Promise.resolve(advanceRef.current?.())
+        .then((applied) => {
+          if (applied === false) scheduleRetry();
+        })
+        .catch((error) => {
+          console.warn('Auto-advance failed:', error?.code || error);
+          scheduleRetry();
+        });
     };
 
     if (dueAt != null) {
@@ -105,6 +119,7 @@ export function useAutoAdvance({ key, due, dueAt = null, isHost, fallbackRank = 
     }
     return () => {
       if (timer) clearTimeout(timer);
+      if (retryTimer) clearTimeout(retryTimer);
     };
   }, [key, due, dueAt, isHost, fallbackRank, fallbackDelayMs, retryTick]);
 }

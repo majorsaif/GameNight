@@ -315,7 +315,6 @@ export default function MafiaGame() {
   function renderPhase() {
   // Phase 3: Role reveal
   if (gameState?.phase === 'roles') {
-    console.log('[MafiaGame] Rendering roles phase', { myRole, user: user?.id });
     if (!myRole) {
       return (
         <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
@@ -1098,7 +1097,6 @@ export default function MafiaGame() {
 
   // End game
   if (gameState?.phase === 'ended') {
-    console.log('[MafiaGame] Rendering end game phase', { winner: gameState.winner, playersCount: gameState.players?.length });
     const winner = gameState.winner;
     const townWon = winner === 'town';
     const mafiaCount = gameState.players?.filter((player) => player.role === 'mafia').length || 0;
