@@ -222,6 +222,23 @@ export default function WelcomeScreen() {
                 {busy === 'join' ? 'Joining...' : 'Join'}
               </button>
             </form>
+
+            <div className="pt-8">
+              <button
+                onClick={() => navigate('/one-phone')}
+                className="relative w-full bg-gradient-to-br from-sky-500 via-sky-600 to-sky-700 rounded-2xl p-8 overflow-hidden hover:shadow-xl hover:shadow-sky-900/50 active:scale-[0.98] transition-all"
+              >
+                <div className="absolute top-2 right-2 text-4xl opacity-20 rotate-12" aria-hidden="true">📱</div>
+                <div className="absolute bottom-4 right-8 text-3xl opacity-15 -rotate-6" aria-hidden="true">🎲</div>
+                <div className="absolute top-8 right-12 text-2xl opacity-10" aria-hidden="true">✨</div>
+                <div className="relative text-left space-y-2">
+                  <h2 className="text-2xl font-bold text-white">Pass &amp; Play</h2>
+                  <p className="text-sky-100 text-sm leading-relaxed">
+                    Only one phone? Play together on a single device.
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
 
         </div>

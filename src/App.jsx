@@ -17,6 +17,12 @@ const WordImposterGame = lazy(() => import('./wordImposter/WordImposterGame'));
 const SpyfallGame = lazy(() => import('./spyfall/SpyfallGame'));
 const PrivacyPage = lazy(() => import('./components/PrivacyPage'));
 const JoinByCode = lazy(() => import('./components/JoinByCode'));
+const OnePhoneHome = lazy(() => import('./onephone/OnePhoneHome'));
+const OnePhoneGames = lazy(() => import('./onephone/OnePhoneGames'));
+const OnePhoneMafiaRoute = lazy(() => import('./onephone/OnePhoneMafiaRoute'));
+const OnePhoneWordImposter = lazy(() => import('./onephone/modes/OnePhoneWordImposter'));
+const OnePhoneSpyfall = lazy(() => import('./onephone/modes/OnePhoneSpyfall'));
+const OnePhoneWheel = lazy(() => import('./onephone/modes/OnePhoneWheel'));
 
 function App() {
   return (
@@ -34,6 +40,12 @@ function App() {
                 <Route path="/onboarding" element={<OnboardingScreen />} />
                 <Route path="/" element={<WelcomeScreen />} />
                 <Route path="/join/:code" element={<JoinByCode />} />
+                <Route path="/one-phone" element={<OnePhoneHome />} />
+                <Route path="/one-phone/games" element={<OnePhoneGames />} />
+                <Route path="/one-phone/mafia" element={<OnePhoneMafiaRoute />} />
+                <Route path="/one-phone/word-imposter" element={<OnePhoneWordImposter />} />
+                <Route path="/one-phone/spyfall" element={<OnePhoneSpyfall />} />
+                <Route path="/one-phone/wheel" element={<OnePhoneWheel />} />
                 <Route path="/room/:roomId" element={<HomeScreen />} />
                 <Route path="/room/:roomId/games" element={<GamesScreen />} />
                 <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />

@@ -440,6 +440,10 @@ function RoomView({ room, isHost, userId, roomId, navigate, onCopyCode, onShare,
 
       {isHost ? (
         <>
+          <div>
+            <h3 className="text-slate-400 text-xs font-bold uppercase tracking-widest mb-3">GAMES</h3>
+            <span className="block h-px w-full bg-[#2a3f5f]" />
+          </div>
           <button
             type="button"
             aria-label="Social deduction games"
