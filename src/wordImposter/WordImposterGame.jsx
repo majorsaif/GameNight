@@ -489,7 +489,7 @@ export default function WordImposterGame() {
     const votedCount = Object.keys(votes).length;
 
     return (
-      <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+      <div className="relative min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-6">
             {isCurrentPlayerEliminated && (

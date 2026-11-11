@@ -1,6 +1,6 @@
 import { initializeApp } from 'firebase/app';
 import { getFirestore } from 'firebase/firestore';
-import { getAuth } from 'firebase/auth';
+import { browserLocalPersistence, indexedDBLocalPersistence, initializeAuth } from 'firebase/auth';
 
 // Vercel preview deployments (pull requests / branches) always talk to the
 // staging project so testing never touches live rooms. Firebase web config is
@@ -33,4 +33,8 @@ if (!isFirebaseConfigured) {
 
 const app = initializeApp(firebaseConfig);
 export const db = getFirestore(app);
-export const auth = getAuth(app);
+// Anonymous sign-in only: skipping the popup/redirect resolver avoids loading
+// Google's iframe scripts on every page.
+export const auth = initializeAuth(app, {
+  persistence: [indexedDBLocalPersistence, browserLocalPersistence]
+});

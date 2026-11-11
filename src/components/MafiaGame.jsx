@@ -453,7 +453,7 @@ export default function MafiaGame() {
       const selectablePlayers = getSelectablePlayers();
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
           <div className="w-full max-w-md mx-auto">
             {isDeadSpectator() && renderEliminatedBanner()}
 
@@ -518,7 +518,7 @@ export default function MafiaGame() {
     const showMafiaCoordination = true;
     
     return (
-      <div className="min-h-screen bg-gradient-to-br from-red-950 via-red-900 to-red-950 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-red-950 via-red-900 to-red-950 p-6 pt-16">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-6">
             {timeLeft !== null && (
@@ -621,7 +621,7 @@ export default function MafiaGame() {
       const selectablePlayers = getSelectablePlayers();
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
           <div className="w-full max-w-md mx-auto">
             {isDeadSpectator() && renderEliminatedBanner()}
 
@@ -679,7 +679,7 @@ export default function MafiaGame() {
     const selectablePlayers = getSelectablePlayers();
     
     return (
-      <div className="min-h-screen bg-gradient-to-br from-green-950 via-green-900 to-green-950 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-green-950 via-green-900 to-green-950 p-6 pt-16">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-6">
             {timeLeft !== null && (
@@ -729,7 +729,7 @@ export default function MafiaGame() {
       const selectablePlayers = getSelectablePlayers();
 
       return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
           <div className="w-full max-w-md mx-auto">
             {isDeadSpectator() && renderEliminatedBanner()}
 
@@ -787,7 +787,7 @@ export default function MafiaGame() {
     const selectablePlayers = getSelectablePlayers();
     
     return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-950 via-yellow-900 to-yellow-950 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-yellow-950 via-yellow-900 to-yellow-950 p-6 pt-16">
         <div className="w-full max-w-md mx-auto">
           <div className="text-center mb-6">
             {timeLeft !== null && (
@@ -883,7 +883,7 @@ export default function MafiaGame() {
     const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
 
     return (
-      <div className="relative min-h-screen bg-gradient-to-br from-[#020817] via-[#0b1325] to-[#020817] p-6">
+      <div className="relative min-h-screen bg-gradient-to-br from-[#020817] via-[#0b1325] to-[#020817] p-6 pt-16">
         <div
           className="pointer-events-none fixed inset-0 z-0"
           style={{
@@ -1038,7 +1038,7 @@ export default function MafiaGame() {
     const formattedTimeLeft = timeLeft !== null ? formatTime(timeLeft) : null;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
         <div className="w-full max-w-md mx-auto">
           {isDeadSpectator() && renderEliminatedBanner()}
 
@@ -1106,7 +1106,7 @@ export default function MafiaGame() {
     const rightMetaText = nightsCount !== null ? `NIGHTS: ${nightsCount}` : `ELIMINATED: ${eliminatedCount}`;
 
     return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6">
+      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
         <div className="w-full max-w-md mx-auto">
           {/* Newspaper Masthead - Classic Broadsheet Style */}
           <div className="mb-8 text-[#e8e0d0]" style={{ fontFamily: 'serif' }}>

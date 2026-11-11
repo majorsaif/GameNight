@@ -445,8 +445,8 @@ export default function SpyfallGame() {
     return (
       <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
 
-        {/* Timer bar */}
-        <div className="w-full max-w-md mx-auto px-4 pt-4">
+        {/* Timer bar (right padding leaves room for the game menu button) */}
+        <div className="w-full max-w-md mx-auto pl-4 pr-14 pt-4">
           <div className="bg-[#1a1a1a] rounded-xl overflow-hidden border border-[#2e3f52]">
             <div className="bg-[#1a1a1a] px-4 py-2 flex items-center justify-start">
               <span className="font-mono uppercase text-white font-bold text-sm tracking-widest">FLIGHTS</span>
@@ -645,11 +645,11 @@ export default function SpyfallGame() {
     const townWon = winner === 'town';
     const spyIds = gameState.spyIds || [];
     const endedLocationName = gameState.location || 'UNKNOWN';
-    const endedLocationSizeClass = endedLocationName.length > 10 ? 'text-2xl' : 'text-4xl';
+    const endedLocationSizeClass = endedLocationName.length > 7 ? 'text-2xl' : 'text-4xl';
 
     return (
       <div className="spyfall-game font-sans min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
-        <div className="w-full max-w-md mx-auto p-6">
+        <div className="w-full max-w-md mx-auto p-6 pt-16">
           <div className="mb-6 text-left">
             <p className="uppercase text-xs tracking-widest text-[#7a8c9e] mb-2" style={{ fontFamily: "'Courier Prime', monospace" }}>OPERATION SPYFALL</p>
             <h1
