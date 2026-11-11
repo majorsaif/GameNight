@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { getAvatarColor, getInitials } from '../utils/avatar';
 
 export default function WheelSetupModal({ room, onLaunch, onClose }) {
   const [wheelType, setWheelType] = useState(null); // null, 'player', 'custom'
@@ -20,7 +19,7 @@ export default function WheelSetupModal({ room, onLaunch, onClose }) {
   };
 
   const handleAddCustomOption = () => {
-    if (customOptions.length < 8) {
+    if (customOptions.length < 12) {
       setCustomOptions([...customOptions, '']);
     }
   };
@@ -37,17 +36,20 @@ export default function WheelSetupModal({ room, onLaunch, onClose }) {
     setCustomOptions(newOptions);
   };
 
+  const WHEEL_COLORS = ['#8b5cf6', '#ec4899', '#3b82f6', '#f97316', '#10b981', '#ef4444', '#14b8a6', '#f59e0b'];
+
   const handleLaunch = () => {
     if (wheelType === 'player') {
+      // Canvas needs real colours (not Tailwind classes); alternate so neighbours differ
       const options = availablePlayers.map((player, index) => ({
         id: `player-${player.id}`,
         label: player.displayNameForGame || player.displayName,
         playerId: player.id,
-        color: getAvatarColor(player, room.id)
+        color: WHEEL_COLORS[index % WHEEL_COLORS.length]
       }));
       onLaunch({ type: 'playerWheel', options });
     } else if (wheelType === 'custom') {
-      const colors = ['#8b5cf6', '#ec4899', '#3b82f6', '#f97316', '#10b981', '#ef4444', '#14b8a6', '#f59e0b'];
+      const colors = WHEEL_COLORS;
       const options = customOptions
         .filter(opt => opt.trim())
         .map((opt, index) => ({
@@ -225,6 +227,7 @@ export default function WheelSetupModal({ room, onLaunch, onClose }) {
                       value={option}
                       onChange={(e) => handleCustomOptionChange(index, e.target.value)}
                       placeholder={`Option ${index + 1}`}
+                      maxLength={40}
                       className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white placeholder-slate-500 focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent"
                     />
                     {customOptions.length > 2 && (

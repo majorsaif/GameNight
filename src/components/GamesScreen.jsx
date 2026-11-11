@@ -1,22 +1,26 @@
 import React, { useState } from 'react';
-import { useNavigate, useParams } from 'react-router-dom';
+import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { useRoom } from '../hooks/useRoom';
-import { doc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '../firebase';
-import LOCATIONS from '../spyfall/locations';
-import mafiaButtonImage from '../assets/mafia-button.png';
-import wordImposterButtonImage from '../assets/word-imposter-button.png';
-import spyfallButtonImage from '../assets/spyfall-button.png';
+import { openLobby } from '../lib/lobby';
+import { useToast } from './Toast';
+import { GameLoading } from './GameShell';
+import { maxMafiaFor } from '../games/mafia/logic';
+import { maxImpostersFor } from '../games/wordImposter/logic';
+import { maxSpiesFor } from '../games/spyfall/logic';
+import mafiaButtonImage from '../assets/mafia-button.webp';
+import wordImposterButtonImage from '../assets/word-imposter-button.webp';
+import spyfallButtonImage from '../assets/spyfall-button.webp';
 import AnimatedNumberStepper from './AnimatedNumberStepper';
 
 export default function GamesScreen() {
   const navigate = useNavigate();
+  const toast = useToast();
   const { roomId } = useParams();
-  const { user } = useAuth();
-  const { isHost, room } = useRoom(roomId, user?.id, user?.displayName, user?.photo || null);
-  const [showComingSoon, setShowComingSoon] = useState(false);
+  const { user, loading: authLoading } = useAuth();
+  const { isHost, room, loading } = useRoom(roomId, user);
   const [showHostOnly, setShowHostOnly] = useState(false);
+  const [busy, setBusy] = useState(false);
   const [showMafiaSetup, setShowMafiaSetup] = useState(false);
   const [mafiaCountError, setMafiaCountError] = useState('');
   const [rules, setRules] = useState({
@@ -42,249 +46,97 @@ export default function GamesScreen() {
   });
 
   const roomPlayerCount = room?.players?.length || 0;
-  const maxStepperCount = Math.max(1, Math.floor(roomPlayerCount * 0.25));
+  const maxMafia = maxMafiaFor(roomPlayerCount);
+  const maxImposters = maxImpostersFor(roomPlayerCount);
+  const maxSpies = maxSpiesFor(roomPlayerCount);
 
   const formatMinutes = (value) => `${value} min`;
   const formatVotingTime = (stepValue) => {
     if (stepValue === 1) return '30s';
     const minutes = stepValue / 2;
-    if (Number.isInteger(minutes)) {
-      return `${minutes} min`;
-    }
-    const wholeMinutes = Math.floor(minutes);
-    return `${wholeMinutes} min 30s`;
+    if (Number.isInteger(minutes)) return `${minutes} min`;
+    return `${Math.floor(minutes)} min 30s`;
   };
 
-  const handleSpyfallClick = () => {
-    if (!isHost) {
-      setShowHostOnly(true);
-      setTimeout(() => setShowHostOnly(false), 3000);
-      return;
-    }
-    setShowSpyfallSetup(true);
+  const hostOnly = () => {
+    setShowHostOnly(true);
+    setTimeout(() => setShowHostOnly(false), 3000);
   };
 
-  const handleStartSpyfallLobby = async () => {
-    if (!isHost || !roomId || !user) return;
-
-    setSpyCountError('');
-
-    const spyCountValue = spyfallRules.spyCount.trim();
-    if (!spyCountValue) {
-      setSpyCountError('Number of spies is required');
-      return;
-    }
-
-    const spyCount = parseInt(spyCountValue, 10);
-    if (isNaN(spyCount) || spyCount < 1) {
-      setSpyCountError('Number of spies must be at least 1');
-      return;
-    }
-
-    const totalPlayers = room?.players?.length || 0;
-    const maxAllowed = Math.max(1, Math.floor(totalPlayers * 0.25));
-    if (spyCount > maxAllowed) {
-      setSpyCountError(`Too many spies! With ${totalPlayers} players you can have a maximum of ${maxAllowed} spy(s)`);
-      return;
-    }
-
-    const roomRef = doc(db, 'rooms', roomId);
-
-    const gamePlayers = room.players.map(p => ({
-      uid: p.id,
-      displayName: p.displayNameForGame || p.displayName,
-      avatarColor: p.avatarColor,
-      role: null
-    }));
-
-    const finalRules = {
-      spyCount,
-      showRoles: spyfallRules.showRoles,
-      discussionTime: spyfallRules.discussionTime
-    };
-
-    await updateDoc(roomRef, {
-      activeActivity: {
-        type: 'spyfall',
-        phase: 'lobby',
-        location: null,
-        rules: finalRules,
-        spyIds: [],
-        eliminatedSpyIds: [],
-        players: gamePlayers,
-        lobbyPlayers: [user.id],
-        currentAskerId: null,
-        readyVotes: [],
-        votes: {},
-        eliminatedUid: null,
-        spyGuessing: null,
-        winner: null,
-        roundNumber: 1,
-        createdAt: serverTimestamp()
-      },
-      lastActivity: serverTimestamp()
-    });
-
-    setShowSpyfallSetup(false);
-    navigate(`/room/${roomId}`);
+  const confirmReplacingActivity = () => {
+    const current = room?.activeActivity;
+    if (!current) return true;
+    // Starting a new lobby replaces whatever is running
+    return window.confirm('A game is already running in this room. Start a new one instead?');
   };
 
-  const handleWordImposterClick = () => {
-    if (!isHost) {
-      setShowHostOnly(true);
-      setTimeout(() => setShowHostOnly(false), 3000);
-      return;
+  const launch = async (type, finalRules, close) => {
+    if (!isHost || !roomId || busy) return;
+    if (!confirmReplacingActivity()) return;
+    setBusy(true);
+    try {
+      await openLobby(roomId, type, finalRules);
+      close(false);
+      navigate(`/room/${roomId}`);
+    } catch (error) {
+      console.error('Could not open lobby:', error);
+      toast.error("Couldn't start the lobby. Try again.");
+    } finally {
+      setBusy(false);
     }
-    setShowWordImposterSetup(true);
   };
 
-  const handleStartWordImposterLobby = async () => {
-    if (!isHost || !roomId || !user) return;
+  const handleMafiaClick = () => (isHost ? setShowMafiaSetup(true) : hostOnly());
+  const handleWordImposterClick = () => (isHost ? setShowWordImposterSetup(true) : hostOnly());
+  const handleSpyfallClick = () => (isHost ? setShowSpyfallSetup(true) : hostOnly());
 
+  const handleStartLobby = () => {
+    setMafiaCountError('');
+    const mafiaCount = parseInt(rules.mafiaCount, 10);
+    if (Number.isNaN(mafiaCount) || mafiaCount < 1) {
+      setMafiaCountError('Number of mafia must be at least 1');
+      return;
+    }
+    launch('mafia', {
+      mafiaCount,
+      doctor: Boolean(rules.doctor),
+      detective: Boolean(rules.detective),
+      discussionTime: rules.discussionTime,
+      votingTime: rules.votingTime
+    }, setShowMafiaSetup);
+  };
+
+  const handleStartWordImposterLobby = () => {
     setImposterCountError('');
-
-    const imposterCountValue = wordImposterRules.imposterCount.trim();
-    if (!imposterCountValue) {
-      setImposterCountError('Number of imposters is required');
-      return;
-    }
-
-    const imposterCount = parseInt(imposterCountValue, 10);
-    if (isNaN(imposterCount) || imposterCount < 1) {
+    const imposterCount = parseInt(wordImposterRules.imposterCount, 10);
+    if (Number.isNaN(imposterCount) || imposterCount < 1) {
       setImposterCountError('Number of imposters must be at least 1');
       return;
     }
-
-    const totalPlayers = room?.players?.length || 0;
-    const maxAllowed = Math.max(1, Math.floor(totalPlayers / 3));
-    if (imposterCount > maxAllowed) {
-      setImposterCountError(`Too many imposters! With ${totalPlayers} players you can have a maximum of ${maxAllowed} imposter(s)`);
-      return;
-    }
-
-    const roomRef = doc(db, 'rooms', roomId);
-
-    const gamePlayers = room.players.map(p => ({
-      uid: p.id,
-      displayName: p.displayNameForGame || p.displayName,
-      avatarColor: p.avatarColor
-    }));
-
-    const finalRules = {
-      imposterCount: imposterCount,
-      showCategory: wordImposterRules.showCategory,
-      imposterNoWord: !!wordImposterRules.imposterNoWord
-    };
-
-    await updateDoc(roomRef, {
-      activeActivity: {
-        type: 'wordImposter',
-        phase: 'lobby',
-        rules: finalRules,
-        players: gamePlayers,
-        lobbyPlayers: [user.id],
-        word: null,
-        imposterWord: null,
-        category: null,
-        imposterIds: [],
-        startingPlayerId: null,
-        direction: null,
-        readyVotes: [],
-        votes: {},
-        eliminatedUid: null,
-        winner: null,
-        wordRevealed: null,
-        roundNumber: 1,
-        createdAt: serverTimestamp()
-      },
-      lastActivity: serverTimestamp()
-    });
-
-    setShowWordImposterSetup(false);
-    navigate(`/room/${roomId}`);
+    launch('wordImposter', {
+      imposterCount,
+      showCategory: Boolean(wordImposterRules.showCategory),
+      imposterNoWord: Boolean(wordImposterRules.imposterNoWord)
+    }, setShowWordImposterSetup);
   };
 
-  const handleMafiaClick = () => {
-    if (!isHost) {
-      setShowHostOnly(true);
-      setTimeout(() => setShowHostOnly(false), 3000);
+  const handleStartSpyfallLobby = () => {
+    setSpyCountError('');
+    const spyCount = parseInt(spyfallRules.spyCount, 10);
+    if (Number.isNaN(spyCount) || spyCount < 1) {
+      setSpyCountError('Number of spies must be at least 1');
       return;
     }
-    // Open rules modal instead of navigating
-    setShowMafiaSetup(true);
+    launch('spyfall', {
+      spyCount,
+      showRoles: Boolean(spyfallRules.showRoles),
+      discussionTime: spyfallRules.discussionTime
+    }, setShowSpyfallSetup);
   };
 
-  const handleStartLobby = async () => {
-    if (!isHost || !roomId || !user) return;
-
-    setMafiaCountError('');
-
-    // Validate mafia count
-    const mafiaCountValue = rules.mafiaCount.trim();
-    if (!mafiaCountValue) {
-      setMafiaCountError('Number of mafias is required');
-      return;
-    }
-
-    const mafiaCount = parseInt(mafiaCountValue, 10);
-    if (isNaN(mafiaCount) || mafiaCount < 1) {
-      setMafiaCountError('Number of mafias must be at least 1');
-      return;
-    }
-
-    // Check 25% limit based on current room players
-    const totalPlayers = room?.players?.length || 0;
-    const maxAllowed = Math.max(1, Math.floor(totalPlayers * 0.25));
-    if (mafiaCount > maxAllowed) {
-      setMafiaCountError(`Too many mafias! With ${totalPlayers} players, you can have a maximum of ${maxAllowed} mafia.`);
-      return;
-    }
-
-    const roomRef = doc(db, 'rooms', roomId);
-
-    // Get all room players and format them for the game
-    const gamePlayers = room.players.map(p => ({
-      uid: p.id,
-      displayName: p.displayNameForGame || p.displayName,
-      avatarColor: p.avatarColor,
-      isAlive: true,
-      role: null
-    }));
-
-    const finalRules = {
-      ...rules,
-      mafiaCount: mafiaCount
-    };
-
-    await updateDoc(roomRef, {
-      activeActivity: {
-        type: 'mafia',
-        phase: 'lobby',
-        rules: finalRules,
-        players: gamePlayers,
-        lobbyPlayers: [user.id],
-        pendingVictim: null,
-        doctorSave: null,
-        detectiveResult: null,
-        nightVotes: {},
-        dayVotes: {},
-        readyVotes: [],
-        confirmedVotes: [],
-        lastEliminated: null,
-        lastSaved: null,
-        winner: null,
-        phaseStartedAt: null,
-        phaseDurationMs: null,
-        roundNumber: 1,
-        createdAt: serverTimestamp()
-      },
-      lastActivity: serverTimestamp()
-    });
-
-    // Close modal and navigate back to HomeScreen
-    setShowMafiaSetup(false);
-    navigate(`/room/${roomId}`);
-  };
+  if (!authLoading && !user) return <Navigate to="/onboarding" replace state={{ redirectTo: `/room/${roomId}` }} />;
+  if (authLoading || loading) return <GameLoading label="Loading games..." />;
+  if (!room) return <Navigate to={`/room/${roomId}`} replace />;
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950">
@@ -292,7 +144,8 @@ export default function GamesScreen() {
       <div className="sticky top-0 z-50 pointer-events-none">
         <div className="w-full max-w-md mx-auto px-6 py-4">
           <button
-            onClick={() => navigate(-1)}
+            onClick={() => navigate(`/room/${roomId}`)}
+            aria-label="Back to room"
             className="pointer-events-auto flex items-center justify-center w-11 h-11 bg-slate-800 border border-slate-700 rounded-full text-slate-300 hover:text-white hover:bg-slate-700 transition-colors shadow-xl"
           >
             <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -360,15 +213,6 @@ export default function GamesScreen() {
         </div>
       </main>
 
-      {/* Coming Soon Toast */}
-      {showComingSoon && (
-        <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
-          <div className="bg-slate-800 border border-slate-700 rounded-xl px-6 py-3 shadow-2xl">
-            <p className="text-white font-semibold">Coming soon! 🎮</p>
-          </div>
-        </div>
-      )}
-
       {/* Host Only Toast */}
       {showHostOnly && (
         <div className="fixed top-20 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
@@ -395,11 +239,11 @@ export default function GamesScreen() {
             <div className="space-y-4">
               {/* Number of mafias */}
               <div>
-                <label className="text-white font-semibold block mb-2 text-center">Number of Mafias</label>
+                <label className="text-white font-semibold block mb-2 text-center">Number of Mafia</label>
                 <AnimatedNumberStepper
                   value={parseInt(rules.mafiaCount, 10) || 1}
                   min={1}
-                  max={maxStepperCount}
+                  max={maxMafia}
                   valueWidthClass="w-16"
                   onChange={(nextValue) => {
                     setRules({ ...rules, mafiaCount: String(nextValue) });
@@ -479,9 +323,10 @@ export default function GamesScreen() {
 
               <button
                 onClick={handleStartLobby}
+                disabled={busy}
                 className="w-full bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold py-4 rounded-xl transition-colors"
               >
-                Start Lobby
+                {busy ? 'Starting...' : 'Start Lobby'}
               </button>
             </div>
           </div>
@@ -509,7 +354,7 @@ export default function GamesScreen() {
                 <AnimatedNumberStepper
                   value={parseInt(spyfallRules.spyCount, 10) || 1}
                   min={1}
-                  max={maxStepperCount}
+                  max={maxSpies}
                   valueWidthClass="w-16"
                   onChange={(nextValue) => {
                     setSpyfallRules({ ...spyfallRules, spyCount: String(nextValue) });
@@ -556,9 +401,10 @@ export default function GamesScreen() {
 
               <button
                 onClick={handleStartSpyfallLobby}
+                disabled={busy}
                 className="w-full bg-gradient-to-r from-indigo-600 to-blue-600 hover:from-indigo-500 hover:to-blue-500 text-white font-bold py-4 rounded-xl transition-colors"
               >
-                Start Lobby
+                {busy ? 'Starting...' : 'Start Lobby'}
               </button>
             </div>
           </div>
@@ -586,7 +432,7 @@ export default function GamesScreen() {
                 <AnimatedNumberStepper
                   value={parseInt(wordImposterRules.imposterCount, 10) || 1}
                   min={1}
-                  max={maxStepperCount}
+                  max={maxImposters}
                   valueWidthClass="w-16"
                   onChange={(nextValue) => {
                     setWordImposterRules({ ...wordImposterRules, imposterCount: String(nextValue) });
@@ -603,7 +449,7 @@ export default function GamesScreen() {
                 <div className="flex items-center justify-between">
                   <div>
                     <label className="text-white font-semibold">Show Category</label>
-                    <p className="text-slate-400 text-sm">Imposters see the category but not the word</p>
+                    <p className="text-slate-400 text-sm">Everyone sees the word's category as a hint</p>
                   </div>
                   <button
                     onClick={() => setWordImposterRules({ ...wordImposterRules, showCategory: !wordImposterRules.showCategory })}
@@ -640,9 +486,10 @@ export default function GamesScreen() {
 
               <button
                 onClick={handleStartWordImposterLobby}
+                disabled={busy}
                 className="w-full bg-gradient-to-r from-teal-600 to-cyan-600 hover:from-teal-500 hover:to-cyan-500 text-white font-bold py-4 rounded-xl transition-colors"
               >
-                Start Lobby
+                {busy ? 'Starting...' : 'Start Lobby'}
               </button>
             </div>
           </div>

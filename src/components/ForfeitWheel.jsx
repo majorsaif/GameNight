@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
+import confetti from 'canvas-confetti';
 import { getAvatarColor, getInitials } from '../utils/avatar';
 
 export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpin }) {
@@ -13,16 +14,25 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
   const options = activity.options || [];
   const segmentAngle = options.length > 0 ? (2 * Math.PI) / options.length : 0;
 
-  // Initialize audio context on first user interaction
   useEffect(() => {
-    if (!audioContextRef.current) {
-      audioContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
+    const Ctx = window.AudioContext || window.webkitAudioContext;
+    if (!audioContextRef.current && Ctx) {
+      try {
+        audioContextRef.current = new Ctx();
+      } catch {
+        audioContextRef.current = null;
+      }
     }
+    return () => {
+      audioContextRef.current?.close?.().catch(() => {});
+      audioContextRef.current = null;
+    };
   }, []);
 
-  // Play tick sound
   const playTick = () => {
-    if (!audioContextRef.current) return;
+    const ctx = audioContextRef.current;
+    if (!ctx || ctx.state === 'closed') return;
+    if (ctx.state === 'suspended') ctx.resume().catch(() => {});
     
     const oscillator = audioContextRef.current.createOscillator();
     const gainNode = audioContextRef.current.createGain();
@@ -116,36 +126,42 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
     ctx.stroke();
   };
 
-  // Animate spin
+  // Rotation that puts the middle of segment `index` under the pointer at the top
+  const landingRotation = (index, spins = 5) => {
+    const jitter = (((activity.spinCount || 1) * 7919) % 100) / 100 - 0.5; // stable per spin, within the slice
+    return (2 * Math.PI * spins) + (2 * Math.PI - (index + 0.5 + jitter * 0.6) * segmentAngle);
+  };
+
+  const spinEndsAt = activity.spinStartTime && activity.spinDuration
+    ? activity.spinStartTime + activity.spinDuration
+    : null;
+  const [now, setNow] = useState(() => Date.now());
+  const isFinished = activity.state === 'result' || (activity.state === 'spinning' && spinEndsAt && now >= spinEndsAt);
+
+  // Animate spin (every client animates locally to the shared result)
   useEffect(() => {
-    if (activity.state === 'spinning' && activity.spinStartTime && activity.spinDuration) {
+    if (options.length === 0) return undefined;
+    const resultIndex = Math.max(0, options.findIndex((opt) => opt.id === activity.resultId));
+    const finalRotation = landingRotation(resultIndex);
+
+    if (activity.state === 'spinning' && spinEndsAt && Date.now() < spinEndsAt) {
       setIsAnimating(true);
+      setShowWinnerModal(false);
       lastTickSegmentRef.current = -1;
-      
       const startTime = activity.spinStartTime;
       const duration = activity.spinDuration;
-      const resultIndex = options.findIndex(opt => opt.id === activity.resultId);
-      
-      // Calculate target rotation to land on result
-      const targetSegmentAngle = resultIndex * segmentAngle;
-      const pointerAngle = Math.PI / 2; // Pointer at top
-      const finalRotation = (2 * Math.PI * 5) + (2 * Math.PI - targetSegmentAngle) + pointerAngle;
 
       const animate = () => {
-        const now = Date.now();
-        const elapsed = now - startTime;
-        const progress = Math.min(elapsed / duration, 1);
-
-        // Ease-out cubic
+        const elapsed = Date.now() - startTime;
+        const progress = Math.min(Math.max(elapsed / duration, 0), 1);
         const easeProgress = 1 - Math.pow(1 - progress, 3);
         const rotation = finalRotation * easeProgress;
 
         setCurrentRotation(rotation);
         drawWheel(rotation);
 
-        // Check for segment crossing and play tick
-        const normalizedRotation = rotation % (2 * Math.PI);
-        const currentSegment = Math.floor((normalizedRotation + Math.PI / 2) / segmentAngle) % options.length;
+        const normalizedRotation = ((rotation % (2 * Math.PI)) + 2 * Math.PI) % (2 * Math.PI);
+        const currentSegment = Math.floor(normalizedRotation / segmentAngle) % options.length;
         if (currentSegment !== lastTickSegmentRef.current && progress < 0.95) {
           playTick();
           lastTickSegmentRef.current = currentSegment;
@@ -155,65 +171,54 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
           animationRef.current = requestAnimationFrame(animate);
         } else {
           setIsAnimating(false);
+          setNow(Date.now());
           setShowWinnerModal(true);
-          
-          // Launch confetti
-          if (window.confetti) {
-            window.confetti({
-              particleCount: 100,
-              spread: 70,
-              origin: { y: 0.6 }
-            });
-          }
+          confetti({ particleCount: 100, spread: 70, origin: { y: 0.6 }, disableForReducedMotion: true });
         }
       };
 
       animationRef.current = requestAnimationFrame(animate);
-
       return () => {
-        if (animationRef.current) {
-          cancelAnimationFrame(animationRef.current);
-        }
+        if (animationRef.current) cancelAnimationFrame(animationRef.current);
       };
-    } else if (activity.state === 'result') {
-      // Show result position
-      const resultIndex = options.findIndex(opt => opt.id === activity.resultId);
-      const targetSegmentAngle = resultIndex * segmentAngle;
-      const pointerAngle = Math.PI / 2;
-      const finalRotation = (2 * Math.PI * 5) + (2 * Math.PI - targetSegmentAngle) + pointerAngle;
+    }
+
+    if (activity.state === 'spinning' || activity.state === 'result') {
+      // Joined after the spin finished: just show where it landed
       setCurrentRotation(finalRotation);
       drawWheel(finalRotation);
+      setNow(Date.now());
     } else {
-      // Idle state
       drawWheel(currentRotation);
     }
-  }, [activity.state, activity.spinStartTime, activity.spinDuration, activity.resultId, options]);
+    return undefined;
+     
+  }, [activity.state, activity.spinStartTime, activity.spinDuration, activity.resultId, activity.spinCount, options.length]);
 
-  // Redraw on mount and resize
+  // Redraw on resize
   useEffect(() => {
     drawWheel(currentRotation);
-    
     const handleResize = () => drawWheel(currentRotation);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
+     
   }, [currentRotation, options]);
 
+  const canSpin = isHost && !isAnimating && (activity.state === 'idle' || isFinished);
   const handleSpin = () => {
-    if (isHost && activity.state === 'idle' && !isAnimating) {
-      onSpin(activity);
-    }
+    if (canSpin) onSpin(activity);
   };
 
-  const winnerOption = options.find(opt => opt.id === activity.resultId);
-  const winnerPlayer = activity.type === 'playerWheel' && winnerOption 
-    ? room.players.find(p => p.id === winnerOption.playerId)
+  const winnerOption = options.find((opt) => opt.id === activity.resultId);
+  const winnerPlayer = activity.type === 'playerWheel' && winnerOption
+    ? room.players.find((p) => p.id === winnerOption.playerId)
     : null;
 
   return (
     <div className="bg-slate-800/30 border border-slate-700/50 rounded-2xl p-6">
       {/* Header */}
       <div className="flex items-center justify-between gap-4 mb-4">
-        <h3 className="text-lg font-bold text-slate-300">Wheel Spin</h3>
+        <h3 className="text-lg font-bold text-slate-300">{activity.type === 'playerWheel' ? 'Player Wheel' : 'Wheel Spin'}</h3>
         {isHost && (
           <button
             onClick={() => onEndActivity()}
@@ -234,18 +239,22 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
         />
 
         {/* Spin Button */}
-        {isHost && activity.state === 'idle' && (
+        {canSpin && (
           <button
             onClick={handleSpin}
             disabled={isAnimating}
             className="px-6 py-3 bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:opacity-50 disabled:cursor-not-allowed text-white font-bold rounded-full transition-all"
           >
-            Spin the Wheel!
+            {activity.state === 'idle' ? 'Spin the Wheel!' : 'Spin Again'}
           </button>
         )}
 
         {/* Winner Banner - Always show below wheel when result is available */}
-        {activity.state === 'result' && winnerOption && (
+        {!isHost && activity.state === 'idle' && (
+          <p className="text-slate-400 text-sm">Waiting for the host to spin...</p>
+        )}
+
+        {isFinished && !isAnimating && winnerOption && (
           <div className="w-full bg-gradient-to-r from-violet-600/20 to-purple-600/20 border-2 border-violet-500 rounded-xl p-4 text-center">
             <div className="flex flex-col items-center gap-3">
               {winnerPlayer && (
@@ -265,7 +274,7 @@ export default function WheelSpin({ activity, room, isHost, onEndActivity, onSpi
       </div>
 
       {/* Winner Modal - Shows immediately after spin completes */}
-      {showWinnerModal && winnerOption && isHost && (
+      {showWinnerModal && winnerOption && (
         <div className="fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50">
           <div className="bg-gradient-to-br from-slate-900 to-slate-800 border-4 border-violet-500 rounded-3xl p-12 max-w-md mx-4 text-center shadow-2xl">
             <div className="text-7xl mb-6">🎉</div>

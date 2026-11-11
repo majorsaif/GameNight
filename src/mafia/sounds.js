@@ -1,34 +1,40 @@
-// Free sound effects for Mafia game
-// Local sound files (originally from Mixkit - royalty free)
-
+// Mafia phase sound effects (originally from Mixkit - royalty free)
 export const MAFIA_SOUNDS = {
-  // Shushing/night ambience - soft whoosh
   NIGHT_START: '/sounds/night-start.m4a',
-  
-  // Knife unsheathing - blade sound
-  MAFIA_WAKE: '/sounds/mafia-wake.wav',
-  
-  // Heartbeat monitor - cardiac beep
+  MAFIA_WAKE: '/sounds/mafia-wake.m4a',
   DOCTOR_WAKE: '/sounds/doctor-wake.m4a',
-  
-  // Detective/mystery - suspenseful tension sting
-  DETECTIVE_WAKE: '/sounds/detective-wake.wav',
-  
-  // Rooster crow - morning wake up
-  DAY_START: '/sounds/day-start.wav'
+  DETECTIVE_WAKE: '/sounds/detective-wake.m4a',
+  DAY_START: '/sounds/day-start.m4a'
 };
 
-/**
- * Play a sound effect from a URL
- * @param {string} url - The URL of the sound to play
- */
+const cache = new Map();
+
+function getAudio(url) {
+  if (!cache.has(url)) {
+    const audio = new Audio(url);
+    audio.preload = 'auto';
+    audio.volume = 0.5;
+    cache.set(url, audio);
+  }
+  return cache.get(url);
+}
+
+/** Preload all sounds so they play instantly on slow connections. */
+export function preloadMafiaSounds() {
+  Object.values(MAFIA_SOUNDS).forEach((url) => getAudio(url));
+}
+
 export function playSound(url) {
   if (!url) return;
-  
-  console.log('[playSound] Attempting to play:', url);
-  const audio = new Audio(url);
-  audio.volume = 0.5; // Set to 50% volume to avoid being too loud
-  audio.play()
-    .then(() => console.log('[playSound] Successfully started playback'))
-    .catch(e => console.warn('Sound playback failed:', e));
+  try {
+    const audio = getAudio(url);
+    audio.currentTime = 0;
+    const result = audio.play();
+    if (result?.catch) {
+      // Autoplay can be blocked until the player taps something - not an error
+      result.catch(() => {});
+    }
+  } catch {
+    // Audio not supported
+  }
 }

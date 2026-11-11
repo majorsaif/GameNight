@@ -11,7 +11,7 @@ const mafiaRules = {
     {
       heading: 'Roles',
       items: [
-        { role: 'Mafia', text: 'Knows the other Mafia members and chooses one target each night.' },
+        { role: 'Mafia', text: 'Knows the other Mafia members and agrees on one target each night. With multiple Mafia, the most-picked target is chosen.' },
         { role: 'Civilian', text: 'No special night action. Uses discussion and voting to identify Mafia.' },
         { role: 'Doctor', text: 'If enabled, chooses one player to protect each night.' },
         { role: 'Detective', text: 'If enabled, investigates one player each night to learn if they are Mafia.' },
@@ -23,7 +23,7 @@ const mafiaRules = {
     },
     {
       heading: 'Day Phase',
-      text: 'Surviving players discuss, then vote to eliminate one suspect. Eliminated players no longer take actions but can still watch the game.',
+      text: 'The night report reveals who was attacked. Surviving players discuss, then vote to eliminate one suspect (ties are broken at random). Eliminated players can no longer act but can keep watching. If nobody votes, nobody is eliminated.',
     },
     {
       heading: 'Win Conditions',

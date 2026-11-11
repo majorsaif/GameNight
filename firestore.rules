@@ -1,0 +1,107 @@
+rules_version = '2';
+
+// Its Games Night - Firestore security rules
+//
+// Everyone is signed in anonymously. Rooms are readable by any signed-in
+// player (so codes and invite links work) but only members can change them,
+// and nobody can wipe or take over a room they're not in.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function me() {
+      return request.auth.uid;
+    }
+
+    match /rooms/{roomId} {
+      function wasMember() {
+        return me() in resource.data.playerIds;
+      }
+
+      function wasHost() {
+        return resource.data.hostId == me();
+      }
+
+      function isExpired() {
+        return resource.data.lastActivity < request.time - duration.value(12, 'h');
+      }
+
+      function validRoom(d) {
+        return d.code is string && d.code.size() == 6
+          && d.hostId is string
+          && d.playerIds is list && d.playerIds.size() >= 1 && d.playerIds.size() <= 20
+          && d.players is list && d.players.size() == d.playerIds.size()
+          && d.hostId in d.playerIds
+          && d.lastActivity is timestamp;
+      }
+
+      // A non-member may only add themselves to the player list
+      function isJoin() {
+        let before = resource.data.playerIds.toSet();
+        let after = request.resource.data.playerIds.toSet();
+        return !wasMember()
+          && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['players', 'playerIds', 'lastActivity'])
+          && after.difference(before) == [me()].toSet()
+          && before.difference(after).size() == 0;
+      }
+
+      // Members play the game. Only the host can remove other people or hand
+      // over hosting; anyone can remove themselves.
+      function isMemberUpdate() {
+        let before = resource.data.playerIds.toSet();
+        let after = request.resource.data.playerIds.toSet();
+        let removed = before.difference(after);
+        return wasMember()
+          && after.difference(before).size() == 0
+          && (wasHost() || removed.size() == 0 || removed == [me()].toSet())
+          && (request.resource.data.hostId == resource.data.hostId
+              || wasHost()
+              // the host is leaving and someone else is taking over
+              || (removed == [resource.data.hostId].toSet() && resource.data.hostId == me()));
+      }
+
+      allow get: if signedIn();
+
+      // Code lookups and the expired-room sweep only; no bulk downloads
+      allow list: if signedIn() && request.query.limit <= 20;
+
+      allow create: if signedIn()
+        && validRoom(request.resource.data)
+        && request.resource.data.hostId == me()
+        && request.resource.data.playerIds == [me()]
+        && request.resource.data.activeActivity == null
+        && request.resource.data.createdAt == request.time
+        && request.resource.data.lastActivity == request.time;
+
+      allow update: if signedIn()
+        && validRoom(request.resource.data)
+        && request.resource.data.code == resource.data.code
+        && request.resource.data.createdAt == resource.data.createdAt
+        && (isJoin() || isMemberUpdate());
+
+      allow delete: if signedIn()
+        && (wasHost() || isExpired() || (wasMember() && resource.data.playerIds.size() == 1));
+    }
+
+    // Profile photos, stored apart from rooms to keep room updates small
+    match /profiles/{userId} {
+      allow get: if signedIn();
+      allow create, update: if signedIn()
+        && me() == userId
+        && request.resource.data.keys().hasOnly(['photo', 'updatedAt'])
+        && request.resource.data.photo is string
+        && request.resource.data.photo.size() <= 40000
+        && request.resource.data.updatedAt == request.time;
+      allow delete: if signedIn() && me() == userId;
+    }
+
+    // Everything else is closed
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

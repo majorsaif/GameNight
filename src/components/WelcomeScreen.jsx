@@ -1,150 +1,111 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../hooks/useAuth';
 import { createRoom, findRoomByCode, joinRoom } from '../hooks/useRoom';
+import { colorForUid, getInitials } from '../utils/avatar';
 import GameNightLogo from './GameNightLogo';
 import ProfileModal from './ProfileModal';
+import { useToast } from './Toast';
+
+const EMPTY_CODE = ['', '', '', '', '', ''];
 
 export default function WelcomeScreen() {
-  const [codeDigits, setCodeDigits] = useState(['', '', '', '', '', '']);
+  const [codeDigits, setCodeDigits] = useState(EMPTY_CODE);
   const [showProfileModal, setShowProfileModal] = useState(false);
+  const [busy, setBusy] = useState(null); // 'host' | 'join' | null
   const navigate = useNavigate();
-  const { user, loading } = useAuth();
+  const toast = useToast();
+  const { user, loading, authError } = useAuth();
   const inputRefs = useRef([]);
 
   useEffect(() => {
-    // If no nickname is set, redirect to onboarding
-    if (!loading && !user) {
-      navigate('/onboarding');
+    document.title = 'Its Games Night - party games for your group';
+  }, []);
+
+  useEffect(() => {
+    if (!loading && !user && !authError) {
+      navigate('/onboarding', { replace: true });
     }
-  }, [loading, user, navigate]);
+  }, [loading, user, authError, navigate]);
 
   const handleHostGame = async () => {
-    if (!user) return;
+    if (!user || busy) return;
+    setBusy('host');
     try {
-      console.log('📍 Starting room creation with user:', { userId: user.id, displayName: user.displayName });
-      const room = await createRoom(user.id, user.displayName, user.photo);
-      console.log('✅ Room created, navigating to:', `/room/${room.id}`);
+      const room = await createRoom(user);
       navigate(`/room/${room.id}`);
     } catch (error) {
-      console.error('❌ Error in handleHostGame:', error);
-      alert('Failed to create room. Please try again.');
+      console.error('Error creating room:', error);
+      toast.error(error?.message?.includes('signing') ? error.message : "Couldn't create a room. Check your connection and try again.");
+      setBusy(null);
     }
   };
 
-  const handleDigitChange = (index, value) => {
-    // Only allow alphanumeric characters
-    const sanitized = value.toUpperCase().replace(/[^A-Z0-9]/g, '');
-    
-    if (sanitized.length > 0) {
-      const newDigits = [...codeDigits];
-      newDigits[index] = sanitized[0];
-      setCodeDigits(newDigits);
-      
-      // Move to next input
-      if (index < 5) {
-        inputRefs.current[index + 1]?.focus();
+  const setCodeFrom = (text, startIndex = 0) => {
+    const chars = String(text || '').toUpperCase().replace(/[^A-Z0-9]/g, '').split('');
+    if (chars.length === 0) return;
+    const next = [...codeDigits];
+    let index = startIndex;
+    chars.forEach((char) => {
+      if (index < 6) {
+        next[index] = char;
+        index += 1;
       }
-    }
+    });
+    setCodeDigits(next);
+    inputRefs.current[Math.min(index, 5)]?.focus();
+  };
+
+  const handleDigitChange = (index, value) => {
+    if (!value) return;
+    setCodeFrom(value, index);
   };
 
   const handleDigitKeyDown = (index, e) => {
     if (e.key === 'Backspace') {
+      e.preventDefault();
+      const next = [...codeDigits];
       if (codeDigits[index] === '' && index > 0) {
-        // Move to previous input if current is empty
+        next[index - 1] = '';
         inputRefs.current[index - 1]?.focus();
       } else {
-        // Clear current digit
-        const newDigits = [...codeDigits];
-        newDigits[index] = '';
-        setCodeDigits(newDigits);
+        next[index] = '';
       }
+      setCodeDigits(next);
+    } else if (e.key === 'ArrowLeft' && index > 0) {
+      inputRefs.current[index - 1]?.focus();
+    } else if (e.key === 'ArrowRight' && index < 5) {
+      inputRefs.current[index + 1]?.focus();
     }
   };
 
-  const handleDigitPaste = (e) => {
+  const handleDigitPaste = (index, e) => {
     e.preventDefault();
-    const pastedText = e.clipboardData.getData('text').toUpperCase().replace(/[^A-Z0-9]/g, '');
-    const newDigits = [...codeDigits];
-    
-    for (let i = 0; i < Math.min(pastedText.length, 6); i++) {
-      newDigits[i] = pastedText[i];
-    }
-    
-    setCodeDigits(newDigits);
+    setCodeFrom(e.clipboardData.getData('text'), index);
   };
 
   const handleJoinGame = async (e) => {
     e.preventDefault();
-    
-    // Validate user auth is ready
-    if (!user) {
-      console.error('❌ handleJoinGame: User not authenticated');
-      alert('Please wait for authentication to complete or set a nickname first.');
-      return;
-    }
-    
-    if (!user.id) {
-      console.error('❌ handleJoinGame: User missing ID, auth still initializing');
-      alert('Authentication is still initializing. Please try again.');
-      return;
-    }
-    
+    if (!user || busy) return;
     const code = codeDigits.join('');
-    if (code.length !== 6) {
-      console.warn('⚠️ handleJoinGame: Code incomplete or invalid');
-      return;
-    }
-    
+    if (code.length !== 6) return;
+
+    setBusy('join');
     try {
-      console.log('📍 handleJoinGame: Starting join flow with code:', code, '| User:', { userId: user.id, displayName: user.displayName });
-      
-      // Find room by code
       const room = await findRoomByCode(code);
       if (!room) {
-        console.warn('❌ handleJoinGame: Room not found for code:', code);
-        alert('Room not found. Please check the code and try again.');
+        toast.error(`No active room with code ${code}. Check the code and try again.`);
+        setBusy(null);
         return;
       }
-      
-      console.log('✅ handleJoinGame: Room found, now joining:', { roomId: room.id, code: code });
-      
-      // Join the room
-      await joinRoom(room.id, user.id, user.displayName, user.photo);
-      console.log('✅ handleJoinGame: Successfully joined room, navigating to:', `/room/${room.id}`);
-      
-      setCodeDigits(['', '', '', '', '', '']);
+      await joinRoom(room.id, user);
+      setCodeDigits(EMPTY_CODE);
       navigate(`/room/${room.id}`);
     } catch (error) {
-      console.error('❌ handleJoinGame: Join failed:', error.message, error);
-      alert(`Failed to join room: ${error.message}. Please try again.`);
+      console.error('Join failed:', error);
+      toast.error(error?.message || "Couldn't join that room. Please try again.");
+      setBusy(null);
     }
-  };
-
-  // Generate initials from nickname
-  const getInitials = (name) => {
-    if (!name) return '?';
-    const parts = name.trim().split(' ');
-    if (parts.length === 1) {
-      return parts[0].substring(0, 2).toUpperCase();
-    }
-    return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
-  };
-
-  // Generate consistent color from name
-  const getAvatarColor = (name) => {
-    if (!name) return 'bg-purple-600';
-    const colors = [
-      'bg-purple-600',
-      'bg-blue-600',
-      'bg-pink-600',
-      'bg-indigo-600',
-      'bg-violet-600',
-      'bg-fuchsia-600',
-      'bg-cyan-600',
-    ];
-    const index = name.charCodeAt(0) % colors.length;
-    return colors[index];
   };
 
   if (loading) {
@@ -160,6 +121,11 @@ export default function WelcomeScreen() {
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
+      {authError && (
+        <div className="bg-red-900/60 border-b border-red-700 text-red-100 text-sm text-center px-4 py-3">
+          Couldn&apos;t connect to the game server. Check your internet connection and reload the page.
+        </div>
+      )}
       {/* Header */}
       <header className="py-8">
         <div className="max-w-md mx-auto px-6 flex justify-end items-center">
@@ -167,6 +133,7 @@ export default function WelcomeScreen() {
             onClick={() => setShowProfileModal(true)}
             className="flex items-center justify-center"
             title="Profile"
+            aria-label="Open profile"
           >
             {user?.photo ? (
               <img
@@ -175,7 +142,7 @@ export default function WelcomeScreen() {
                 className="w-10 h-10 rounded-full object-cover"
               />
             ) : user?.displayName ? (
-              <div className={`w-10 h-10 rounded-full ${getAvatarColor(user.displayName)} flex items-center justify-center text-white font-bold text-sm`}>
+              <div className={`w-10 h-10 rounded-full ${colorForUid(user.id)} flex items-center justify-center text-white font-bold text-sm`}>
                 {getInitials(user.displayName)}
               </div>
             ) : (
@@ -196,7 +163,9 @@ export default function WelcomeScreen() {
           {/* Host Game Card */}
           <button
             onClick={handleHostGame}
-            className="relative w-full bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 rounded-2xl p-8 overflow-hidden hover:shadow-xl hover:shadow-purple-900/50 active:scale-[0.98] transition-all"
+            disabled={!user || Boolean(busy)}
+            aria-busy={busy === 'host'}
+            className="relative w-full disabled:opacity-70 disabled:cursor-wait bg-gradient-to-br from-purple-600 via-purple-700 to-purple-800 rounded-2xl p-8 overflow-hidden hover:shadow-xl hover:shadow-purple-900/50 active:scale-[0.98] transition-all"
           >
             {/* Decorative emojis */}
             <div className="absolute top-2 right-2 text-4xl opacity-20 rotate-12">🃏</div>
@@ -204,7 +173,7 @@ export default function WelcomeScreen() {
             <div className="absolute top-8 right-12 text-2xl opacity-10">🎯</div>
             
             <div className="relative text-left space-y-2">
-              <h2 className="text-2xl font-bold text-white">Host a Room</h2>
+              <h2 className="text-2xl font-bold text-white">{busy === 'host' ? 'Creating room...' : 'Host a Room'}</h2>
               <p className="text-purple-100 text-sm leading-relaxed">
                 Create a live room and invite your friends to join.
               </p>
@@ -227,11 +196,18 @@ export default function WelcomeScreen() {
                     key={index}
                     ref={(el) => (inputRefs.current[index] = el)}
                     type="text"
-                    maxLength={1}
+                    inputMode="text"
+                    autoCapitalize="characters"
+                    autoComplete="off"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    aria-label={`Room code character ${index + 1}`}
+                    maxLength={6}
                     value={digit}
-                    onChange={(e) => handleDigitChange(index, e.target.value)}
+                    onChange={(e) => handleDigitChange(index, e.target.value.slice(-6))}
                     onKeyDown={(e) => handleDigitKeyDown(index, e)}
-                    onPaste={index === 0 ? handleDigitPaste : undefined}
+                    onPaste={(e) => handleDigitPaste(index, e)}
+                    onFocus={(e) => e.target.select()}
                     className="w-12 h-14 bg-[#16213e] border border-[#2a3f5f] rounded-lg text-white text-center text-xl font-bold uppercase outline-none focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 transition-all"
                   />
                 ))}
@@ -240,16 +216,39 @@ export default function WelcomeScreen() {
               {/* Full-width Join Button */}
               <button
                 type="submit"
-                disabled={codeDigits.join('').length !== 6}
+                disabled={codeDigits.join('').length !== 6 || Boolean(busy)}
                 className="w-full py-4 bg-purple-600 hover:bg-purple-700 disabled:bg-slate-700 disabled:text-slate-500 text-white font-bold rounded-xl transition-colors disabled:cursor-not-allowed"
               >
-                Join
+                {busy === 'join' ? 'Joining...' : 'Join'}
               </button>
             </form>
+
+            <div className="pt-8">
+              <button
+                onClick={() => navigate('/one-phone')}
+                className="relative w-full bg-gradient-to-br from-sky-500 via-sky-600 to-sky-700 rounded-2xl p-8 overflow-hidden hover:shadow-xl hover:shadow-sky-900/50 active:scale-[0.98] transition-all"
+              >
+                <div className="absolute top-2 right-2 text-4xl opacity-20 rotate-12" aria-hidden="true">📱</div>
+                <div className="absolute bottom-4 right-8 text-3xl opacity-15 -rotate-6" aria-hidden="true">🎲</div>
+                <div className="absolute top-8 right-12 text-2xl opacity-10" aria-hidden="true">✨</div>
+                <div className="relative text-left space-y-2">
+                  <h2 className="text-2xl font-bold text-white">Pass &amp; Play</h2>
+                  <p className="text-sky-100 text-sm leading-relaxed">
+                    Only one phone? Play together on a single device.
+                  </p>
+                </div>
+              </button>
+            </div>
           </div>
 
         </div>
       </div>
+
+      <footer className="py-6 text-center text-xs text-slate-600">
+        <Link to="/privacy" className="hover:text-slate-400">Privacy</Link>
+        <span className="mx-2">·</span>
+        <span>Mafia · Word Imposter · Spyfall · Spin the Wheel</span>
+      </footer>
 
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />
     </div>

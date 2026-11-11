@@ -14,21 +14,21 @@ const spyfallRules = {
     },
     {
       heading: 'Ready to Vote',
-      text: 'Any active player can click "Ready to Vote" at any time. When all active players have clicked Ready to Vote, voting starts automatically. The host can also click "Start Voting" to begin immediately.',
+      text: 'Any active player can tap "Ready to Vote" at any time. When everyone is ready, or the timer runs out, voting starts automatically. The host can also tap "Start Voting" to begin straight away. Tap locations on your list to cross them out as you rule them out.',
     },
     {
       heading: 'Spy Guess',
-      text: 'At any point during questioning, a spy can click "Ready to Guess." All players are notified and the host confirms whether the spy guessed correctly. A correct guess wins the game for the spy; an incorrect guess eliminates that spy.',
+      text: 'During questioning or voting, a spy can tap "Ready to Guess". The game pauses, the spy names the location out loud and the host confirms whether it was right. A correct guess wins the game for the spies; a wrong guess eliminates that spy.',
     },
     {
       heading: 'Voting',
-      text: 'Each player votes for who they think the spy is. The player with the most votes is eliminated — ties are broken randomly. If the eliminated player is a spy, the game may continue with remaining spies. If they are innocent, the spy wins.',
+      text: 'Each player votes for who they think the spy is. The player with the most votes is eliminated, and ties are broken at random. If they were a spy and other spies remain, questioning continues. If they were innocent, the spies win.',
     },
     {
       heading: 'Win Conditions',
       items: [
-        { role: 'Spy wins', text: 'All non-spy players vote to end the game and the spy correctly guesses the location, OR the spy clicks Ready to Guess and the host confirms a correct guess.' },
-        { role: 'Town wins', text: 'All spies are voted out or guess the location incorrectly.' },
+        { role: 'Spies win', text: 'An innocent player is voted out, or a spy correctly guesses the location.' },
+        { role: 'Town wins', text: 'Every spy is voted out or guesses the location wrong.' },
       ],
     },
   ],

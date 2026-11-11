@@ -1,5 +1,5 @@
 import React from 'react';
-import logo from '../assets/itsgamesnight-logo.png';
+import logo from '../assets/itsgamesnight-logo.webp';
 
 export default function GameNightLogo({ size = 'compact', className = '' }) {
   const logoSizeClass = size === 'hero' ? 'h-20' : 'h-8';
