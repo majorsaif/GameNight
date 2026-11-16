@@ -6,9 +6,6 @@ import { ACCENT_TINT } from '../games/catalog';
 import { useToast } from './Toast';
 import GameSettings, { summarizeRules, validateRules } from './GameSettings';
 import RulesSheet from './RulesSheet';
-
-// Temporary re-export while Pass & Play is rebuilt on the design system.
-export { Toggle } from '../ui';
 import { Avatar, Badge, Button, Card, ConfirmDialog, Notice, ScreenFooter, Sheet, cn, playerName } from '../ui';
 
 /**

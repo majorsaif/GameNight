@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { arrayUnion } from 'firebase/firestore';
-import { Eye, EyeOff, Hourglass, Search, Skull, Stethoscope, User, Volume2 } from 'lucide-react';
+import { Eye, EyeOff, Hourglass, Volume2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { endActivity, useRoom } from '../hooks/useRoom';
 import { transitionActivity, updateActivity, useAutoAdvance, useCountdown } from '../lib/activity';
@@ -10,11 +10,7 @@ import { GAMES } from '../games/catalog';
 import VotingPanel from './VotingPanel';
 import GameShell, { GameLoading } from './GameShell';
 import { useToast } from './Toast';
-import mafiaRoleCardImage from '../assets/mafia/mafia-card.webp';
-import detectiveRoleCardImage from '../assets/mafia/detective-card.webp';
-import doctorRoleCardImage from '../assets/mafia/doctor-card.webp';
-import civilianRoleCardImage from '../assets/mafia/civilian-card.webp';
-import cardBackImage from '../assets/mafia/card-back.webp';
+import { RoleBadge, RoleCard } from '../mafia/roles';
 import { KILL_NOTE, SAVE_NOTE } from '../mafia/causes';
 import {
   activeActorUids,
@@ -50,39 +46,6 @@ const PHASE_SOUNDS = {
   'night-detective': MAFIA_SOUNDS.DETECTIVE_WAKE,
   'day-discussion': MAFIA_SOUNDS.DAY_START
 };
-
-export const MAFIA_ROLES = {
-  mafia: { label: 'Mafia', tone: 'mafia', icon: Skull, image: mafiaRoleCardImage },
-  doctor: { label: 'Doctor', tone: 'success', icon: Stethoscope, image: doctorRoleCardImage },
-  detective: { label: 'Detective', tone: 'warning', icon: Search, image: detectiveRoleCardImage },
-  civilian: { label: 'Civilian', tone: 'neutral', icon: User, image: civilianRoleCardImage }
-};
-
-export function RoleBadge({ role }) {
-  const meta = MAFIA_ROLES[role] || MAFIA_ROLES.civilian;
-  return <Badge tone={meta.tone} icon={meta.icon}>{meta.label}</Badge>;
-}
-
-/** The illustrated role card. `rotation` drives the flip animation. */
-export function RoleCard({ image, alt, rotation = 0, onClick, disabled }) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      className="mx-auto block w-56 rounded-card md:w-64"
-      style={{ perspective: '600px' }}
-      aria-label={alt}
-    >
-      <img
-        src={image}
-        alt=""
-        className="aspect-[432/608] w-full rounded-card border border-line-strong object-cover shadow-pop"
-        style={{ transform: `rotateY(${rotation}deg)`, transition: 'transform 0.3s ease' }}
-      />
-    </button>
-  );
-}
 
 /** Night-time choice for the Mafia, Doctor or Detective. */
 function NightAction({ title, hint, seconds, candidates, selected, locked, onSelect, onConfirm, confirmLabel, lockedLabel, renderSubtitle, children }) {
@@ -148,12 +111,8 @@ export default function MafiaGame() {
   const phaseId = gameState?.phaseId ?? 0;
 
   const [showRole, setShowRole] = useState(false);
-  const [isRoleCardFrontVisible, setIsRoleCardFrontVisible] = useState(false);
-  const [isCardFlipping, setIsCardFlipping] = useState(false);
-  const [cardRotationY, setCardRotationY] = useState(0);
   const [selectedPlayer, setSelectedPlayer] = useState(null);
   const [busy, setBusy] = useState(false);
-  const flipTimeoutsRef = useRef([]);
   const lastSoundPhaseRef = useRef(null);
 
   const timeLeft = useCountdown(gameState?.phaseEndsAt || null);
@@ -191,16 +150,9 @@ export default function MafiaGame() {
     setSelectedPlayer(own);
   }, [phaseId]);
 
-  useEffect(() => () => flipTimeoutsRef.current.forEach((id) => clearTimeout(id)), []);
-
+  // Never leave a role showing once the role-card phase is over
   useEffect(() => {
-    if (phase === 'roles') return;
-    flipTimeoutsRef.current.forEach((id) => clearTimeout(id));
-    flipTimeoutsRef.current = [];
-    setShowRole(false);
-    setIsRoleCardFrontVisible(false);
-    setIsCardFlipping(false);
-    setCardRotationY(0);
+    if (phase !== 'roles') setShowRole(false);
   }, [phase]);
 
   const guard = { type: 'mafia', phaseId };
@@ -238,28 +190,6 @@ export default function MafiaGame() {
 
   const isCurrentUserAlive = () => Boolean(me && me.isAlive);
   const getSelectablePlayers = () => selectableTargets(gameState, user?.id);
-
-  const runRoleCardFlip = (nextFrontVisible) => {
-    if (isCardFlipping) return;
-    flipTimeoutsRef.current.forEach((id) => clearTimeout(id));
-    setIsCardFlipping(true);
-    setCardRotationY(90);
-    const halfway = setTimeout(() => {
-      setIsRoleCardFrontVisible(nextFrontVisible);
-      setCardRotationY(0);
-    }, 300);
-    const complete = setTimeout(() => {
-      setShowRole(nextFrontVisible);
-      setIsCardFlipping(false);
-      flipTimeoutsRef.current = [];
-    }, 600);
-    flipTimeoutsRef.current = [halfway, complete];
-  };
-
-  const handleToggleRole = () => {
-    if (isCardFlipping) return;
-    runRoleCardFlip(!showRole);
-  };
 
   const withBusy = async (fn) => {
     if (busy) return;
@@ -384,20 +314,13 @@ export default function MafiaGame() {
           )
         };
       }
-      const roleMeta = MAFIA_ROLES[myRole] || MAFIA_ROLES.civilian;
       return {
         subtitle: 'Role cards',
         body: (
           <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4">
             <PhaseTitle title="Your role card" hint="For your eyes only. Tap the card to flip it." />
-            <RoleCard
-              image={isRoleCardFrontVisible ? roleMeta.image : cardBackImage}
-              alt={showRole ? `Your role is ${roleMeta.label}. Tap to hide.` : 'Role card, face down. Tap to reveal.'}
-              rotation={cardRotationY}
-              onClick={handleToggleRole}
-              disabled={isCardFlipping}
-            />
-            <Button variant="secondary" icon={showRole ? EyeOff : Eye} onClick={handleToggleRole} disabled={isCardFlipping}>
+            <RoleCard role={myRole} flipped={showRole} onToggle={() => setShowRole((v) => !v)} />
+            <Button variant="secondary" icon={showRole ? EyeOff : Eye} onClick={() => setShowRole((v) => !v)}>
               {showRole ? 'Hide role' : 'Reveal role'}
             </Button>
             <ScreenFooter>

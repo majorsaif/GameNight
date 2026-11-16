@@ -33,8 +33,7 @@ function MenuRow({ icon: Icon, tone = 'default', children, ...rest }) {
 export default function GameShell({
   roomId,
   isHost,
-  game: gameProp,
-  gameName,
+  game,
   subtitle = null,
   tone = 'default',
   width = 'column',
@@ -47,8 +46,6 @@ export default function GameShell({
   const [menuOpen, setMenuOpen] = useState(false);
   const [rulesOpen, setRulesOpen] = useState(false);
   const [confirmEnd, setConfirmEnd] = useState(false);
-  // `gameName` is the old API, still used by games not yet rebuilt
-  const game = gameProp || { name: gameName, icon: BookOpen, accent: 'mafia', rules: null };
   const Icon = game.icon;
   const night = tone === 'night';
 

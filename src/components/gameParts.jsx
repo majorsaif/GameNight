@@ -50,37 +50,45 @@ export function ReadyStatus({ players, readyUids, label = 'Ready to vote' }) {
   );
 }
 
+/** The revealed side of a secret: a label, the secret itself in large type, and any extra lines. */
+export function SecretFace({ accent, label, value, details = [], valueTone = 'accent', children }) {
+  const long = String(value || '').length > 12;
+  return (
+    <Card className="flex min-h-72 flex-col items-center justify-center gap-4 text-center">
+      <p className="text-base font-medium text-ink-muted">{label}</p>
+      <p className={cn('break-words font-bold', long ? 'text-3xl' : 'text-4xl', valueTone === 'danger' ? 'text-danger' : ACCENT_TEXT[accent])}>
+        {value}
+      </p>
+      {details.filter(Boolean).map((detail) => (
+        <p key={detail} className="text-lg text-ink-muted">{detail}</p>
+      ))}
+      {children}
+    </Card>
+  );
+}
+
 /**
  * A secret only one player should see (their word, location or role).
  * Hidden until tapped, with type large enough to read at arm's length.
  */
-export function SecretCard({ revealed, onToggle, accent, label, value, details = [], hiddenTitle = 'Your secret is hidden', valueTone = 'accent' }) {
-  const long = String(value || '').length > 12;
+export function SecretCard({ revealed, onToggle, accent, hiddenTitle = 'Your secret is hidden', ...face }) {
+  if (revealed) {
+    return (
+      <SecretFace accent={accent} {...face}>
+        <Button variant="secondary" icon={EyeOff} onClick={onToggle}>Hide</Button>
+      </SecretFace>
+    );
+  }
   return (
     <Card className="flex min-h-72 flex-col items-center justify-center gap-4 text-center">
-      {revealed ? (
-        <>
-          <p className="text-base font-medium text-ink-muted">{label}</p>
-          <p className={cn('break-words font-bold', long ? 'text-3xl' : 'text-4xl', valueTone === 'danger' ? 'text-danger' : ACCENT_TEXT[accent])}>
-            {value}
-          </p>
-          {details.filter(Boolean).map((detail) => (
-            <p key={detail} className="text-lg text-ink-muted">{detail}</p>
-          ))}
-          <Button variant="secondary" icon={EyeOff} onClick={onToggle}>Hide</Button>
-        </>
-      ) : (
-        <>
-          <span className={cn('inline-flex h-16 w-16 items-center justify-center rounded-full', ACCENT_TINT[accent])}>
-            <EyeOff className="h-8 w-8" aria-hidden="true" />
-          </span>
-          <div>
-            <p className="text-xl font-semibold text-ink">{hiddenTitle}</p>
-            <p className="mt-1 text-base text-ink-muted">Make sure nobody else can see your screen.</p>
-          </div>
-          <Button icon={Eye} onClick={onToggle}>Reveal</Button>
-        </>
-      )}
+      <span className={cn('inline-flex h-16 w-16 items-center justify-center rounded-full', ACCENT_TINT[accent])}>
+        <EyeOff className="h-8 w-8" aria-hidden="true" />
+      </span>
+      <div>
+        <p className="text-xl font-semibold text-ink">{hiddenTitle}</p>
+        <p className="mt-1 text-base text-ink-muted">Make sure nobody else can see your screen.</p>
+      </div>
+      <Button icon={Eye} onClick={onToggle}>Reveal</Button>
     </Card>
   );
 }
