@@ -15,6 +15,7 @@ No app install and no sign-up.
 ## Stack
 
 - React 19 + React Router 7, built with Vite, styled with Tailwind CSS
+- Design system: tokens in `tailwind.config.js`, app components in `src/ui/`, and the printed game props (case files, ballots, reports, boarding passes) in `src/components/props.jsx`. Icons are `lucide-react`; fonts are self-hosted with Fontsource.
 - Firebase Anonymous Auth + Cloud Firestore (real-time room state)
 - Hosted on Vercel (Hobby). Firebase runs on the free Spark plan, so it can never bill you; at worst it pauses until the daily quota resets.
 
