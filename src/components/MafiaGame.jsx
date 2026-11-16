@@ -1,11 +1,12 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { arrayUnion } from 'firebase/firestore';
+import { Eye, EyeOff, Hourglass, Search, Skull, Stethoscope, User, Volume2 } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { endActivity, useRoom } from '../hooks/useRoom';
 import { transitionActivity, updateActivity, useAutoAdvance, useCountdown } from '../lib/activity';
-import { getInitials } from '../utils/avatar';
 import { MAFIA_SOUNDS, playSound, preloadMafiaSounds } from '../mafia/sounds';
+import { GAMES } from '../games/catalog';
 import VotingPanel from './VotingPanel';
 import GameShell, { GameLoading } from './GameShell';
 import { useToast } from './Toast';
@@ -25,6 +26,22 @@ import {
   startDayVoteUpdates,
   startNightUpdates
 } from '../games/mafia/logic';
+import { EliminatedNotice, Facts, PhaseTitle, ReadyStatus, ResultList, SleepScreen, WinnerBanner } from './gameParts';
+import {
+  Avatar,
+  AvatarStack,
+  Badge,
+  Button,
+  Card,
+  Countdown,
+  EmptyState,
+  Notice,
+  ScreenFooter,
+  SectionHeading,
+  SelectableRow,
+  cn,
+  playerName
+} from '../ui';
 
 const PHASE_SOUNDS = {
   'night-eyes-closed': MAFIA_SOUNDS.NIGHT_START,
@@ -33,6 +50,91 @@ const PHASE_SOUNDS = {
   'night-detective': MAFIA_SOUNDS.DETECTIVE_WAKE,
   'day-discussion': MAFIA_SOUNDS.DAY_START
 };
+
+export const MAFIA_ROLES = {
+  mafia: { label: 'Mafia', tone: 'mafia', icon: Skull, image: mafiaRoleCardImage },
+  doctor: { label: 'Doctor', tone: 'success', icon: Stethoscope, image: doctorRoleCardImage },
+  detective: { label: 'Detective', tone: 'warning', icon: Search, image: detectiveRoleCardImage },
+  civilian: { label: 'Civilian', tone: 'neutral', icon: User, image: civilianRoleCardImage }
+};
+
+export function RoleBadge({ role }) {
+  const meta = MAFIA_ROLES[role] || MAFIA_ROLES.civilian;
+  return <Badge tone={meta.tone} icon={meta.icon}>{meta.label}</Badge>;
+}
+
+/** The illustrated role card. `rotation` drives the flip animation. */
+export function RoleCard({ image, alt, rotation = 0, onClick, disabled }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      className="mx-auto block w-56 rounded-card md:w-64"
+      style={{ perspective: '600px' }}
+      aria-label={alt}
+    >
+      <img
+        src={image}
+        alt=""
+        className="aspect-[432/608] w-full rounded-card border border-line-strong object-cover shadow-pop"
+        style={{ transform: `rotateY(${rotation}deg)`, transition: 'transform 0.3s ease' }}
+      />
+    </button>
+  );
+}
+
+/** Night-time choice for the Mafia, Doctor or Detective. */
+function NightAction({ title, hint, seconds, candidates, selected, locked, onSelect, onConfirm, confirmLabel, lockedLabel, renderSubtitle, children }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <Countdown seconds={seconds} size="lg" />
+      <PhaseTitle title={title} hint={hint} />
+      <ul className="grid gap-2 md:grid-cols-2">
+        {candidates.map((player) => (
+          <li key={player.uid}>
+            <SelectableRow
+              selected={selected === player.uid}
+              disabled={locked}
+              onClick={() => onSelect(player.uid)}
+              leading={<Avatar player={player} size="lg" />}
+              title={playerName(player)}
+              subtitle={renderSubtitle?.(player)}
+            />
+          </li>
+        ))}
+      </ul>
+      {children}
+      <ScreenFooter>
+        <Button size="lg" block onClick={onConfirm} disabled={!selected || locked}>
+          {locked ? lockedLabel : confirmLabel}
+        </Button>
+      </ScreenFooter>
+    </div>
+  );
+}
+
+/** What players who are out (or watching) see while a night role acts. */
+function NightWatch({ title, seconds, candidates, countFor, markLabel }) {
+  return (
+    <div className="flex flex-col gap-4">
+      <Countdown seconds={seconds} size="lg" />
+      <PhaseTitle title={title} hint="You can see this because you're not in the round." />
+      <ul className="grid gap-2 md:grid-cols-2">
+        {candidates.map((player) => {
+          const count = countFor(player);
+          return (
+            <li key={player.uid} className="flex min-h-16 items-center gap-3 rounded-control border border-line bg-surface px-3 py-2">
+              <Avatar player={player} size="lg" />
+              <span className="min-w-0 flex-1 truncate text-base font-medium text-ink">{playerName(player)}</span>
+              {count > 0 && <Badge tone="brand">{markLabel(count)}</Badge>}
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
 
 export default function MafiaGame() {
   const { roomId } = useParams();
@@ -71,6 +173,7 @@ export default function MafiaGame() {
   }, [gameState?.players, room?.playerIds, user?.id]);
 
   useEffect(() => {
+    document.title = 'Mafia | Its Games Night';
     preloadMafiaSounds();
   }, []);
 
@@ -86,7 +189,7 @@ export default function MafiaGame() {
     if (!gameState) return;
     const own = gameState.nightVotes?.[user?.id] || gameState.dayVotes?.[user?.id] || null;
     setSelectedPlayer(own);
-  }, [phaseId]);  
+  }, [phaseId]);
 
   useEffect(() => () => flipTimeoutsRef.current.forEach((id) => clearTimeout(id)), []);
 
@@ -133,26 +236,6 @@ export default function MafiaGame() {
     ))
   });
 
-  const getPlayerPhoto = (player) => player?.photo || room?.players?.find((p) => p.id === player?.uid)?.photo || null;
-
-  const renderPlayerAvatar = (player, sizeClasses, textSizeClasses = 'text-sm', extraClasses = '') => {
-    const playerPhoto = getPlayerPhoto(player);
-    if (playerPhoto) {
-      return (
-        <img
-          src={playerPhoto}
-          alt={player.displayName}
-          className={`${sizeClasses} rounded-full object-cover ${extraClasses}`.trim()}
-        />
-      );
-    }
-    return (
-      <div className={`${sizeClasses} ${player.avatarColor || 'bg-slate-600'} rounded-full flex items-center justify-center text-white font-bold ${textSizeClasses} ${extraClasses}`.trim()}>
-        {getInitials(player.displayName)}
-      </div>
-    );
-  };
-
   const isCurrentUserAlive = () => Boolean(me && me.isAlive);
   const getSelectablePlayers = () => selectableTargets(gameState, user?.id);
 
@@ -173,14 +256,9 @@ export default function MafiaGame() {
     flipTimeoutsRef.current = [halfway, complete];
   };
 
-  const handleRevealRole = () => {
-    if (showRole || isCardFlipping) return;
-    runRoleCardFlip(true);
-  };
-
-  const handleHideRole = () => {
-    if (!showRole || isCardFlipping) return;
-    runRoleCardFlip(false);
+  const handleToggleRole = () => {
+    if (isCardFlipping) return;
+    runRoleCardFlip(!showRole);
   };
 
   const withBusy = async (fn) => {
@@ -254,1064 +332,497 @@ export default function MafiaGame() {
     navigate(`/room/${roomId}`);
   });
 
-  const isSpectator = () => {
-    if (!myRole) return true;
-    return Boolean(me && !me.isAlive);
-  };
-
   const isDeadSpectator = () => Boolean(me && !me.isAlive);
-
-  const renderEliminatedBanner = () => (
-    <div className="relative overflow-hidden bg-[#e3d2ad] border border-[#c4ab78] rounded-lg p-4 mb-6 text-center shadow-lg">
-      <h2 className="text-black font-serif font-black text-lg uppercase tracking-wide">
-        YOU HAVE BEEN
-        <span
-          className="inline-block align-middle ml-2 border-2 border-[#6d1010] rounded-sm px-2 py-1 text-[#6d1010] text-xs font-bold uppercase tracking-widest opacity-80"
-          style={{ transform: 'rotate(10deg)', fontFamily: "'Courier Prime', monospace" }}
-        >
-          ELIMINATED
-        </span>
-      </h2>
-    </div>
-  );
-
-  const getRoleIcon = (role) => {
-    switch (role) {
-      case 'mafia': return '🔪';
-      case 'civilian': return '👤';
-      case 'doctor': return '🩺';
-      case 'detective': return '🔍';
-      default: return '❓';
-    }
-  };
-
-  const getRoleCardImage = (role) => {
-    switch (role) {
-      case 'mafia': return mafiaRoleCardImage;
-      case 'detective': return detectiveRoleCardImage;
-      case 'doctor': return doctorRoleCardImage;
-      case 'civilian': return civilianRoleCardImage;
-      default: return cardBackImage;
-    }
-  };
-
-  const formatTime = (seconds) => {
-    const mins = Math.floor(seconds / 60);
-    const secs = seconds % 60;
-    return `${mins}:${secs.toString().padStart(2, '0')}`;
-  };
+  const isSpectator = () => !myRole || isDeadSpectator();
 
   if (authLoading || roomLoading) return <GameLoading />;
   if (!user) return <Navigate to="/onboarding" replace state={{ redirectTo: `/room/${roomId}/games/mafia` }} />;
   if (roomError || !room) return <Navigate to={`/room/${roomId}`} replace />;
   if (!gameState || phase === 'lobby') return <Navigate to={`/room/${roomId}`} replace />;
 
+  const round = gameState.roundNumber ?? 1;
+  const view = renderPhase();
+
   return (
-    <GameShell roomId={roomId} isHost={isHost} gameName="Mafia" onEndGame={() => endActivity(roomId)}>
-      {renderPhase()}
+    <GameShell
+      roomId={roomId}
+      isHost={isHost}
+      game={GAMES.mafia}
+      subtitle={view.subtitle}
+      tone={view.tone}
+      width={view.width}
+      phaseKey={view.key || phase}
+      onEndGame={() => endActivity(roomId)}
+    >
+      {view.body}
     </GameShell>
   );
 
+  function sleepView(key, seconds = null) {
+    return {
+      key,
+      subtitle: `Night ${round}`,
+      tone: 'night',
+      body: (
+        <SleepScreen seconds={seconds}>
+          {isDeadSpectator() && <EliminatedNotice />}
+        </SleepScreen>
+      )
+    };
+  }
+
   function renderPhase() {
-  // Phase 3: Role reveal
-  if (gameState?.phase === 'roles') {
-    if (!myRole) {
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
-          <div className="w-full max-w-md text-center">
-            <div className="bg-slate-800/50 border border-slate-700 rounded-2xl p-8">
-              <div className="text-6xl mb-4">⏳</div>
-              <p className="text-slate-300 text-lg">Waiting for host to start the night...</p>
+    // Role reveal
+    if (phase === 'roles') {
+      if (!myRole) {
+        return {
+          subtitle: 'Role cards',
+          body: (
+            <div className="flex flex-1 flex-col justify-center">
+              <EmptyState icon={Eye} title="You're watching this game" message="Players are looking at their role cards. The night starts soon." />
             </div>
+          )
+        };
+      }
+      const roleMeta = MAFIA_ROLES[myRole] || MAFIA_ROLES.civilian;
+      return {
+        subtitle: 'Role cards',
+        body: (
+          <div className="flex flex-1 flex-col items-center justify-center gap-6 py-4">
+            <PhaseTitle title="Your role card" hint="For your eyes only. Tap the card to flip it." />
+            <RoleCard
+              image={isRoleCardFrontVisible ? roleMeta.image : cardBackImage}
+              alt={showRole ? `Your role is ${roleMeta.label}. Tap to hide.` : 'Role card, face down. Tap to reveal.'}
+              rotation={cardRotationY}
+              onClick={handleToggleRole}
+              disabled={isCardFlipping}
+            />
+            <Button variant="secondary" icon={showRole ? EyeOff : Eye} onClick={handleToggleRole} disabled={isCardFlipping}>
+              {showRole ? 'Hide role' : 'Reveal role'}
+            </Button>
+            <ScreenFooter>
+              {isHost ? (
+                <Button size="lg" block onClick={startNightPhase} loading={busy}>Start the night</Button>
+              ) : (
+                <Notice icon={Hourglass}>Waiting for the host to start the night.</Notice>
+              )}
+            </ScreenFooter>
           </div>
-        </div>
-      );
+        )
+      };
     }
 
-    const displayedRoleCardImage = isRoleCardFrontVisible ? getRoleCardImage(myRole) : cardBackImage;
+    // Night - everyone's eyes closed
+    if (phase.startsWith('night-eyes-closed')) {
+      const isInitialNight = phase === 'night-eyes-closed';
+      const showVolumePrompt = isInitialNight && round === 1 && timeLeft !== null && timeLeft > 5;
+      if (showVolumePrompt) {
+        const volumeCountdown = Math.max(1, Math.min(7, timeLeft - 5));
+        return {
+          key: 'volume',
+          subtitle: 'Night 1',
+          tone: 'night',
+          body: (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
+              <Volume2 className="h-16 w-16 text-brand-300" aria-hidden="true" />
+              <h2 className="text-4xl font-bold text-ink">Turn your volume up</h2>
+              <p className="max-w-xs text-lg text-ink-muted">Sound cues tell each role when to wake.</p>
+              <p className="tabular text-timer font-bold text-ink" aria-live="off">{volumeCountdown}</p>
+            </div>
+          )
+        };
+      }
+      return sleepView('sleep', timeLeft);
+    }
 
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-6">
-        <div className="w-full max-w-md">
-          <div className="text-center">
-            <h1 className="text-white text-2xl font-bold mb-6">For your eyes only</h1>
-
-            <div
-              className="mx-auto w-[200px] h-[280px]"
-              style={{
-                perspective: '600px',
-                WebkitPerspective: '600px'
-              }}
-            >
-              <img
-                src={displayedRoleCardImage}
-                alt={showRole ? `${myRole} role card` : 'Mafia role card back'}
-                className="w-full h-full rounded-2xl border border-white/20 object-cover shadow-2xl"
-                style={{
-                  transform: `rotateY(${cardRotationY}deg)`,
-                  WebkitTransform: `rotateY(${cardRotationY}deg)`,
-                  transition: 'transform 0.3s ease',
-                  WebkitTransition: '-webkit-transform 0.3s ease, transform 0.3s ease',
-                  transformStyle: 'preserve-3d',
-                  WebkitTransformStyle: 'preserve-3d',
-                  backfaceVisibility: 'hidden',
-                  WebkitBackfaceVisibility: 'hidden'
-                }}
+    // Night - Mafia turn
+    if (phase === 'night-mafia') {
+      const isMafia = myRole === 'mafia' && me?.isAlive;
+      if (isSpectator()) {
+        const mafiaVotes = gameState.nightVotes || {};
+        return {
+          subtitle: `Night ${round}`,
+          width: 'wide',
+          body: (
+            <div className="flex flex-col gap-4">
+              {isDeadSpectator() && <EliminatedNotice />}
+              <NightWatch
+                title="The Mafia are choosing"
+                seconds={timeLeft}
+                candidates={getSelectablePlayers()}
+                countFor={(player) => Object.values(mafiaVotes).filter((v) => v === player.uid).length}
+                markLabel={(count) => `${count} vote${count === 1 ? '' : 's'}`}
               />
             </div>
+          )
+        };
+      }
+      if (!isMafia) return sleepView('sleep');
 
-            {!showRole ? (
-              <button
-                onClick={handleRevealRole}
-                disabled={isCardFlipping}
-                className="w-full max-w-[18rem] mx-auto h-14 mt-6 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
-              >
-                Reveal Role
-              </button>
-            ) : (
-              <button
-                onClick={handleHideRole}
-                disabled={isCardFlipping}
-                className="w-full max-w-[18rem] mx-auto h-14 mt-6 flex items-center justify-center bg-white/20 hover:bg-white/30 disabled:opacity-60 disabled:cursor-not-allowed text-white font-bold rounded-xl transition-colors"
-              >
-                Hide
-              </button>
-            )}
-          </div>
-
-          <div className="mt-6">
-            {isHost ? (
-              <button
-                onClick={startNightPhase}
-                disabled={busy}
-                className="w-full max-w-[18rem] mx-auto h-14 flex items-center justify-center bg-gradient-to-r from-violet-600 to-purple-600 hover:from-violet-500 hover:to-purple-500 text-white font-bold rounded-xl transition-colors"
-              >
-                Start Night
-              </button>
-            ) : (
-              <div className="w-full max-w-[18rem] mx-auto h-14 bg-slate-800/50 border border-slate-700 rounded-xl flex items-center justify-center text-center px-3">
-                <p className="text-slate-300">Waiting for host to start the night...</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Night phase - Eyes closed
-  if (gameState?.phase?.startsWith('night-eyes-closed')) {
-    const isInitialNight = gameState?.phase === 'night-eyes-closed';
-    const isFirstRound = (gameState?.roundNumber ?? 1) === 1;
-    const showFirstNightVolumePrompt =
-      isInitialNight &&
-      isFirstRound &&
-      timeLeft !== null &&
-      timeLeft > 5;
-
-    if (showFirstNightVolumePrompt) {
-      const volumeCountdown = Math.max(1, Math.min(7, timeLeft - 5));
-      return (
-        <div className="min-h-screen bg-black p-6 flex items-center justify-center">
-          <div className="text-center">
-            <div className="text-9xl mb-8">🔊</div>
-            <h1 className="text-white text-4xl font-black mb-4">Turn up your volume</h1>
-            <p className="text-slate-300 text-lg mb-12">Sound effects are coming...</p>
-            <div className="text-6xl font-bold text-slate-400">{volumeCountdown}</div>
-          </div>
-        </div>
-      );
-    }
-
-    return (
-      <div className="min-h-screen bg-black p-6">
-        <div className="w-full max-w-md mx-auto">
-          {isDeadSpectator() && renderEliminatedBanner()}
-
-          <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-8xl mb-6">😴</div>
-              <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-              {timeLeft !== null && (
-                <p className="text-slate-300 font-mono text-2xl mt-4">{formatTime(timeLeft)}</p>
-              )}
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Night phase - Mafia turn
-  if (gameState?.phase === 'night-mafia') {
-    const isMafia = myRole === 'mafia' && gameState.players.find(p => p.uid === user?.id)?.isAlive;
-    const spectator = isSpectator();
-
-    if (spectator) {
-      // Show spectator view
-      const mafiaVotes = gameState.nightVotes || {};
-      const selectablePlayers = getSelectablePlayers();
-
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
-          <div className="w-full max-w-md mx-auto">
-            {isDeadSpectator() && renderEliminatedBanner()}
-
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 mb-4">
-              <div className="text-center mb-4">
-                <h3 className="text-white font-semibold text-lg">Mafia Voting</h3>
-                {timeLeft !== null && (
-                  <p className="text-red-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                {selectablePlayers.map((player) => {
-                  const voteCount = Object.values(mafiaVotes).filter(v => v === player.uid).length;
-                  return (
-                    <div
-                      key={player.uid}
-                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                        <span className="text-white">{player.displayName}</span>
-                      </div>
-                      {voteCount > 0 && (
-                        <span className="text-red-400 font-bold">{voteCount} 🔪</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (!isMafia) {
-      return (
-        <div className="min-h-screen bg-black p-6">
-          <div className="w-full max-w-md mx-auto">
-            {isDeadSpectator() && renderEliminatedBanner()}
-
-            <div className="min-h-[70vh] flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-8xl mb-6">😴</div>
-                <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Active mafia player
-    const selectablePlayers = getSelectablePlayers();
-    const mafiaPlayers = gameState.players.filter((player) => player.role === 'mafia');
-    const sortedMafiaPlayers = [...mafiaPlayers].sort((a, b) => {
-      if (a.isAlive === b.isAlive) return 0;
-      return a.isAlive ? -1 : 1;
-    });
-    const mafiaSelections = gameState.mafiaSelections || {};
-    const showMafiaCoordination = true;
-    
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-red-950 via-red-900 to-red-950 p-6 pt-16">
-        <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-6">
-            {timeLeft !== null && (
-              <div className="text-red-300 font-mono text-4xl mb-2">{formatTime(timeLeft)}</div>
-            )}
-            <h2 className="text-white text-xl font-semibold">Choose a player to kill</h2>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.map((player) => {
-              const selectorsForPlayer = mafiaPlayers.filter(
-                (mafiaPlayer) => mafiaSelections[mafiaPlayer.uid]?.targetUid === player.uid
-              );
-
+      const mafiaPlayers = gameState.players.filter((player) => player.role === 'mafia');
+      const sortedMafiaPlayers = [...mafiaPlayers].sort((a, b) => {
+        if (a.isAlive === b.isAlive) return 0;
+        return a.isAlive ? -1 : 1;
+      });
+      const mafiaSelections = gameState.mafiaSelections || {};
+      return {
+        subtitle: `Night ${round}`,
+        width: 'wide',
+        body: (
+          <NightAction
+            title="Choose who to eliminate"
+            hint={mafiaPlayers.length > 1 ? 'Look up and agree with your team. Most-picked wins.' : 'Pick quietly. Everyone else has their eyes shut.'}
+            seconds={timeLeft}
+            candidates={getSelectablePlayers()}
+            selected={selectedPlayer}
+            locked={hasConfirmed}
+            onSelect={handleVotePlayer}
+            onConfirm={handleConfirmVote}
+            confirmLabel="Confirm target"
+            lockedLabel="Target locked in"
+            renderSubtitle={(player) => {
+              const pickers = mafiaPlayers.filter((m) => m.uid !== user.id && mafiaSelections[m.uid]?.targetUid === player.uid);
+              if (pickers.length === 0) return null;
               return (
-                <button
-                  key={player.uid}
-                  onClick={() => handleVotePlayer(player.uid)}
-                  disabled={hasConfirmed}
-                  className={`flex items-start gap-3 rounded-xl p-4 transition-all ${
-                    selectedPlayer === player.uid
-                      ? 'bg-red-600 ring-2 ring-white'
-                      : 'bg-slate-800/50 hover:bg-slate-700'
-                  } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
-                  <div className="flex-1 min-w-0 text-left">
-                    <span className="text-white font-semibold block">{player.displayName}</span>
-                    {showMafiaCoordination && selectorsForPlayer.length > 0 && (
-                      <div className="mt-2 flex items-center gap-2 flex-wrap">
-                        {selectorsForPlayer.map((mafiaPlayer) => {
-                          const selection = mafiaSelections[mafiaPlayer.uid];
-                          const isConfirmedSelection = selection?.confirmed === true;
-                          return (
-                            <div
-                              key={mafiaPlayer.uid}
-                              className={`${isConfirmedSelection ? 'opacity-100' : 'opacity-40'} transition-opacity`}
-                              title={`${mafiaPlayer.displayName}${isConfirmedSelection ? ' (confirmed)' : ' (selecting)'}`}
-                            >
-                              {renderPlayerAvatar(mafiaPlayer, 'w-8 h-8', 'text-xs')}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-                </button>
+                <span className="mt-1 flex items-center gap-2">
+                  <AvatarStack
+                    players={pickers}
+                    size="xs"
+                    ringClass="ring-surface"
+                    isDimmed={(m) => mafiaSelections[m.uid]?.confirmed !== true}
+                  />
+                  <span>{pickers.every((m) => mafiaSelections[m.uid]?.confirmed) ? 'Team pick' : 'Team is considering'}</span>
+                </span>
               );
-            })}
-          </div>
-
-          <button
-            onClick={handleConfirmVote}
-            disabled={!selectedPlayer || hasConfirmed}
-            className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-red-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
+            }}
           >
-            {hasConfirmed ? 'Vote Confirmed' : 'Confirm'}
-          </button>
-
-          {showMafiaCoordination && (
-            <div className="mt-6 rounded-xl border border-red-900/60 bg-black/20 p-4">
-              <p className="text-red-200/80 text-[11px] font-mono uppercase tracking-widest mb-3">
-                Look up to coordinate with your team
-              </p>
-              <div className="space-y-2">
-                {sortedMafiaPlayers.map((mafiaPlayer) => {
-                  const isEliminatedMafia = mafiaPlayer.isAlive === false;
-                  return (
-                    <div key={mafiaPlayer.uid} className="flex items-center gap-3">
-                      <div className={isEliminatedMafia ? 'opacity-30' : 'opacity-100'}>
-                        {renderPlayerAvatar(mafiaPlayer, 'w-9 h-9', 'text-xs')}
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`font-medium ${isEliminatedMafia ? 'text-red-100/30 line-through' : 'text-red-100'}`}>
-                          {mafiaPlayer.displayName}
-                        </span>
-                        {isEliminatedMafia && (
-                          <span className="text-[11px] uppercase tracking-wide text-red-300/60">eliminated</span>
-                        )}
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
-  // Night phase - Doctor turn
-  if (gameState?.phase === 'night-doctor') {
-    const isDoctor = myRole === 'doctor' && gameState.players.find(p => p.uid === user?.id)?.isAlive;
-    const spectator = isSpectator();
-    const doctorDead = !gameState.players.find(p => p.role === 'doctor' && p.isAlive);
-
-    if (spectator && !doctorDead) {
-      const doctorVote = gameState.nightVotes || {};
-      const selectablePlayers = getSelectablePlayers();
-
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
-          <div className="w-full max-w-md mx-auto">
-            {isDeadSpectator() && renderEliminatedBanner()}
-
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <div className="text-center mb-4">
-                <h3 className="text-white font-semibold text-lg">Doctor Turn</h3>
-                {timeLeft !== null && (
-                  <p className="text-green-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                {selectablePlayers.map((player) => {
-                  const voteCount = Object.values(doctorVote).filter((v) => v === player.uid).length;
-                  return (
-                    <div
-                      key={player.uid}
-                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                        <span className="text-white">{player.displayName}</span>
-                      </div>
-                      {voteCount > 0 && (
-                        <span className="text-green-400 font-bold">🩺</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    if (!isDoctor) {
-      return (
-        <div className="min-h-screen bg-black p-6">
-          <div className="w-full max-w-md mx-auto">
-            {isDeadSpectator() && renderEliminatedBanner()}
-
-            <div className="min-h-[70vh] flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-8xl mb-6">😴</div>
-                <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-              </div>
-            </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Active doctor player
-    const selectablePlayers = getSelectablePlayers();
-    
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-950 via-green-900 to-green-950 p-6 pt-16">
-        <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-6">
-            {timeLeft !== null && (
-              <div className="text-green-300 font-mono text-4xl mb-2">{formatTime(timeLeft)}</div>
+            {mafiaPlayers.length > 1 && (
+              <Card padding="sm">
+                <h3 className="text-sm font-medium text-ink-muted">Your team</h3>
+                <ul className="mt-2 flex flex-wrap gap-2">
+                  {sortedMafiaPlayers.map((mafiaPlayer) => (
+                    <li key={mafiaPlayer.uid} className="flex items-center gap-2 rounded-full bg-surface-raised py-1 pl-1 pr-3">
+                      <Avatar player={mafiaPlayer} size="xs" dimmed={mafiaPlayer.isAlive === false} />
+                      <span className={cn('text-sm font-medium', mafiaPlayer.isAlive === false ? 'text-ink-faint line-through' : 'text-ink')}>
+                        {playerName(mafiaPlayer)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </Card>
             )}
-            <h2 className="text-white text-xl font-semibold">Choose who to save</h2>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.map((player) => (
-              <button
-                key={player.uid}
-                onClick={() => handleVotePlayer(player.uid)}
-                disabled={hasConfirmed}
-                className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                  selectedPlayer === player.uid
-                    ? 'bg-green-600 ring-2 ring-white'
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
-                <span className="text-white font-semibold">{player.displayName}</span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleConfirmVote}
-            disabled={!selectedPlayer || hasConfirmed}
-            className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-green-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
-          >
-            {hasConfirmed ? 'Saved' : 'Confirm'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Night phase - Detective turn
-  if (gameState?.phase === 'night-detective') {
-    const isDetective = myRole === 'detective' && gameState.players.find(p => p.uid === user?.id)?.isAlive;
-    const spectator = isSpectator();
-    const detectiveDead = !gameState.players.find(p => p.role === 'detective' && p.isAlive);
-
-    if (spectator && !detectiveDead) {
-      const detectiveVote = gameState.nightVotes || {};
-      const selectablePlayers = getSelectablePlayers();
-
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
-          <div className="w-full max-w-md mx-auto">
-            {isDeadSpectator() && renderEliminatedBanner()}
-
-            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-              <div className="text-center mb-4">
-                <h3 className="text-white font-semibold text-lg">Detective Turn</h3>
-                {timeLeft !== null && (
-                  <p className="text-yellow-400 font-mono text-2xl">{formatTime(timeLeft)}</p>
-                )}
-              </div>
-
-              <div className="space-y-2">
-                {selectablePlayers.map((player) => {
-                  const voteCount = Object.values(detectiveVote).filter((v) => v === player.uid).length;
-                  return (
-                    <div
-                      key={player.uid}
-                      className="bg-slate-700/50 rounded-lg p-3 flex items-center justify-between"
-                    >
-                      <div className="flex items-center gap-3">
-                        {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                        <span className="text-white">{player.displayName}</span>
-                      </div>
-                      {voteCount > 0 && (
-                        <span className="text-yellow-400 font-bold">🔍</span>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          </div>
-        </div>
-      );
+          </NightAction>
+        )
+      };
     }
 
-    if (!isDetective) {
-      return (
-        <div className="min-h-screen bg-black p-6">
-          <div className="w-full max-w-md mx-auto">
-            {isDeadSpectator() && renderEliminatedBanner()}
-
-            <div className="min-h-[70vh] flex items-center justify-center">
-              <div className="text-center">
-                <div className="text-8xl mb-6">😴</div>
-                <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-              </div>
+    // Night - Doctor turn
+    if (phase === 'night-doctor') {
+      const isDoctor = myRole === 'doctor' && me?.isAlive;
+      const doctorDead = !gameState.players.find((p) => p.role === 'doctor' && p.isAlive);
+      if (isSpectator() && !doctorDead) {
+        const doctorVote = gameState.nightVotes || {};
+        return {
+          subtitle: `Night ${round}`,
+          width: 'wide',
+          body: (
+            <div className="flex flex-col gap-4">
+              {isDeadSpectator() && <EliminatedNotice />}
+              <NightWatch
+                title="The Doctor is choosing"
+                seconds={timeLeft}
+                candidates={getSelectablePlayers()}
+                countFor={(player) => Object.values(doctorVote).filter((v) => v === player.uid).length}
+                markLabel={() => 'Protected'}
+              />
             </div>
-          </div>
-        </div>
-      );
-    }
-
-    // Active detective player
-    const selectablePlayers = getSelectablePlayers();
-    
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-yellow-950 via-yellow-900 to-yellow-950 p-6 pt-16">
-        <div className="w-full max-w-md mx-auto">
-          <div className="text-center mb-6">
-            {timeLeft !== null && (
-              <div className="text-yellow-300 font-mono text-4xl mb-2">{formatTime(timeLeft)}</div>
-            )}
-            <h2 className="text-white text-xl font-semibold">Who are you suspicious of?</h2>
-          </div>
-
-          <div className="grid grid-cols-1 gap-3 mb-6">
-            {selectablePlayers.map((player) => (
-              <button
-                key={player.uid}
-                onClick={() => handleVotePlayer(player.uid)}
-                disabled={hasConfirmed}
-                className={`flex items-center gap-3 rounded-xl p-4 transition-all ${
-                  selectedPlayer === player.uid
-                    ? 'bg-yellow-600 ring-2 ring-white'
-                    : 'bg-slate-800/50 hover:bg-slate-700'
-                } ${hasConfirmed ? 'opacity-50 cursor-not-allowed' : ''}`}
-              >
-                {renderPlayerAvatar(player, 'w-12 h-12', 'text-base')}
-                <span className="text-white font-semibold">{player.displayName}</span>
-              </button>
-            ))}
-          </div>
-
-          <button
-            onClick={handleConfirmVote}
-            disabled={!selectedPlayer || hasConfirmed}
-            className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-yellow-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
-          >
-            {hasConfirmed ? 'Investigating...' : 'Confirm'}
-          </button>
-        </div>
-      </div>
-    );
-  }
-
-  // Detective result
-  if (gameState?.phase === 'night-detective-result') {
-    const isDetective = myRole === 'detective' && gameState.players.find(p => p.uid === user?.id)?.isAlive;
-    
-    if (isDetective && gameState.detectiveResult) {
-      const result = gameState.detectiveResult;
-      return (
-        <div className="min-h-screen bg-gradient-to-br from-yellow-950 via-yellow-900 to-yellow-950 flex items-center justify-center p-6">
-          <div className="w-full max-w-md text-center">
-            <p className="text-white text-3xl font-bold">
-              {result.isMafia
-                ? `${result.targetName} is the mafia`
-                : `${result.targetName} is not the mafia`}
-            </p>
-          </div>
-        </div>
-      );
-    }
-
-    // Non-detective players - no timer during detective result phase
-    return (
-      <div className="min-h-screen bg-black p-6">
-        <div className="w-full max-w-md mx-auto">
-          {isDeadSpectator() && renderEliminatedBanner()}
-
-          <div className="min-h-[70vh] flex items-center justify-center">
-            <div className="text-center">
-              <div className="text-8xl mb-6">😴</div>
-              <h1 className="text-white text-4xl font-black">Close your eyes 😴</h1>
-            </div>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Day phase - Discussion
-  if (gameState?.phase === 'day-discussion') {
-    const spectator = isSpectator();
-    const victimUid = gameState.pendingVictim;
-    const saved = Boolean(gameState.lastSaved && gameState.lastSaved === victimUid);
-    const victim = victimUid ? gameState.players.find(p => p.uid === victimUid) : null;
-    const savedPlayer = gameState.lastSaved ? gameState.players.find((p) => p.uid === gameState.lastSaved) : null;
-    const investigatedPlayer = gameState.detectiveResult?.targetUid
-      ? gameState.players.find((p) => p.uid === gameState.detectiveResult.targetUid)
-      : null;
-    const nightReportCause = gameState.nightReportCause || '';
-    const defaultReportNote = victim
-      ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
-      : '';
-    const nightReportNote = gameState.nightReportNote || defaultReportNote;
-    const livingPlayers = gameState.players.filter((p) => p.isAlive);
-    const readyVotes = gameState.readyVotes || [];
-    const canReadyToVote = !spectator && isCurrentUserAlive();
-    const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
-
-    return (
-      <div className="relative min-h-screen bg-gradient-to-br from-[#020817] via-[#0b1325] to-[#020817] p-6 pt-16">
-        <div
-          className="pointer-events-none fixed inset-0 z-0"
-          style={{
-            background: 'radial-gradient(circle at center, rgba(127, 29, 29, 0) 58%, rgba(127, 29, 29, 0.13) 100%)'
-          }}
-        />
-
-        <div className="relative z-10 w-full max-w-md mx-auto">
-          {isDeadSpectator() && renderEliminatedBanner()}
-
-          <div className="text-center mb-6">
-            {victim && (
-              <div className="relative overflow-hidden bg-[#e8dcc8] border border-[#c1ab89] rounded-xl p-5 mb-5 text-left shadow-lg">
-                <p className="font-mono text-[#3f3127] text-xs font-bold tracking-[0.2em]">INCIDENT REPORT</p>
-                <div className="border-t border-[#665341] my-3" />
-                <p className="font-mono text-[#2f241c] text-sm">
-                  {saved ? 'PATIENT' : 'VICTIM'}: {victim.displayName}
-                </p>
-
-                {spectator && activeRules.doctor && savedPlayer && (
-                  <p className="font-mono text-[#2f241c] text-sm mt-1">
-                    DOCTOR SAVE: {savedPlayer.displayName}
-                  </p>
-                )}
-
-                {spectator && activeRules.detective && gameState.detectiveResult && (
-                  <p className="font-mono text-[#2f241c] text-sm mt-1">
-                    DETECTIVE CHECK: {investigatedPlayer?.displayName || gameState.detectiveResult.targetName}
-                  </p>
-                )}
-
-                {!saved && (
-                  <p className="font-mono text-[#2f241c] text-sm mt-1">
-                    CAUSE: {nightReportCause}
-                  </p>
-                )}
-
-                <p className="font-mono text-[#2f241c] text-sm mt-1">
-                  STATUS: {saved ? 'ALIVE' : 'DECEASED'}
-                </p>
-
-                <p className="font-mono text-[#2f241c] text-sm mt-4 text-center">
-                  {nightReportNote}
-                </p>
-
-                <div className="border-t border-[#665341] my-3" />
-
-                <div className="pointer-events-none absolute inset-0 flex items-center justify-center">
-                  <div
-                    className={`border-4 px-4 py-1 text-3xl font-black uppercase tracking-widest opacity-60 ${
-                      saved ? 'border-green-900 text-green-900' : 'border-red-900 text-red-900'
-                    }`}
-                    style={{ transform: 'rotate(-15deg)' }}
-                  >
-                    {saved ? 'ALIVE' : 'DECEASED'}
-                  </div>
-                </div>
-              </div>
-            )}
-
-            <div
-              className="bg-[#0b1325] border border-[#334258] rounded-xl p-4 mb-6 text-[#f0e5cf] shadow-lg"
-              style={{ transform: 'rotate(-1deg)' }}
-            >
-              <h2 className="font-serif text-2xl font-black uppercase tracking-wide">THE MORNING AFTER</h2>
-              <div className="border-t border-[#f0e5cf]/60 my-2" />
-              {timeLeft !== null && (
-                <p className="font-serif text-4xl font-black">{formatTime(timeLeft)}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="bg-[#0f1a2f] border border-[#334258] rounded-xl p-4 shadow-lg">
-            <h3 className="text-[#e7dbc6] font-mono font-bold uppercase tracking-widest">SUSPECTS</h3>
-            <div className="border-t border-red-700/70 mt-2 mb-3" />
-            <div className="space-y-2">
-              {livingPlayers.map((player) => (
-                <div
-                  key={player.uid}
-                  className="flex items-center gap-3 bg-[#16233b] border border-[#334258] rounded-lg p-3"
-                >
-                  {renderPlayerAvatar(player, 'w-10 h-10', 'text-sm')}
-                  <span className="text-[#e7dbc6] font-mono">{player.displayName}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-
-          <div className="bg-[#0f1a2f] border border-[#334258] rounded-xl p-4 mt-4 shadow-lg">
-            <button
-              onClick={handleReadyToVote}
-              disabled={!canReadyToVote || myReadyClicked}
-              className={`w-full py-3 rounded-md font-black uppercase tracking-wide border-2 transition-colors ${
-                canReadyToVote
-                  ? myReadyClicked
-                    ? 'border-[#3e4d63] bg-[#1f2a3f] text-[#7e8ea6] cursor-not-allowed'
-                    : 'border-[#e7dbc6] bg-[#0f1a2f] hover:bg-[#16233b] text-[#f2e8d3]'
-                  : 'border-[#3e4d63] bg-[#1f2a3f] text-[#7e8ea6] cursor-not-allowed'
-              }`}
-            >
-              {myReadyClicked ? 'BALLOT READY' : 'READY TO VOTE'}
-            </button>
-            <p className="text-[#c7baa3] text-sm mt-3 font-mono">
-              Ready: {readyVotes.length}/{livingPlayers.length}
-            </p>
-            <div className="flex items-center justify-center mt-3">
-              {livingPlayers.map((player, index) => {
-                const isReady = readyVotes.includes(player.uid);
-                const playerPhoto = getPlayerPhoto(player);
-                return (
-                  playerPhoto ? (
-                    <img
-                      key={player.uid}
-                      src={playerPhoto}
-                      alt={player.displayName}
-                      className={`w-7 h-7 rounded-full border-2 border-[#0f1a2f] object-cover ${index > 0 ? '-ml-2' : ''} ${isReady ? '' : 'opacity-50 grayscale'}`}
-                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
-                    />
-                  ) : (
-                    <div
-                      key={player.uid}
-                      className={`w-7 h-7 rounded-full border-2 border-[#0f1a2f] flex items-center justify-center text-[10px] font-bold ${index > 0 ? '-ml-2' : ''} ${
-                        isReady ? `${player.avatarColor} text-white` : 'bg-[#3a4760] text-[#9faec4]'
-                      }`}
-                      title={`${player.displayName}${isReady ? ' (Ready)' : ' (Not ready)'}`}
-                    >
-                      {getInitials(player.displayName)}
-                    </div>
-                  )
-                );
-              })}
-            </div>
-
-            {isHost && (
-              <button
-                onClick={handleStartVotingNow}
-                className="w-full mt-3 border-2 border-[#e7dbc6] bg-[#0f1a2f] hover:bg-[#16233b] text-[#f2e8d3] font-black uppercase tracking-wide py-3 rounded-md transition-colors"
-              >
-                Start Voting
-              </button>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // Day phase - Voting
-  if (gameState?.phase === 'day-vote') {
-    const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true);
-    const dayVotes = gameState.dayVotes || {};
-    const formattedTimeLeft = timeLeft !== null ? formatTime(timeLeft) : null;
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
-        <div className="w-full max-w-md mx-auto">
-          {isDeadSpectator() && renderEliminatedBanner()}
-
-          <VotingPanel
-            players={selectablePlayers}
-            votes={dayVotes}
-            currentUid={user?.id}
-            isHost={isHost}
-            onVote={handleSubmitDayVote}
-            onEndVoting={handleEndDayVoting}
-            theme="ballot"
-            timerLabel="TIME REMAINING"
-            timerValue={formattedTimeLeft}
+          )
+        };
+      }
+      if (!isDoctor) return sleepView('sleep');
+      return {
+        subtitle: `Night ${round}`,
+        width: 'wide',
+        body: (
+          <NightAction
+            title="Choose who to protect"
+            hint="If the Mafia pick them tonight, they survive."
+            seconds={timeLeft}
+            candidates={getSelectablePlayers()}
+            selected={selectedPlayer}
+            locked={hasConfirmed}
+            onSelect={handleVotePlayer}
+            onConfirm={handleConfirmVote}
+            confirmLabel="Protect this player"
+            lockedLabel="Protection locked in"
           />
-        </div>
-      </div>
-    );
-  }
+        )
+      };
+    }
 
-  // Day result - who was voted out
-  if (gameState?.phase === 'day-result') {
-    const eliminatedPlayer = gameState.lastEliminated
-      ? gameState.players.find((p) => p.uid === gameState.lastEliminated)
-      : null;
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-[#020817] via-[#0b1325] to-[#020817] flex items-center justify-center p-6">
-        <div className="w-full max-w-md text-center">
-          {isDeadSpectator() && gameState.lastEliminated !== user?.id && renderEliminatedBanner()}
-          <div className="relative overflow-hidden bg-[#e8dcc8] border border-[#c1ab89] rounded-xl p-6 text-left shadow-lg">
-            <p className="font-mono text-[#3f3127] text-xs font-bold tracking-[0.2em]">THE TOWN HAS SPOKEN</p>
-            <div className="border-t border-[#665341] my-3" />
-            {eliminatedPlayer ? (
-              <div className="flex items-center gap-4">
-                {renderPlayerAvatar(eliminatedPlayer, 'w-14 h-14', 'text-lg')}
-                <div>
-                  <p className="font-mono text-[#2f241c] text-lg font-bold uppercase">{eliminatedPlayer.displayName}</p>
-                  <p className="font-mono text-[#5a4837] text-sm">
-                    {eliminatedPlayer.uid === user?.id ? 'You were voted out.' : 'was voted out.'}
-                    {gameState.dayVoteTie ? ' (tie broken at random)' : ''}
-                  </p>
-                </div>
-              </div>
-            ) : (
-              <p className="font-mono text-[#2f241c] text-base">No votes were cast. Nobody was eliminated.</p>
-            )}
-            <div className="border-t border-[#665341] my-3" />
-            <p className="font-mono text-[#5a4837] text-sm text-center">Night falls again soon...</p>
-            {timeLeft !== null && (
-              <p className="font-serif text-3xl font-black text-[#3f3127] text-center mt-2">{timeLeft}</p>
-            )}
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // End game
-  if (gameState?.phase === 'ended') {
-    const winner = gameState.winner;
-    const townWon = winner === 'town';
-    const mafiaCount = gameState.players?.filter((player) => player.role === 'mafia').length || 0;
-    const eliminatedCount = gameState.players?.filter((player) => player.isAlive === false).length || 0;
-    const nightsCount = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : null;
-    const totalRoundsPlayed = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : 1;
-    const rightMetaText = nightsCount !== null ? `NIGHTS: ${nightsCount}` : `ELIMINATED: ${eliminatedCount}`;
-
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 pt-16">
-        <div className="w-full max-w-md mx-auto">
-          {/* Newspaper Masthead - Classic Broadsheet Style */}
-          <div className="mb-8 text-[#e8e0d0]" style={{ fontFamily: 'serif' }}>
-            {/* Top metadata bar */}
-            <div className="border-t-2 border-[#e8e0d0]/40 mb-2" style={{ fontSize: '1px' }} />
-            <div className="flex items-center justify-between py-1 mb-2 text-[15px] leading-none">
-              <span className="font-mono tracking-wider">MAFIAS: {mafiaCount}</span>
-              <span className="font-mono text-center flex-1">THE GAMES NIGHT GAZETTE</span>
-              <span className="font-mono tracking-wider">{rightMetaText}</span>
+    // Night - Detective turn
+    if (phase === 'night-detective') {
+      const isDetective = myRole === 'detective' && me?.isAlive;
+      const detectiveDead = !gameState.players.find((p) => p.role === 'detective' && p.isAlive);
+      if (isSpectator() && !detectiveDead) {
+        const detectiveVote = gameState.nightVotes || {};
+        return {
+          subtitle: `Night ${round}`,
+          width: 'wide',
+          body: (
+            <div className="flex flex-col gap-4">
+              {isDeadSpectator() && <EliminatedNotice />}
+              <NightWatch
+                title="The Detective is choosing"
+                seconds={timeLeft}
+                candidates={getSelectablePlayers()}
+                countFor={(player) => Object.values(detectiveVote).filter((v) => v === player.uid).length}
+                markLabel={() => 'Investigated'}
+              />
             </div>
+          )
+        };
+      }
+      if (!isDetective) return sleepView('sleep');
+      return {
+        subtitle: `Night ${round}`,
+        width: 'wide',
+        body: (
+          <NightAction
+            title="Choose who to investigate"
+            hint="You'll find out whether they are Mafia."
+            seconds={timeLeft}
+            candidates={getSelectablePlayers()}
+            selected={selectedPlayer}
+            locked={hasConfirmed}
+            onSelect={handleVotePlayer}
+            onConfirm={handleConfirmVote}
+            confirmLabel="Investigate this player"
+            lockedLabel="Investigating"
+          />
+        )
+      };
+    }
 
-            {/* Double Rule */}
-            <div className="border-t-2 border-[#e8e0d0]/60" style={{ marginBottom: '2px' }} />
-            <div className="border-t border-[#e8e0d0]/40 mb-4" />
-
-            {/* Headline */}
-            <h1
-              className="font-black uppercase text-center mb-2"
-              style={{
-                fontSize: '3rem',
-                letterSpacing: '0.1em',
-                lineHeight: '1.1',
-                fontFamily: "'Playfair Display', 'Georgia', serif",
-                fontWeight: 900
-              }}
-            >
-              {townWon ? 'TOWN TRIUMPHS' : 'MAFIA REIGNS'}
-            </h1>
-
-            {/* Deck Line */}
-            <p
-              className="text-center italic mb-4"
-              style={{
-                fontSize: '14px',
-                fontFamily: "'Georgia', serif",
-                lineHeight: '1.4'
-              }}
-            >
-              {townWon
-                ? 'Mafia members identified and removed from the village'
-                : 'Civilians deceived as mafia seizes control of the village'}
-            </p>
-
-            {/* Bottom Rule */}
-            <div className="border-t border-[#e8e0d0]/40" />
-          </div>
-
-          {/* Case Closed Card */}
-          <div className="relative overflow-hidden rounded-xl p-5 mb-6 text-left shadow-lg" style={{ backgroundColor: '#d4b483', border: '1px solid #8b6b3f' }}>
-            {/* CASE Header */}
-            <div className="mb-4 flex items-center gap-2">
-              <span className="font-mono font-bold uppercase tracking-widest text-sm" style={{ color: '#3a2a1a' }}>
-                CASE:
-              </span>
-              <span
-                className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
-                style={{
-                  borderColor: townWon ? '#5a7a9a' : '#8b3a3a',
-                  color: townWon ? '#5a7a9a' : '#8b3a3a',
-                  transform: 'rotate(-6deg)',
-                  fontSize: '10px'
-                }}
-              >
-                CLOSED
-              </span>
+    // Detective result
+    if (phase === 'night-detective-result') {
+      const isDetective = myRole === 'detective' && me?.isAlive;
+      if (isDetective && gameState.detectiveResult) {
+        const result = gameState.detectiveResult;
+        const target = gameState.players.find((p) => p.uid === result.targetUid);
+        return {
+          subtitle: `Night ${round}`,
+          body: (
+            <div className="flex flex-1 flex-col items-center justify-center gap-4 py-10 text-center">
+              {target && <Avatar player={target} size="2xl" />}
+              <p className="text-lg text-ink-muted">{result.targetName}</p>
+              <h2 className={cn('text-4xl font-bold', result.isMafia ? 'text-mafia' : 'text-success')}>
+                {result.isMafia ? 'is Mafia' : 'is not Mafia'}
+              </h2>
+              <p className="max-w-xs text-base text-ink-muted">Keep it to yourself until the day begins.</p>
             </div>
+          )
+        };
+      }
+      return sleepView('sleep');
+    }
 
-            {/* Divider */}
-            <div style={{ height: '1px', backgroundColor: '#4a3622', marginBottom: '16px', opacity: '0.45' }} />
+    // Day - discussion
+    if (phase === 'day-discussion') {
+      const spectator = isSpectator();
+      const victimUid = gameState.pendingVictim;
+      const saved = Boolean(gameState.lastSaved && gameState.lastSaved === victimUid);
+      const victim = victimUid ? gameState.players.find((p) => p.uid === victimUid) : null;
+      const savedPlayer = gameState.lastSaved ? gameState.players.find((p) => p.uid === gameState.lastSaved) : null;
+      const investigatedPlayer = gameState.detectiveResult?.targetUid
+        ? gameState.players.find((p) => p.uid === gameState.detectiveResult.targetUid)
+        : null;
+      const nightReportCause = gameState.nightReportCause || '';
+      const defaultReportNote = victim
+        ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
+        : '';
+      const nightReportNote = gameState.nightReportNote || defaultReportNote;
+      const livingPlayers = gameState.players.filter((p) => p.isAlive);
+      const readyVotes = gameState.readyVotes || [];
+      const canReadyToVote = !spectator && isCurrentUserAlive();
+      const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
 
-            {/* Player List */}
-            <div style={{ backgroundColor: '#eadfca', border: '1px solid #8b6b3f', borderRadius: '8px', padding: '16px' }}>
-              <p className="text-[#3a2a1a] text-[11px] font-mono uppercase tracking-widest mb-3">AGENTS ASSIGNED: {gameState.players?.length || 0}</p>
-              <div className="border-t border-[#8b6b3f]/40 mb-3" />
-              <div>
-                {gameState.players.map((player, idx) => {
-                  const survivedRounds = Number.isInteger(player.eliminatedRound)
-                    ? Math.min(totalRoundsPlayed, player.eliminatedRound)
-                    : totalRoundsPlayed;
-                  const roundsLabel = `Rounds: ${survivedRounds}`;
-                  const roleRoundsColor = player.role === 'mafia'
-                    ? '#8b3a3a'
-                    : player.role === 'doctor'
-                      ? '#4a7c5a'
-                      : player.role === 'detective'
-                        ? '#8b6b3f'
-                        : '#5a7a9a';
-
-                  return (
-                    <div key={player.uid}>
-                      <div
-                        className="relative flex items-center justify-between py-3"
-                        style={{
-                          backgroundColor: idx % 2 === 0 ? 'transparent' : '#f3ead8/40'
-                        }}
-                      >
-                        <div className="flex items-center gap-3">
-                          {renderPlayerAvatar(player, 'w-8 h-8', 'text-xs')}
-                          <span className="font-mono font-semibold uppercase" style={{ color: '#2f2418', fontSize: '14px' }}>
-                            {player.displayName}
-                            <span style={{ marginLeft: '8px', fontSize: '12px', fontFamily: 'monospace', color: roleRoundsColor }}>
-                              {roundsLabel}
-                            </span>
-                          </span>
+      return {
+        subtitle: `Day ${round}`,
+        width: 'wide',
+        body: (
+          <div className="flex flex-col gap-4">
+            {isDeadSpectator() && <EliminatedNotice />}
+            <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
+              <div className="flex flex-col gap-4">
+                <Countdown seconds={timeLeft} label="Discussion ends in" />
+                <Card>
+                  <h2 className="text-sm font-medium text-ink-muted">Last night</h2>
+                  {victim ? (
+                    <>
+                      <div className="mt-3 flex items-center gap-4">
+                        <Avatar player={victim} size="xl" dimmed={!saved} />
+                        <div className="min-w-0 flex-1">
+                          <p className="truncate text-2xl font-semibold text-ink">{playerName(victim)}</p>
+                          <div className="mt-1">
+                            <Badge tone={saved ? 'success' : 'danger'}>{saved ? 'Attacked but saved' : 'Killed'}</Badge>
+                          </div>
                         </div>
-
-                        <div className="flex items-center gap-2">
-                        {/* Mafia: stamp first, then emoji */}
-                        {player.role === 'mafia' && (
-                          <>
-                            <span
-                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
-                              style={{
-                                borderColor: '#8b3a3a',
-                                color: '#8b3a3a',
-                                transform: 'rotate(6deg)',
-                                fontSize: '10px'
-                              }}
-                            >
-                              MAFIA
-                            </span>
-                            <span className="text-lg">{getRoleIcon(player.role)}</span>
-                          </>
-                        )}
-
-                        {/* Doctor: green stamp + emoji */}
-                        {player.role === 'doctor' && (
-                          <>
-                            <span
-                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
-                              style={{
-                                borderColor: '#4a7c5a',
-                                color: '#4a7c5a',
-                                transform: 'rotate(6deg)',
-                                fontSize: '10px'
-                              }}
-                            >
-                              Doctor
-                            </span>
-                            <span className="text-lg">{getRoleIcon(player.role)}</span>
-                          </>
-                        )}
-
-                        {/* Detective: brown stamp + emoji */}
-                        {player.role === 'detective' && (
-                          <>
-                            <span
-                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
-                              style={{
-                                borderColor: '#8b6b3f',
-                                color: '#8b6b3f',
-                                transform: 'rotate(6deg)',
-                                fontSize: '10px'
-                              }}
-                            >
-                              Detective
-                            </span>
-                            <span className="text-lg">{getRoleIcon(player.role)}</span>
-                          </>
-                        )}
-
-                        {/* Civilian: blue stamp + emoji */}
-                        {player.role === 'civilian' && (
-                          <>
-                            <span
-                              className="border-2 px-2 py-0.5 text-xs font-black uppercase tracking-widest"
-                              style={{
-                                borderColor: '#5a7a9a',
-                                color: '#5a7a9a',
-                                transform: 'rotate(6deg)',
-                                fontSize: '10px'
-                              }}
-                            >
-                              Civilian
-                            </span>
-                            <span className="text-lg">{getRoleIcon(player.role)}</span>
-                          </>
-                        )}
-
-                        </div>
-
                       </div>
-                      {idx < gameState.players.length - 1 && (
-                        <div style={{ height: '1px', backgroundColor: '#8b6b3f', opacity: '0.25' }} />
+                      <p className="mt-4 text-base text-ink-muted">
+                        {!saved && nightReportCause ? `${nightReportCause}. ` : ''}{nightReportNote}
+                      </p>
+                    </>
+                  ) : (
+                    <p className="mt-2 text-xl font-semibold text-ink">A quiet night. Nobody was attacked.</p>
+                  )}
+                  {spectator && (activeRules.doctor || activeRules.detective) && (
+                    <dl className="mt-4 space-y-1 border-t border-line pt-4 text-sm">
+                      {activeRules.doctor && savedPlayer && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-ink-faint">Doctor protected</dt>
+                          <dd className="font-medium text-ink">{playerName(savedPlayer)}</dd>
+                        </div>
                       )}
-                    </div>
-                  );
-                })}
+                      {activeRules.detective && gameState.detectiveResult && (
+                        <div className="flex justify-between gap-3">
+                          <dt className="text-ink-faint">Detective checked</dt>
+                          <dd className="font-medium text-ink">{investigatedPlayer ? playerName(investigatedPlayer) : gameState.detectiveResult.targetName}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
+                </Card>
+              </div>
+
+              <div className="flex flex-col gap-4">
+                <section>
+                  <SectionHeading count={livingPlayers.length}>Still alive</SectionHeading>
+                  <ul className="grid grid-cols-2 gap-2">
+                    {livingPlayers.map((player) => (
+                      <li key={player.uid} className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-surface p-2">
+                        <Avatar player={player} size="sm" />
+                        <span className="min-w-0 truncate text-sm font-medium text-ink">{playerName(player)}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </section>
+                <ReadyStatus players={livingPlayers} readyUids={readyVotes} />
               </div>
             </div>
+
+            <ScreenFooter>
+              {canReadyToVote && (
+                <Button size="lg" block onClick={handleReadyToVote} disabled={myReadyClicked}>
+                  {myReadyClicked ? "You're ready to vote" : 'Ready to vote'}
+                </Button>
+              )}
+              {isHost && (
+                <Button variant="secondary" block onClick={handleStartVotingNow} disabled={busy}>Start voting now</Button>
+              )}
+            </ScreenFooter>
           </div>
+        )
+      };
+    }
 
-          {/* Return Button */}
-          <button
-            onClick={handleReturnToGamesNight}
-            disabled={busy}
-            className="w-full bg-[#e8dcc8] hover:bg-[#f0e5cf] border border-[#c1ab89] text-[#3f3127] font-mono font-bold py-3 rounded-lg transition-colors tracking-wide"
-          >
-            {isHost ? 'Return to Its Games Night' : 'Back to room'}
-          </button>
-        </div>
-      </div>
-    );
+    // Day - voting
+    if (phase === 'day-vote') {
+      const selectablePlayers = getSelectablePlayers().filter((player) => player.isAlive === true);
+      return {
+        subtitle: `Day ${round} vote`,
+        width: 'wide',
+        body: (
+          <div className="flex flex-col gap-4">
+            {isDeadSpectator() && <EliminatedNotice />}
+            <Countdown seconds={timeLeft} size="lg" label="Voting ends in" />
+            <PhaseTitle title="Who is Mafia?" hint="The player with the most votes is out." />
+            <VotingPanel
+              players={selectablePlayers}
+              votes={gameState.dayVotes || {}}
+              currentUid={user?.id}
+              isHost={isHost}
+              onVote={handleSubmitDayVote}
+              onEndVoting={handleEndDayVoting}
+            />
+          </div>
+        )
+      };
+    }
+
+    // Day result - who was voted out
+    if (phase === 'day-result') {
+      const eliminatedPlayer = gameState.lastEliminated
+        ? gameState.players.find((p) => p.uid === gameState.lastEliminated)
+        : null;
+      return {
+        subtitle: `Day ${round} result`,
+        body: (
+          <div className="flex flex-1 flex-col justify-center gap-4 py-6">
+            {isDeadSpectator() && gameState.lastEliminated !== user?.id && <EliminatedNotice />}
+            <Card className="flex flex-col items-center gap-3 py-8 text-center">
+              <p className="text-base font-medium text-ink-muted">The town has voted</p>
+              {eliminatedPlayer ? (
+                <>
+                  <Avatar player={eliminatedPlayer} size="2xl" dimmed />
+                  <h2 className="text-3xl font-bold text-ink">
+                    {eliminatedPlayer.uid === user?.id ? 'You were voted out' : `${playerName(eliminatedPlayer)} was voted out`}
+                  </h2>
+                  {gameState.dayVoteTie && <Badge>Tie broken at random</Badge>}
+                </>
+              ) : (
+                <h2 className="text-3xl font-bold text-ink">Nobody was voted out</h2>
+              )}
+              {!eliminatedPlayer && <p className="text-base text-ink-muted">No votes were cast.</p>}
+            </Card>
+            {timeLeft !== null && (
+              <p className="text-center text-lg text-ink-muted">
+                Night falls in <span className="tabular font-semibold text-ink">{timeLeft}</span>
+              </p>
+            )}
+          </div>
+        )
+      };
+    }
+
+    // End game
+    if (phase === 'ended') {
+      const townWon = gameState.winner === 'town';
+      const mafiaCount = gameState.players?.filter((player) => player.role === 'mafia').length || 0;
+      const totalRoundsPlayed = Number.isInteger(gameState?.roundNumber) ? gameState.roundNumber : 1;
+      return {
+        subtitle: 'Game over',
+        width: 'wide',
+        body: (
+          <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
+            <WinnerBanner
+              accent="mafia"
+              title={townWon ? 'The town wins' : 'The Mafia win'}
+              subtitle={townWon ? 'Every Mafia member was found and voted out.' : 'The Mafia took control of the town.'}
+            >
+              <Facts items={[`${mafiaCount} Mafia`, `${totalRoundsPlayed} night${totalRoundsPlayed === 1 ? '' : 's'}`]} />
+            </WinnerBanner>
+            <ResultList
+              title="Who was who"
+              players={gameState.players}
+              isFaded={(player) => player.isAlive === false}
+              renderMeta={(player) => (
+                Number.isInteger(player.eliminatedRound)
+                  ? `Out in round ${Math.min(totalRoundsPlayed, player.eliminatedRound)}`
+                  : 'Survived'
+              )}
+              renderBadge={(player) => <RoleBadge role={player.role} />}
+            />
+            <ScreenFooter>
+              <Button size="lg" block onClick={handleReturnToGamesNight} loading={busy}>
+                {isHost ? 'End game and return to room' : 'Back to room'}
+              </Button>
+            </ScreenFooter>
+          </div>
+        )
+      };
+    }
+
+    return { body: null };
   }
-
-  return null;
-}
 }

@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { getAvatarColor, getInitials } from '../utils/avatar';
+import { Eye } from 'lucide-react';
 import { useAutoAdvance } from '../lib/activity';
+import { Avatar, AvatarStack, Badge, Button, Notice, ScreenFooter, SelectableRow, playerName } from '../ui';
 
 const getPlayerUid = (player) => player?.uid || player?.id || null;
 
-const getPlayerName = (player) => player?.displayNameForGame || player?.displayName || 'Unknown';
-
-const getPlayerPhoto = (player) => player?.photo || player?.photoURL || null;
-
+/**
+ * Open voting used by every game: pick a player, confirm, and watch the
+ * votes land. Closes itself 5 seconds after the last vote.
+ */
 export default function VotingPanel({
   players,
   requiredVoterUids = null,
@@ -17,18 +18,11 @@ export default function VotingPanel({
   fallbackRank = 0,
   onVote,
   onEndVoting,
-  theme = 'default',
-  timerLabel = 'TIME REMAINING',
-  timerValue = null,
-  title,
-  subtitle
+  paused = false,
+  extraActions = null
 }) {
   const allPlayers = Array.isArray(players) ? players : [];
   const votesByVoter = votes && typeof votes === 'object' ? votes : {};
-  const isBallotTheme = theme === 'ballot';
-  const isSpyfallTheme = theme === 'spyfall';
-  const panelTitle = title || (isBallotTheme ? 'OFFICIAL BALLOT' : isSpyfallTheme ? 'WHO IS THE SPY?' : 'Voting');
-  const panelSubtitle = subtitle || (isBallotTheme ? 'Cast your vote - mark one candidate' : isSpyfallTheme ? 'CAST YOUR VOTE - ONE SUSPECT ONLY' : null);
 
   const playersByUid = useMemo(() => {
     const entries = allPlayers
@@ -57,6 +51,7 @@ export default function VotingPanel({
     if (votableUids.length === 0) return false;
     return votableUids.every((uid) => votesByVoter[uid] != null);
   }, [votableUids, votesByVoter]);
+  const votedCount = votableUids.filter((uid) => votesByVoter[uid] != null).length;
 
   useEffect(() => {
     if (confirmedTarget != null) {
@@ -67,7 +62,7 @@ export default function VotingPanel({
     setLocalConfirmed(false);
   }, [confirmedTarget]);
 
-  // Once everyone has voted, close the ballot after a 5s countdown
+  // Once everyone has voted, close the vote after a 5s countdown
   useEffect(() => {
     setAutoEndAt(allVotesConfirmed ? Date.now() + 5000 : null);
   }, [allVotesConfirmed]);
@@ -89,18 +84,16 @@ export default function VotingPanel({
   });
 
   const handleSelectTarget = (targetUid) => {
-    if (!canVote || hasConfirmed) return;
+    if (!canVote || hasConfirmed || paused) return;
     setSelectedTarget(targetUid);
-    if (voteError) {
-      setVoteError('');
-    }
+    if (voteError) setVoteError('');
   };
 
   const handleConfirmVote = async () => {
     if (!canVote || hasConfirmed || !selectedTarget || isSubmitting) return;
 
     if (selectedTarget === currentUid) {
-      setVoteError('You cannot vote for yourself');
+      setVoteError("You can't vote for yourself.");
       return;
     }
 
@@ -109,437 +102,75 @@ export default function VotingPanel({
       await onVote?.(selectedTarget);
       setLocalConfirmed(true);
       setVoteError('');
-    } catch (error) {
-      setVoteError('Could not confirm vote. Please try again.');
+    } catch {
+      setVoteError("Couldn't send your vote. Try again.");
     } finally {
       setIsSubmitting(false);
     }
   };
 
-  if (isBallotTheme) {
-    return (
-      <div className="relative bg-[#f5f0e8] border-2 border-[#bfae95] rounded-xl p-4 shadow-[0_8px_24px_rgba(0,0,0,0.3)] text-[#3f3127] overflow-hidden">
-        {hasConfirmed && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
-            <div
-              className="border-2 border-red-700 rounded-sm px-6 py-2 text-red-700 text-5xl font-bold uppercase tracking-[0.2em] opacity-80"
-              style={{ transform: 'rotate(-15deg)', fontFamily: "'Courier Prime', monospace" }}
-            >
-              VOTED
-            </div>
-          </div>
-        )}
-
-        <div className="text-center mb-4">
-          <h3 className="font-serif text-[#3f3127] text-2xl font-black uppercase tracking-wide">{panelTitle}</h3>
-          {panelSubtitle && (
-            <p className="mt-1 text-sm italic text-[#5a4837]">{panelSubtitle}</p>
-          )}
-          <div className="border-t border-[#5a4837] mt-3" />
-        </div>
-
-        {timerValue != null && (
-          <div className="text-center mb-4">
-            <p className="text-[11px] font-semibold uppercase tracking-[0.22em] text-[#5a4837]">{timerLabel}</p>
-            <p className="text-3xl font-black font-serif text-[#3f3127]">{timerValue}</p>
-          </div>
-        )}
-
-        {allVotesConfirmed && autoEndSeconds != null && (
-          <div className="bg-[#ece2d2] border border-[#c8b89f] rounded-lg p-3 text-center mb-4">
-            <p className="text-[#4a3a2b] text-sm font-semibold">
-              All votes confirmed. Ending in {autoEndSeconds}s...
-            </p>
-          </div>
-        )}
-
-        <div className="mb-4 overflow-hidden rounded-lg border border-[#ccbda6] bg-[#f8f3ea]">
-          {allPlayers.map((player, index) => {
-            const candidateUid = getPlayerUid(player);
-            if (!candidateUid) return null;
-
-            const candidateVotes = Object.entries(votesByVoter)
-              .filter(([, targetUid]) => targetUid === candidateUid)
-              .map(([voterUid]) => playersByUid.get(voterUid))
-              .filter(Boolean);
-
-            const candidateVoteCount = candidateVotes.length;
-            const candidatePhoto = getPlayerPhoto(player);
-            const isSelected = selectedTarget === candidateUid;
-            const isCurrentUser = candidateUid === currentUid;
-            const rowDisabled = !canVote || hasConfirmed;
-
-            return (
-              <button
-                key={candidateUid}
-                type="button"
-                onClick={() => handleSelectTarget(candidateUid)}
-                disabled={rowDisabled}
-                className={`w-full text-left px-3 py-3 transition-colors ${
-                  index > 0 ? 'border-t border-[#d5c7b2]' : ''
-                } ${
-                  isSelected ? 'bg-[#eadfcf]' : 'bg-[#f8f3ea]'
-                } ${
-                  rowDisabled ? 'opacity-60 cursor-not-allowed' : 'hover:bg-[#efe3cf]'
-                }`}
-              >
-                <div className="flex flex-col gap-2">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className={`inline-flex h-6 w-6 items-center justify-center border-2 text-sm font-black ${
-                        isSelected
-                          ? 'bg-[#3f3127] border-[#3f3127] text-[#f5f0e8]'
-                          : 'bg-[#fdfaf3] border-[#5a4837] text-transparent'
-                      }`}
-                    >
-                      {isSelected ? '✓' : ''}
-                    </span>
-
-                    {candidatePhoto ? (
-                      <img
-                        src={candidatePhoto}
-                        alt={getPlayerName(player)}
-                        className="w-11 h-11 rounded-full object-cover"
-                      />
-                    ) : (
-                      <div className={`w-11 h-11 rounded-full border border-[#bfae95] ${getAvatarColor(player)} flex items-center justify-center text-white font-bold`}>
-                        {getInitials(getPlayerName(player))}
-                      </div>
-                    )}
-
-                    <div className="flex-1 min-w-0 flex items-center justify-between gap-2">
-                      <span className="text-[#2f241c] font-mono font-semibold truncate">
-                        {getPlayerName(player)} {isCurrentUser ? '(You)' : ''}
-                      </span>
-                      <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-[#3f3127] text-[#f5f0e8] text-sm font-bold">
-                        {candidateVoteCount}
-                      </span>
-                    </div>
-                  </div>
-
-                  <div className="flex items-center min-h-7 pl-[5.75rem]">
-                    {candidateVotes.map((voter, voteIndex) => {
-                      const voterUid = getPlayerUid(voter);
-                      const voterPhoto = getPlayerPhoto(voter);
-                      const overlapClass = voteIndex > 0 ? '-ml-2' : '';
-                      const voterName = getPlayerName(voter);
-
-                      return voterPhoto ? (
-                        <img
-                          key={voterUid}
-                          src={voterPhoto}
-                          alt={voterName}
-                          className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] object-cover ${overlapClass}`}
-                          title={voterName}
-                        />
-                      ) : (
-                        <div
-                          key={voterUid}
-                          className={`w-7 h-7 rounded-full border-2 border-[#f5f0e8] bg-[#d7c8b2] flex items-center justify-center text-[10px] text-[#3f3127] font-bold ${overlapClass}`}
-                          title={voterName}
-                        >
-                          {getInitials(voterName)}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              </button>
-            );
-          })}
-        </div>
-
-        {canVote && !hasConfirmed && (
-          <>
-            <button
-              type="button"
-              onClick={handleConfirmVote}
-              disabled={!selectedTarget || isSubmitting}
-              className="w-full border-2 border-[#4a3a2b] bg-[#f5f0e8] hover:bg-[#ece1cf] disabled:bg-[#ddd2c2] text-[#3f3127] disabled:text-[#867a6b] font-black uppercase tracking-[0.16em] py-3 rounded-md shadow-[0_3px_0_#4a3a2b] active:translate-y-[2px] active:shadow-none transition-all"
-            >
-              {isSubmitting ? 'STAMPING...' : 'CONFIRM VOTE'}
-            </button>
-
-            {voteError && <p className="text-red-800 text-sm text-center mt-2 font-semibold">{voteError}</p>}
-          </>
-        )}
-
-        {hasConfirmed && (
-          <p className="text-center text-[#4b3b2d] font-semibold mt-2">Vote confirmed. Waiting for others...</p>
-        )}
-
-        {isHost && (
-          <button
-            onClick={onEndVoting}
-            className="w-full mt-3 border-2 border-red-700 bg-[#f5f0e8] hover:bg-[#f0e3d6] text-red-700 font-black uppercase tracking-[0.16em] py-3 rounded-md transition-colors"
-          >
-            CLOSE BALLOT
-          </button>
-        )}
-      </div>
-    );
-  }
-
-  if (isSpyfallTheme) {
-    return (
-      <div>
-        <div className="text-center mb-4">
-          <h3 className="spy-serif text-2xl font-bold text-white">{panelTitle}</h3>
-          {panelSubtitle && (
-            <p className="spy-mono mt-1 text-xs uppercase tracking-widest text-[#7a8c9e]">{panelSubtitle}</p>
-          )}
-        </div>
-
-        <div className="bg-[#1e2a3a] border border-[#2e3f52] rounded-2xl p-4">
-          <div className="flex items-center justify-between mb-4">
-            <h4 className="spy-mono text-[#7a8c9e] text-sm uppercase tracking-widest">Voting</h4>
-            {isHost && (
-              <button
-                onClick={onEndVoting}
-                className="spy-mono px-4 py-2 bg-[#c9882a] hover:bg-[#b07520] text-white text-sm font-bold uppercase rounded-lg transition-colors"
-              >
-                End Voting
-              </button>
-            )}
-          </div>
-
-          {allVotesConfirmed && autoEndSeconds != null && (
-            <div className="bg-[#243040] border border-[#2e3f52] rounded-xl p-3 text-center mb-4">
-              <p className="text-[#d4c9a8] text-sm font-semibold">
-                All votes confirmed. Ending in {autoEndSeconds}s...
-              </p>
-            </div>
-          )}
-
-          <div className="grid grid-cols-1 gap-3 mb-4">
-            {allPlayers.map((player) => {
-              const candidateUid = getPlayerUid(player);
-              if (!candidateUid) return null;
-
-              const candidateVotes = Object.entries(votesByVoter)
-                .filter(([, targetUid]) => targetUid === candidateUid)
-                .map(([voterUid]) => playersByUid.get(voterUid))
-                .filter(Boolean);
-
-              const candidateVoteCount = candidateVotes.length;
-              const candidatePhoto = getPlayerPhoto(player);
-              const isSelected = selectedTarget === candidateUid;
-              const isCurrentUser = candidateUid === currentUid;
-
-              return (
-                <button
-                  key={candidateUid}
-                  type="button"
-                  onClick={() => handleSelectTarget(candidateUid)}
-                  disabled={!canVote || hasConfirmed}
-                  className={`flex items-start gap-3 rounded-xl p-3 border transition-all ${
-                    isSelected
-                      ? 'bg-[#c9882a]/10 border-[#c9882a]/60'
-                      : 'bg-[#243040] border-transparent hover:border-[#c9882a]/40'
-                  } ${(!canVote || hasConfirmed) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                >
-                  {candidatePhoto ? (
-                    <img
-                      src={candidatePhoto}
-                      alt={getPlayerName(player)}
-                      className="w-12 h-12 rounded-full object-cover"
-                    />
-                  ) : (
-                    <div className={`w-12 h-12 ${player.avatarColor || 'bg-slate-600'} rounded-full flex items-center justify-center text-white font-bold`}>
-                      {getInitials(getPlayerName(player))}
-                    </div>
-                  )}
-
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center justify-between gap-2">
-                      <span className="text-white font-semibold truncate">
-                        {getPlayerName(player)} {isCurrentUser ? '(You)' : ''}
-                      </span>
-                      <span className="inline-flex items-center justify-center w-8 h-8 rounded-lg bg-[#1e2a3a] border border-[#2e3f52] text-[#c9882a] text-sm font-bold">
-                        {candidateVoteCount}
-                      </span>
-                    </div>
-
-                    <div className="flex items-center mt-2">
-                      {candidateVotes.map((voter, index) => {
-                        const voterUid = getPlayerUid(voter);
-                        const voterPhoto = getPlayerPhoto(voter);
-                        const overlapClass = index > 0 ? '-ml-2' : '';
-                        const voterName = getPlayerName(voter);
-
-                        return voterPhoto ? (
-                          <img
-                            key={voterUid}
-                            src={voterPhoto}
-                            alt={voterName}
-                            className={`w-7 h-7 rounded-full border-2 border-[#0f172a] object-cover ${overlapClass}`}
-                            title={voterName}
-                          />
-                        ) : (
-                          <div
-                            key={voterUid}
-                            className={`w-7 h-7 ${voter.avatarColor || 'bg-slate-600'} rounded-full border-2 border-[#0f172a] flex items-center justify-center text-[10px] text-white font-bold ${overlapClass}`}
-                            title={voterName}
-                          >
-                            {getInitials(voterName)}
-                          </div>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-
-          {canVote && !hasConfirmed && (
-            <>
-              <button
-                type="button"
-                onClick={handleConfirmVote}
-                disabled={!selectedTarget || isSubmitting}
-                className="spy-mono w-full bg-[#c9882a] hover:bg-[#b07520] disabled:bg-[#2e3f52] text-white disabled:text-[#7a8c9e] font-bold uppercase py-4 rounded-xl transition-colors"
-              >
-                {isSubmitting ? 'Submitting...' : 'Submit Vote'}
-              </button>
-
-              {voteError && <p className="text-red-400 text-sm text-center mt-2">{voteError}</p>}
-            </>
-          )}
-
-          {hasConfirmed && (
-            <div className="bg-[#243040] border border-[#2e3f52] rounded-xl p-4 text-center mt-3">
-              <p className="text-[#c9882a] font-semibold">Vote confirmed. Waiting for others...</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4">
-      <div className="flex items-center justify-between mb-4">
-        <h3 className="text-white font-semibold text-lg">Voting</h3>
-        {isHost && (
-          <button
-            onClick={onEndVoting}
-            className="px-3 py-2 bg-violet-600 hover:bg-violet-500 text-white text-sm font-bold rounded-lg transition-colors"
-          >
-            End Voting
-          </button>
-        )}
+    <div className="flex flex-col gap-4">
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-base font-medium text-ink-muted">
+          {allVotesConfirmed && autoEndSeconds != null
+            ? `All votes are in. Closing in ${autoEndSeconds}s`
+            : 'Votes show as they come in'}
+        </p>
+        <Badge tone={allVotesConfirmed ? 'success' : 'neutral'}>{votedCount} of {votableUids.length} voted</Badge>
       </div>
 
-      {allVotesConfirmed && autoEndSeconds != null && (
-        <div className="bg-slate-700/40 border border-slate-600 rounded-xl p-3 text-center mb-4">
-          <p className="text-slate-200 text-sm font-semibold">
-            All votes confirmed. Ending in {autoEndSeconds}s...
-          </p>
-        </div>
-      )}
+      {!canVote && <Notice icon={Eye}>You&apos;re watching this vote.</Notice>}
 
-      <div className="grid grid-cols-1 gap-3 mb-4">
+      <ul className="grid gap-2 md:grid-cols-2">
         {allPlayers.map((player) => {
           const candidateUid = getPlayerUid(player);
           if (!candidateUid) return null;
-
-          const candidateVotes = Object.entries(votesByVoter)
+          const voters = Object.entries(votesByVoter)
             .filter(([, targetUid]) => targetUid === candidateUid)
             .map(([voterUid]) => playersByUid.get(voterUid))
             .filter(Boolean);
-
-          const candidateVoteCount = candidateVotes.length;
-          const candidatePhoto = getPlayerPhoto(player);
-          const isSelected = selectedTarget === candidateUid;
-          const isCurrentUser = candidateUid === currentUid;
-
+          const isSelf = candidateUid === currentUid;
           return (
-            <button
-              key={candidateUid}
-              type="button"
-              onClick={() => handleSelectTarget(candidateUid)}
-              disabled={!canVote || hasConfirmed}
-              className={`flex items-start gap-3 rounded-xl p-4 transition-all ${
-                isSelected
-                  ? 'bg-violet-600 ring-2 ring-white'
-                  : 'bg-slate-800/50 hover:bg-slate-700'
-              } ${(!canVote || hasConfirmed) ? 'opacity-50 cursor-not-allowed' : ''}`}
-            >
-              {candidatePhoto ? (
-                <img
-                  src={candidatePhoto}
-                  alt={getPlayerName(player)}
-                  className="w-12 h-12 rounded-full object-cover"
-                />
-              ) : (
-                <div className={`w-12 h-12 ${player.avatarColor || 'bg-slate-600'} rounded-full flex items-center justify-center text-white font-bold`}>
-                  {getInitials(getPlayerName(player))}
-                </div>
-              )}
-
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="text-white font-semibold truncate">
-                    {getPlayerName(player)} {isCurrentUser ? '(You)' : ''}
-                  </span>
-                  <span className="inline-flex items-center justify-center min-w-8 h-8 px-2 rounded-full bg-slate-700 text-slate-200 text-sm font-bold">
-                    {candidateVoteCount}
-                  </span>
-                </div>
-
-                <div className="flex items-center mt-2">
-                  {candidateVotes.map((voter, index) => {
-                    const voterUid = getPlayerUid(voter);
-                    const voterPhoto = getPlayerPhoto(voter);
-                    const overlapClass = index > 0 ? '-ml-2' : '';
-                    const voterName = getPlayerName(voter);
-
-                    return voterPhoto ? (
-                      <img
-                        key={voterUid}
-                        src={voterPhoto}
-                        alt={voterName}
-                        className={`w-7 h-7 rounded-full border-2 border-slate-900 object-cover ${overlapClass}`}
-                        title={voterName}
-                      />
-                    ) : (
-                      <div
-                        key={voterUid}
-                        className={`w-7 h-7 ${voter.avatarColor || 'bg-slate-600'} rounded-full border-2 border-slate-900 flex items-center justify-center text-[10px] text-white font-bold ${overlapClass}`}
-                        title={voterName}
-                      >
-                        {getInitials(voterName)}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            </button>
+            <li key={candidateUid}>
+              <SelectableRow
+                selected={selectedTarget === candidateUid && canVote}
+                disabled={!canVote || hasConfirmed || paused || isSelf}
+                mark={canVote && !isSelf}
+                onClick={() => handleSelectTarget(candidateUid)}
+                leading={<Avatar player={player} size="lg" />}
+                title={`${playerName(player)}${isSelf ? ' (you)' : ''}`}
+                subtitle={voters.length > 0 ? (
+                  <AvatarStack players={voters} max={6} size="xs" ringClass="ring-surface" className="mt-1" />
+                ) : null}
+                trailing={voters.length > 0 ? (
+                  <Badge tone="brand" className="tabular">{voters.length} vote{voters.length === 1 ? '' : 's'}</Badge>
+                ) : null}
+              />
+            </li>
           );
         })}
-      </div>
+      </ul>
 
-      {canVote && !hasConfirmed && (
-        <>
-          <button
-            type="button"
+      {voteError && <p role="alert" className="text-center text-sm text-danger">{voteError}</p>}
+
+      <ScreenFooter>
+        {canVote && (
+          <Button
+            size="lg"
+            block
             onClick={handleConfirmVote}
-            disabled={!selectedTarget || isSubmitting}
-            className="w-full bg-white hover:bg-slate-200 disabled:bg-slate-600 text-slate-900 disabled:text-slate-400 font-bold py-4 rounded-xl transition-colors"
+            disabled={hasConfirmed || !selectedTarget || paused}
+            loading={isSubmitting}
           >
-            {isSubmitting ? 'Confirming...' : 'Confirm Vote'}
-          </button>
-
-          {voteError && <p className="text-red-400 text-sm text-center mt-2">{voteError}</p>}
-        </>
-      )}
-
-      {hasConfirmed && (
-        <div className="bg-slate-700/40 border border-slate-600 rounded-xl p-4 text-center mt-3">
-          <p className="text-violet-300 font-semibold">Vote confirmed. Waiting for others...</p>
-        </div>
-      )}
+            {hasConfirmed ? 'Vote locked in' : selectedTarget ? `Vote for ${playerName(playersByUid.get(selectedTarget))}` : 'Choose who to vote for'}
+          </Button>
+        )}
+        {isHost && (
+          <Button variant="secondary" block onClick={onEndVoting} disabled={paused}>Close voting now</Button>
+        )}
+        {extraActions}
+      </ScreenFooter>
     </div>
   );
 }

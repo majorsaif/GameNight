@@ -1,34 +1,31 @@
 const wordImposterRules = {
   title: 'Word Imposter',
-  summary:
-    'A social deduction game where Town players share one word while imposter players try to survive voting and mislead the table.',
-
+  summary: 'Everyone gets the same secret word, except the imposter. Give clues, spot who is bluffing and vote them out.',
   sections: [
     {
       heading: 'Setup',
-      text: 'Town players receive the town word. If "Imposter gets no word" is ON, imposters only learn that they are the imposter. If it is OFF, each imposter secretly gets a different, similar word and may not even realise they are the imposter. With "Show Category" on, everyone sees the word\'s category.',
+      text: 'Imposters get a similar decoy word and may not realise they are the imposter. With "Imposter gets no word" on, they are simply told they are the imposter. "Show category" gives everyone the word\'s category.'
     },
     {
-      heading: 'Describing',
-      text: 'Each round starts with a random active starting player and direction. Active players give clues and then mark ready. Eliminated players can watch but cannot interact.',
+      heading: 'Clues',
+      text: 'Starting with a random player, go round giving one clue each. Tap Ready to vote when you have heard enough.'
     },
     {
       heading: 'Voting',
-      text: 'Only active players can vote and be voted for. The player with the most votes is eliminated and everyone learns whether they were an imposter. If the top vote is tied, nobody is eliminated and a new describing round begins.',
+      text: 'The player with the most votes is out, and everyone learns whether they were an imposter. A tied vote removes nobody and starts a new round.'
     },
     {
-      heading: 'Declare Guess (Only when No-Word is ON)',
-      text: 'Imposters can declare a guess during describing or voting. The game pauses, the imposter says the word out loud, and the host marks it Correct or Incorrect. A wrong guess eliminates that imposter.',
+      heading: 'Guessing the word',
+      text: 'Only when imposters have no word: an imposter can stop the game to guess the word out loud, and the host marks it right or wrong. A wrong guess puts that imposter out.'
     },
     {
-      heading: 'Win Conditions',
+      heading: 'Winning',
       items: [
-        { role: 'Town wins', text: 'All imposters are eliminated.' },
-        { role: 'Imposter wins', text: 'The imposters equal or outnumber the remaining town players (with one imposter, that means only 2 players are left).' },
-        { role: 'Imposter wins (No-Word Mode)', text: 'If No-Word mode is enabled, an imposter also wins by correctly guessing the town word.' },
-      ],
-    },
-  ],
+        { role: 'Town', text: 'Wins when every imposter is out.' },
+        { role: 'Imposters', text: 'Win when they equal or outnumber the town, or by guessing the word correctly.' }
+      ]
+    }
+  ]
 };
 
 export default wordImposterRules;

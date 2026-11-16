@@ -1,38 +1,32 @@
 const mafiaRules = {
   title: 'Mafia',
-  summary:
-    'A social deduction game where Mafia act at night and Town works together during the day to identify and eliminate them.',
-
+  summary: 'The Mafia pick someone off each night. By day, the town talks it through and votes out a suspect.',
   sections: [
-    {
-      heading: 'Sound Effects',
-      text: 'This game uses sound effects to signal each phase of the night. When the first night begins, you will have 7 seconds to turn up your volume before the night sounds start. Make sure your volume is on before the host starts the game.',
-    },
     {
       heading: 'Roles',
       items: [
-        { role: 'Mafia', text: 'Knows the other Mafia members and agrees on one target each night. With multiple Mafia, the most-picked target is chosen.' },
-        { role: 'Civilian', text: 'No special night action. Uses discussion and voting to identify Mafia.' },
-        { role: 'Doctor', text: 'If enabled, chooses one player to protect each night.' },
-        { role: 'Detective', text: 'If enabled, investigates one player each night to learn if they are Mafia.' },
-      ],
+        { role: 'Mafia', text: 'Know each other and choose one target each night. If they disagree, the most-picked target is hit.' },
+        { role: 'Doctor', text: 'Protects one player each night (if switched on).' },
+        { role: 'Detective', text: 'Checks one player each night to learn whether they are Mafia (if switched on).' },
+        { role: 'Civilian', text: 'No night action. Finds the Mafia by talking and voting.' }
+      ]
     },
     {
-      heading: 'Night Phase',
-      text: 'Players act in hidden night phases. Mafia selects a target, Doctor protects (if enabled), and Detective investigates (if enabled). Results are revealed at day start.',
+      heading: 'Night',
+      text: 'Everyone closes their eyes. Sound cues wake each role in turn, so turn your volume up before the first night.'
     },
     {
-      heading: 'Day Phase',
-      text: 'The night report reveals who was attacked. Surviving players discuss, then vote to eliminate one suspect (ties are broken at random). Eliminated players can no longer act but can keep watching. If nobody votes, nobody is eliminated.',
+      heading: 'Day',
+      text: 'The night report shows who was attacked. Talk it over, then vote someone out. Ties are broken at random, and if nobody votes, nobody goes. Players who are out can keep watching.'
     },
     {
-      heading: 'Win Conditions',
+      heading: 'Winning',
       items: [
-        { role: 'Town wins', text: 'All Mafia members have been eliminated.' },
-        { role: 'Mafia wins', text: 'Mafia members equal or outnumber the remaining non-Mafia players.' },
-      ],
-    },
-  ],
+        { role: 'Town', text: 'Wins when every Mafia member is out.' },
+        { role: 'Mafia', text: 'Win when they equal or outnumber everyone else.' }
+      ]
+    }
+  ]
 };
 
 export default mafiaRules;

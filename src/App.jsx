@@ -3,7 +3,7 @@ import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
-import { GameLoading } from './components/GameShell';
+import { LoadingScreen } from './ui';
 import WelcomeScreen from './components/WelcomeScreen';
 import OnboardingScreen from './components/OnboardingScreen';
 import HomeScreen from './components/HomeScreen';
@@ -27,14 +27,14 @@ function App() {
   return (
     <ErrorBoundary>
       {isStagingBuild && (
-        <div className="fixed bottom-2 left-2 z-[200] px-2 py-1 rounded bg-amber-500 text-black text-[10px] font-bold uppercase tracking-wider pointer-events-none">
+        <div className="pointer-events-none fixed left-1/2 top-0 z-[200] -translate-x-1/2 rounded-b-sm bg-warning px-2 text-xs font-semibold text-black">
           Staging
         </div>
       )}
       <ToastProvider>
         <AuthProvider>
           <Router>
-            <Suspense fallback={<GameLoading label="Loading..." />}>
+            <Suspense fallback={<LoadingScreen />}>
               <Routes>
                 <Route path="/onboarding" element={<OnboardingScreen />} />
                 <Route path="/" element={<WelcomeScreen />} />

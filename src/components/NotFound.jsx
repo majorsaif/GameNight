@@ -1,16 +1,20 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import GameNightLogo from './GameNightLogo';
+import { Compass } from 'lucide-react';
+import { Button, StatusScreen } from '../ui';
 
 export default function NotFound() {
+  useEffect(() => {
+    document.title = 'Page not found | Its Games Night';
+  }, []);
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col items-center justify-center text-center gap-6 px-6">
-      <GameNightLogo size="hero" />
-      <h1 className="text-3xl font-bold text-white">Page not found</h1>
-      <p className="text-slate-400">That link doesn&apos;t go anywhere. Host a new room or join one with a code.</p>
-      <Link to="/" className="px-8 py-3 bg-violet-600 hover:bg-violet-500 text-white font-semibold rounded-xl">
-        Go home
-      </Link>
-    </div>
+    <StatusScreen
+      icon={Compass}
+      title="Page not found"
+      message="That link doesn't lead anywhere. Head home to host a room or join one with a code."
+    >
+      <Button as={Link} to="/" block>Go to home</Button>
+    </StatusScreen>
   );
 }
