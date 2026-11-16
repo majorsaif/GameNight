@@ -501,7 +501,7 @@ export function PaperButton({ icon: Icon = null, className, children, ...rest })
     <button
       type="button"
       className={cn(
-        'inline-flex min-h-tap items-center justify-center gap-2 rounded-control border-2 border-dashed border-manila-line bg-manila-light/70 px-4 font-mono text-sm font-bold uppercase tracking-[0.12em] text-manila-ink transition-colors duration-150 hover:bg-manila-light disabled:cursor-not-allowed disabled:opacity-60',
+        'inline-flex min-h-tap items-center justify-center gap-2 whitespace-nowrap rounded-control border-2 border-dashed border-manila-line bg-manila-light/70 px-4 font-mono text-sm font-bold uppercase tracking-[0.12em] text-manila-ink transition-colors duration-150 hover:bg-manila-light disabled:cursor-not-allowed disabled:opacity-60',
         className
       )}
       {...rest}

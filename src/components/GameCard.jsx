@@ -18,7 +18,7 @@ export default function GameCard({ game, playerCount = null, disabled = false, o
         <img src={game.art} alt="" className="aspect-[16/8] w-full scale-110 object-cover" />
       </span>
       <span className="flex w-full flex-1 flex-col gap-2 p-4">
-        <span className="flex items-center justify-between gap-3">
+        <span className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 md:flex-col md:items-start">
           <span className="text-xl font-semibold text-ink">{game.name}</span>
           <Badge tone={short ? 'warning' : 'neutral'} icon={Users}>{game.minPlayers}+ players</Badge>
         </span>

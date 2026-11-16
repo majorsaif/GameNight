@@ -81,7 +81,7 @@ export default function LobbyCard({ game, deal, room, lobbyState, userId, roomId
             Watching: {spectatingPlayers.map((p) => playerName(p)).join(', ')}
           </p>
         )}
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="flex flex-wrap gap-2">
           <PaperButton icon={isSpectating ? UserPlus : Eye} onClick={handleToggleSpectate} disabled={busy}>
             {isSpectating ? 'Join the game' : 'Watch instead'}
           </PaperButton>
