@@ -178,7 +178,7 @@ export function BallotRow({ player, selected = false, disabled = false, mark = t
     <li className="border-t border-paper-line first:border-t-0">
       <button
         type="button"
-        aria-pressed={mark ? selected : undefined}
+        aria-pressed={mark === true ? selected : undefined}
         disabled={disabled}
         onClick={onClick}
         className={cn(
@@ -187,7 +187,8 @@ export function BallotRow({ player, selected = false, disabled = false, mark = t
           disabled ? 'cursor-not-allowed' : 'hover:bg-paper-shade'
         )}
       >
-        {mark && (
+        {mark === 'blank' && <span className="h-7 w-7 shrink-0" aria-hidden="true" />}
+        {mark === true && (
           <span
             aria-hidden="true"
             className={cn(
@@ -440,7 +441,7 @@ function Flap({ char, big }) {
     <span
       className={cn(
         'relative inline-flex items-center justify-center rounded-sm border border-[#2b2b2b] bg-[#151515] font-mono font-bold',
-        big ? 'h-14 w-10 text-4xl' : 'h-9 w-7 text-lg'
+        big ? 'h-12 w-8 text-3xl sm:h-14 sm:w-10 sm:text-4xl' : 'h-9 w-6 text-base sm:w-7 sm:text-lg'
       )}
     >
       {char}
@@ -460,11 +461,11 @@ export function DeparturesBoard({ seconds, paused = false }) {
         <span>Departures</span>
         <span className={tone}>{status}</span>
       </div>
-      <div className="flex items-center justify-between gap-3 px-4 py-4">
-        <span className="flex gap-1 text-ink" aria-hidden="true">
+      <div className="flex items-center justify-between gap-2 px-3 py-4 sm:px-4">
+        <span className="flex gap-0.5 text-ink sm:gap-1" aria-hidden="true">
           {'TIME'.split('').map((char, i) => <Flap key={i} char={char} />)}
         </span>
-        <span className={cn('flex gap-1', tone)} aria-hidden="true">
+        <span className={cn('flex gap-0.5 sm:gap-1', tone)} aria-hidden="true">
           {clock.split('').map((char, i) => <Flap key={i} char={char} big />)}
         </span>
       </div>

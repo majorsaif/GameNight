@@ -166,7 +166,7 @@ export default function OnePhoneSpyfall() {
       <header>
         <TypeLabel className="text-ink-muted">Operation Spyfall</TypeLabel>
         <h2 className="mt-2 break-words font-serif text-4xl font-black uppercase text-danger">{spyNames}</h2>
-        <p className="mt-1 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink-muted">
+        <p className="mt-2 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink-muted">
           {dealt.spyIds.length > 1 ? 'Were the spies' : 'Was the spy'}
         </p>
       </header>

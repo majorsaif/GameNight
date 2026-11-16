@@ -138,7 +138,7 @@ export default function VotingPanel({
               suffix={isSelf ? ' (you)' : ''}
               selected={canVote && selectedTarget === candidateUid}
               disabled={!canVote || hasConfirmed || paused || isSelf}
-              mark={canVote && !isSelf}
+              mark={!canVote ? false : isSelf ? 'blank' : true}
               onClick={() => handleSelectTarget(candidateUid)}
               voters={voters}
               count={voters.length}

@@ -373,7 +373,7 @@ export default function SpyfallGame() {
                 <h2 className={cn('mt-2 font-serif text-4xl font-black uppercase', townWon ? 'text-spyfall' : 'text-danger')}>
                   {townWon ? 'Spy identified' : 'Operative undetected'}
                 </h2>
-                <p className="mt-1 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink-muted">
+                <p className="mt-2 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink-muted">
                   {townWon ? 'Mission complete' : (spyIds.length > 1 ? 'The spies evaded capture' : 'The spy evaded capture')}
                 </p>
                 {reason && (
