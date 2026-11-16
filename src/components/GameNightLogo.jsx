@@ -1,14 +1,19 @@
 import React from 'react';
 import logo from '../assets/itsgamesnight-logo.webp';
 
-export default function GameNightLogo({ size = 'compact', className = '' }) {
-  const logoSizeClass = size === 'hero' ? 'h-20' : 'h-8';
+const SIZES = {
+  compact: 'h-8',
+  hero: 'h-14 sm:h-16'
+};
 
+export default function GameNightLogo({ size = 'compact', className = '' }) {
   return (
     <img
       src={logo}
       alt="Its Games Night"
-      className={`${logoSizeClass} w-auto ${className}`.trim()}
+      width="500"
+      height="118"
+      className={`${SIZES[size] || SIZES.compact} w-auto ${className}`.trim()}
     />
   );
 }

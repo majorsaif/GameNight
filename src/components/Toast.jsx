@@ -1,11 +1,12 @@
 import React, { createContext, useCallback, useContext, useMemo, useRef, useState } from 'react';
+import { CircleAlert, CircleCheck, Info } from 'lucide-react';
 
 const ToastContext = createContext(null);
 
-const TONE_CLASSES = {
-  info: 'bg-slate-900/95 border-slate-700 text-slate-100',
-  success: 'bg-emerald-900/95 border-emerald-700 text-emerald-50',
-  error: 'bg-red-900/95 border-red-700 text-red-50'
+const TONES = {
+  info: { icon: Info, className: 'text-brand-300' },
+  success: { icon: CircleCheck, className: 'text-success' },
+  error: { icon: CircleAlert, className: 'text-danger' }
 };
 
 export function ToastProvider({ children }) {
@@ -34,20 +35,26 @@ export function ToastProvider({ children }) {
     <ToastContext.Provider value={api}>
       {children}
       <div
-        className="fixed top-4 inset-x-0 z-[100] flex flex-col items-center gap-2 px-4 pointer-events-none"
+        className="pointer-events-none fixed inset-x-0 top-0 z-[100] flex flex-col items-center gap-2 px-gutter pt-safe"
         role="status"
         aria-live="polite"
       >
-        {toasts.map((toast) => (
-          <button
-            key={toast.id}
-            type="button"
-            onClick={() => dismiss(toast.id)}
-            className={`pointer-events-auto max-w-sm w-full text-left px-4 py-3 rounded-xl border shadow-2xl text-sm font-semibold animate-fade-in ${TONE_CLASSES[toast.tone] || TONE_CLASSES.info}`}
-          >
-            {toast.message}
-          </button>
-        ))}
+        <div className="h-3 shrink-0" aria-hidden="true" />
+        {toasts.map((toast) => {
+          const tone = TONES[toast.tone] || TONES.info;
+          const Icon = tone.icon;
+          return (
+            <button
+              key={toast.id}
+              type="button"
+              onClick={() => dismiss(toast.id)}
+              className="pointer-events-auto flex w-full max-w-sm animate-enter items-center gap-3 rounded-control border border-line-strong bg-surface-raised px-4 py-3 text-left shadow-pop"
+            >
+              <Icon className={`h-5 w-5 shrink-0 ${tone.className}`} aria-hidden="true" />
+              <span className="min-w-0 flex-1 text-sm font-medium text-ink">{toast.message}</span>
+            </button>
+          );
+        })}
       </div>
     </ToastContext.Provider>
   );

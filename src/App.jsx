@@ -1,14 +1,37 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy as reactLazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider } from './components/Toast';
 import ErrorBoundary from './components/ErrorBoundary';
-import { GameLoading } from './components/GameShell';
+import { LoadingScreen } from './ui';
 import WelcomeScreen from './components/WelcomeScreen';
 import OnboardingScreen from './components/OnboardingScreen';
 import HomeScreen from './components/HomeScreen';
 import NotFound from './components/NotFound';
 import { isStagingBuild } from './firebase';
+
+// After a new deploy, files from the old build are gone. A tab that was open
+// across the deploy reloads once to pick up the new build instead of crashing.
+const RELOAD_KEY = 'gamenight_chunk_reload';
+function lazy(load) {
+  return reactLazy(() => load()
+    .then((module) => {
+      try { sessionStorage.removeItem(RELOAD_KEY); } catch { /* storage unavailable */ }
+      return module;
+    })
+    .catch((error) => {
+      let alreadyTried = false;
+      try {
+        alreadyTried = sessionStorage.getItem(RELOAD_KEY) === '1';
+        if (!alreadyTried) sessionStorage.setItem(RELOAD_KEY, '1');
+      } catch { alreadyTried = true; }
+      if (!alreadyTried) {
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }));
+}
 
 // Game screens are loaded on demand so the first page loads fast
 const GamesScreen = lazy(() => import('./components/GamesScreen'));
@@ -22,20 +45,19 @@ const OnePhoneGames = lazy(() => import('./onephone/OnePhoneGames'));
 const OnePhoneMafiaRoute = lazy(() => import('./onephone/OnePhoneMafiaRoute'));
 const OnePhoneWordImposter = lazy(() => import('./onephone/modes/OnePhoneWordImposter'));
 const OnePhoneSpyfall = lazy(() => import('./onephone/modes/OnePhoneSpyfall'));
-const OnePhoneWheel = lazy(() => import('./onephone/modes/OnePhoneWheel'));
 
 function App() {
   return (
     <ErrorBoundary>
       {isStagingBuild && (
-        <div className="fixed bottom-2 left-2 z-[200] px-2 py-1 rounded bg-amber-500 text-black text-[10px] font-bold uppercase tracking-wider pointer-events-none">
+        <div className="pointer-events-none fixed left-1/2 top-0 z-[200] -translate-x-1/2 rounded-b-sm bg-warning px-2 text-xs font-semibold text-black">
           Staging
         </div>
       )}
       <ToastProvider>
         <AuthProvider>
           <Router>
-            <Suspense fallback={<GameLoading label="Loading..." />}>
+            <Suspense fallback={<LoadingScreen />}>
               <Routes>
                 <Route path="/onboarding" element={<OnboardingScreen />} />
                 <Route path="/" element={<WelcomeScreen />} />
@@ -45,7 +67,6 @@ function App() {
                 <Route path="/one-phone/mafia" element={<OnePhoneMafiaRoute />} />
                 <Route path="/one-phone/word-imposter" element={<OnePhoneWordImposter />} />
                 <Route path="/one-phone/spyfall" element={<OnePhoneSpyfall />} />
-                <Route path="/one-phone/wheel" element={<OnePhoneWheel />} />
                 <Route path="/room/:roomId" element={<HomeScreen />} />
                 <Route path="/room/:roomId/games" element={<GamesScreen />} />
                 <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />

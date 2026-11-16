@@ -11,11 +11,11 @@ No app install and no sign-up.
 | **Mafia** | 4+ | Hidden roles (Mafia, Doctor, Detective, Civilians), timed night turns with sound cues, day discussion and ballot voting. |
 | **Word Imposter** | 3+ | Everyone gets a secret word except the imposter(s), who get a decoy word or none. Describe, vote, unmask. |
 | **Spyfall** | 3+ | Everyone knows the location except the spy. Question each other before time runs out. |
-| **Spin the Wheel** | 2+ | Pick a random player or spin a custom wheel of forfeits. |
 
 ## Stack
 
 - React 19 + React Router 7, built with Vite, styled with Tailwind CSS
+- Design system: tokens in `tailwind.config.js`, app components in `src/ui/`, and the printed game props (case files, ballots, reports, boarding passes) in `src/components/props.jsx`. Icons are `lucide-react`; fonts are self-hosted with Fontsource.
 - Firebase Anonymous Auth + Cloud Firestore (real-time room state)
 - Hosted on Vercel (Hobby). Firebase runs on the free Spark plan, so it can never bill you; at worst it pauses until the daily quota resets.
 
