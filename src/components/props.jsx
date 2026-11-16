@@ -163,13 +163,13 @@ export function Ballot({ title = 'Official ballot', subtitle = 'Mark one candida
           <p className={cn('tabular font-serif text-display font-black', seconds <= 10 && 'text-stamp-red')}>{formatClock(seconds)}</p>
         </div>
       )}
-      {status && <p className="mb-3 text-center font-mono text-sm text-paper-muted">{status}</p>}
-      <ul className="overflow-hidden rounded border border-paper-line">{children}</ul>
+      {status && <p className="mb-3 mt-2 text-center font-mono text-sm text-paper-muted">{status}</p>}
       {stamped && (
-        <div className="pointer-events-none absolute inset-0 flex items-center justify-center" aria-hidden="true">
-          <Stamp tone="red" size="lg" tilt="steep" className="bg-paper/60 opacity-90">Voted</Stamp>
+        <div className="mb-4 flex justify-center" role="status">
+          <Stamp tone="red" size="lg" tilt="steep">Voted</Stamp>
         </div>
       )}
+      <ul className="overflow-hidden rounded border border-paper-line">{children}</ul>
     </Paper>
   );
 }

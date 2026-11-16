@@ -590,7 +590,7 @@ export default function MafiaGame() {
                   {timeLeft != null && (
                     <p className={cn('tabular font-serif text-timer font-black', timeLeft <= 10 ? 'text-warning' : 'text-ink')}>{formatClock(timeLeft)}</p>
                   )}
-                  <p className="mt-1 text-base text-ink-muted">Talk it over. Who do you suspect?</p>
+                  <p className="mt-3 text-base text-ink-muted">Talk it over. Who do you suspect?</p>
                 </div>
                 <IncidentReport
                   victim={victim}
