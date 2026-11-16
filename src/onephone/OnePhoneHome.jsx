@@ -69,10 +69,6 @@ export default function OnePhoneHome() {
     navigate('/one-phone/games');
   };
 
-  const handleSpinWheel = () => {
-    navigate('/one-phone/wheel');
-  };
-
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex flex-col">
       <header className="relative z-40 w-full max-w-md mx-auto px-4 sm:px-6 py-4">
@@ -165,20 +161,6 @@ export default function OnePhoneHome() {
           onClick={handleSocialDeduction}
           style={{
             backgroundImage: 'url("/images/cards/social-deduction.webp")',
-            backgroundSize: '112%',
-            backgroundPosition: 'center'
-          }}
-          className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-        >
-          <div className="absolute inset-0 bg-black/25" />
-        </button>
-
-        <button
-          type="button"
-          aria-label="Spin Wheel"
-          onClick={handleSpinWheel}
-          style={{
-            backgroundImage: 'url("/images/cards/spin-wheel.webp")',
             backgroundSize: '112%',
             backgroundPosition: 'center'
           }}

@@ -199,51 +199,6 @@ export async function endActivity(roomId) {
   await updateDoc(roomRef(roomId), { activeActivity: null, lastActivity: serverTimestamp() });
 }
 
-export async function startWheel(roomId, wheelData) {
-  const options = (Array.isArray(wheelData?.options) ? wheelData.options : [])
-    .slice(0, 30)
-    .map((option) => ({
-      id: String(option.id),
-      label: String(option.label || '').slice(0, 40),
-      color: option.color || '#8b5cf6',
-      playerId: option.playerId ?? null
-    }));
-  await updateDoc(roomRef(roomId), {
-    activeActivity: {
-      type: wheelData?.type === 'playerWheel' ? 'playerWheel' : 'customWheel',
-      options,
-      state: 'idle',
-      resultId: null,
-      spinStartTime: null,
-      spinDuration: null,
-      spinCount: 0
-    },
-    lastActivity: serverTimestamp()
-  });
-}
-
-/**
- * Host spins the wheel. The result is chosen up front and every client animates
- * to it; clients work out "finished" from spinStartTime + spinDuration, so no
- * second write is needed.
- */
-export async function spinWheel(roomId, activity) {
-  const options = activity?.options || [];
-  if (options.length < 2) return;
-  const values = new Uint32Array(2);
-  crypto.getRandomValues(values);
-  const result = options[values[0] % options.length];
-  const duration = 4000 + (values[1] % 3000);
-  await updateDoc(roomRef(roomId), {
-    'activeActivity.state': 'spinning',
-    'activeActivity.resultId': result.id,
-    'activeActivity.spinStartTime': Date.now(),
-    'activeActivity.spinDuration': duration,
-    'activeActivity.spinCount': (activity.spinCount || 0) + 1,
-    lastActivity: serverTimestamp()
-  });
-}
-
 /**
  * Deletes a handful of rooms that have been idle for 12h+. Runs at most every
  * 6h per device; security rules only allow deleting rooms that really expired.

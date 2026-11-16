@@ -247,7 +247,7 @@ export default function WelcomeScreen() {
       <footer className="py-6 text-center text-xs text-slate-600">
         <Link to="/privacy" className="hover:text-slate-400">Privacy</Link>
         <span className="mx-2">·</span>
-        <span>Mafia · Word Imposter · Spyfall · Spin the Wheel</span>
+        <span>Mafia · Word Imposter · Spyfall</span>
       </footer>
 
       <ProfileModal isOpen={showProfileModal} onClose={() => setShowProfileModal(false)} />

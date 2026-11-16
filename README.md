@@ -11,7 +11,6 @@ No app install and no sign-up.
 | **Mafia** | 4+ | Hidden roles (Mafia, Doctor, Detective, Civilians), timed night turns with sound cues, day discussion and ballot voting. |
 | **Word Imposter** | 3+ | Everyone gets a secret word except the imposter(s), who get a decoy word or none. Describe, vote, unmask. |
 | **Spyfall** | 3+ | Everyone knows the location except the spy. Question each other before time runs out. |
-| **Spin the Wheel** | 2+ | Pick a random player or spin a custom wheel of forfeits. |
 
 ## Stack
 

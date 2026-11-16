@@ -22,7 +22,6 @@ const OnePhoneGames = lazy(() => import('./onephone/OnePhoneGames'));
 const OnePhoneMafiaRoute = lazy(() => import('./onephone/OnePhoneMafiaRoute'));
 const OnePhoneWordImposter = lazy(() => import('./onephone/modes/OnePhoneWordImposter'));
 const OnePhoneSpyfall = lazy(() => import('./onephone/modes/OnePhoneSpyfall'));
-const OnePhoneWheel = lazy(() => import('./onephone/modes/OnePhoneWheel'));
 
 function App() {
   return (
@@ -45,7 +44,6 @@ function App() {
                 <Route path="/one-phone/mafia" element={<OnePhoneMafiaRoute />} />
                 <Route path="/one-phone/word-imposter" element={<OnePhoneWordImposter />} />
                 <Route path="/one-phone/spyfall" element={<OnePhoneSpyfall />} />
-                <Route path="/one-phone/wheel" element={<OnePhoneWheel />} />
                 <Route path="/room/:roomId" element={<HomeScreen />} />
                 <Route path="/room/:roomId/games" element={<GamesScreen />} />
                 <Route path="/room/:roomId/games/mafia" element={<MafiaGame />} />

@@ -1,7 +1,7 @@
 {
   "name": "itsgamesnight",
   "version": "1.0.0",
-  "description": "Its Games Night - free party games (Mafia, Word Imposter, Spyfall, Spin the Wheel) played together on your phones",
+  "description": "Its Games Night - free party games (Mafia, Word Imposter, Spyfall) played together on your phones",
   "type": "module",
   "scripts": {
     "dev": "vite",
@@ -21,7 +21,6 @@
   },
   "homepage": "https://www.itsgamesnight.com",
   "dependencies": {
-    "canvas-confetti": "^1.9.4",
     "firebase": "^12.10.0",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",

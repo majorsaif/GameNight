@@ -4,14 +4,10 @@ import {
   endActivity,
   leaveRoom,
   removePlayer,
-  spinWheel,
-  startWheel,
   transferHost,
   useRoom
 } from '../hooks/useRoom';
 import { useAuth } from '../hooks/useAuth';
-import WheelSpin from './ForfeitWheel';
-import WheelSetupModal from './WheelSetupModal';
 import MafiaLobbyCard from './MafiaLobbyCard';
 import WordImposterLobbyCard from './WordImposterLobbyCard';
 import SpyfallLobbyCard from './SpyfallLobbyCard';
@@ -54,7 +50,6 @@ export default function HomeScreen() {
   const { room, loading: roomLoading, error, isHost } = useRoom(roomId, user);
   const navigate = useNavigate();
   const toast = useToast();
-  const [showWheelSetup, setShowWheelSetup] = useState(false);
   const [confirmLeave, setConfirmLeave] = useState(false);
 
   useEffect(() => {
@@ -179,24 +174,8 @@ export default function HomeScreen() {
           navigate={navigate}
           onCopyCode={handleCopyCode}
           onShare={handleShareRoom}
-          onOpenWheelSetup={() => setShowWheelSetup(true)}
         />
       </main>
-
-      {showWheelSetup && (
-        <WheelSetupModal
-          room={room}
-          onClose={() => setShowWheelSetup(false)}
-          onLaunch={async (wheelData) => {
-            setShowWheelSetup(false);
-            try {
-              await startWheel(roomId, wheelData);
-            } catch {
-              toast.error("Couldn't start the wheel. Try again.");
-            }
-          }}
-        />
-      )}
 
       <ConfirmDialog
         open={confirmLeave}
@@ -296,12 +275,13 @@ function PlayersModal({ room, roomId, isHost, userId, onClose }) {
   );
 }
 
-function RoomView({ room, isHost, userId, roomId, navigate, onCopyCode, onShare, onOpenWheelSetup }) {
+function RoomView({ room, isHost, userId, roomId, navigate, onCopyCode, onShare }) {
   const [showAllPlayers, setShowAllPlayers] = useState(false);
   const toast = useToast();
-  const activity = room.activeActivity;
+  // Rooms left on an activity this version doesn't know (e.g. the retired
+  // wheel) are treated as having no activity, so they show the normal room view.
+  const activity = GAME_ROUTES[room.activeActivity?.type] ? room.activeActivity : null;
   const activityType = activity?.type;
-  const isWheel = activityType === 'playerWheel' || activityType === 'customWheel';
   const isLobby = activity?.phase === 'lobby';
 
   const visiblePlayers = room.players.slice(0, 6);
@@ -345,17 +325,6 @@ function RoomView({ room, isHost, userId, roomId, navigate, onCopyCode, onShare,
             </button>
           )}
         </div>
-      );
-    }
-    if (isWheel) {
-      return (
-        <WheelSpin
-          activity={activity}
-          room={room}
-          isHost={isHost}
-          onEndActivity={() => endActivity(roomId)}
-          onSpin={() => spinWheel(roomId, activity).catch(() => toast.error("Couldn't spin. Try again."))}
-        />
       );
     }
     return null;
@@ -449,15 +418,6 @@ function RoomView({ room, isHost, userId, roomId, navigate, onCopyCode, onShare,
             aria-label="Social deduction games"
             onClick={() => navigate(`/room/${roomId}/games`)}
             style={{ backgroundImage: 'url("/images/cards/social-deduction.webp")', backgroundSize: '112%', backgroundPosition: 'center' }}
-            className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
-          >
-            <div className="absolute inset-0 bg-black/25" />
-          </button>
-          <button
-            type="button"
-            aria-label="Spin the wheel"
-            onClick={onOpenWheelSetup}
-            style={{ backgroundImage: 'url("/images/cards/spin-wheel.webp")', backgroundSize: '112%', backgroundPosition: 'center' }}
             className="group relative overflow-hidden rounded-[2rem] shadow-xl hover:shadow-2xl hover:-translate-y-1 active:translate-y-0 transition-all duration-300 h-52 bg-slate-900"
           >
             <div className="absolute inset-0 bg-black/25" />
