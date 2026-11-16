@@ -2,11 +2,11 @@ import React, { useMemo, useState } from 'react';
 import { BookOpen, Eye, Play, Settings2, UserPlus } from 'lucide-react';
 import { endActivity, getLobbyParticipantIds } from '../hooks/useRoom';
 import { saveLobbyRules, setSpectating, startFromLobby } from '../lib/lobby';
-import { ACCENT_TINT } from '../games/catalog';
 import { useToast } from './Toast';
 import GameSettings, { summarizeRules, validateRules } from './GameSettings';
 import RulesSheet from './RulesSheet';
-import { Avatar, Badge, Button, Card, ConfirmDialog, Notice, ScreenFooter, Sheet, cn, playerName } from '../ui';
+import { AgentList, CaseFile, PaperButton, Stamp } from './props';
+import { Button, ConfirmDialog, ScreenFooter, Sheet, playerName } from '../ui';
 
 /**
  * Lobby for any game. Everyone in the room is in the game by default; players
@@ -28,7 +28,6 @@ export default function LobbyCard({ game, deal, room, lobbyState, userId, roomId
   const missing = Math.max(0, game.minPlayers - participantIds.length);
   const canStart = missing === 0;
   const rules = lobbyState?.rules || {};
-  const Icon = game.icon;
 
   const guarded = async (fn) => {
     if (busy) return;
@@ -61,55 +60,33 @@ export default function LobbyCard({ game, deal, room, lobbyState, userId, roomId
   const handleToggleSpectate = () => guarded(() => setSpectating(roomId, userId, !isSpectating));
 
   return (
-    <Card padding="none" className="animate-enter overflow-hidden">
-      <div className="flex items-center gap-3 p-4">
-        <span className={cn('inline-flex h-11 w-11 shrink-0 items-center justify-center rounded-full', ACCENT_TINT[game.accent])}>
-          <Icon className="h-5 w-5" aria-hidden="true" />
-        </span>
-        <div className="min-w-0 flex-1">
-          <h2 className="truncate text-xl font-semibold text-ink">{game.name}</h2>
-          <p className="text-sm text-ink-muted">Lobby open</p>
-        </div>
-        <Button variant="ghost" size="sm" icon={BookOpen} onClick={() => setShowRules(true)}>Rules</Button>
-      </div>
-
-      <ul className="flex flex-wrap gap-2 border-t border-line px-4 py-3" aria-label="Game settings">
-        {summarizeRules(game.type, rules).map((item) => (
-          <li key={item}><Badge>{item}</Badge></li>
-        ))}
-      </ul>
-
-      <div className="border-t border-line p-4">
-        <div className="flex items-center justify-between gap-3">
-          <h3 className="text-base font-semibold text-ink">Playing</h3>
-          <Badge tone={canStart ? 'success' : 'warning'}>
-            {canStart ? `${joinedPlayers.length} ready` : `${joinedPlayers.length} of ${game.minPlayers} needed`}
-          </Badge>
-        </div>
-        <ul className="mt-3 grid grid-cols-2 gap-2">
-          {joinedPlayers.map((player) => (
-            <li key={player.id} className="flex min-w-0 items-center gap-2 rounded-control bg-surface-raised p-2">
-              <Avatar player={player} size="sm" />
-              <span className="min-w-0 truncate text-sm font-medium text-ink">
-                {playerName(player)}{player.id === userId ? ' (you)' : ''}
-              </span>
-            </li>
-          ))}
-        </ul>
+    <div className="animate-enter">
+      <CaseFile
+        name={game.name}
+        meta={summarizeRules(game.type, rules).join(' · ')}
+        action={<PaperButton icon={BookOpen} onClick={() => setShowRules(true)} className="px-3">Rules</PaperButton>}
+      >
+        <AgentList
+          players={joinedPlayers}
+          youId={userId}
+          renderStamp={(player) => (player.id === room.hostId ? <Stamp tone="brown" tilt="right">Host</Stamp> : null)}
+        />
+        <p className="font-mono text-sm">
+          {canStart
+            ? `Ready to open the case with ${joinedPlayers.length} agents.`
+            : `Need ${missing} more agent${missing === 1 ? '' : 's'} (${game.minPlayers} minimum).`}
+        </p>
         {spectatingPlayers.length > 0 && (
-          <p className="mt-3 text-sm text-ink-faint">
+          <p className="font-mono text-sm text-manila-ink/80">
             Watching: {spectatingPlayers.map((p) => playerName(p)).join(', ')}
           </p>
         )}
-
-        <div className="mt-4 flex flex-wrap gap-2">
-          <Button variant="secondary" size="sm" icon={isSpectating ? UserPlus : Eye} onClick={handleToggleSpectate} disabled={busy}>
+        <div className="grid gap-2 sm:grid-cols-2">
+          <PaperButton icon={isSpectating ? UserPlus : Eye} onClick={handleToggleSpectate} disabled={busy}>
             {isSpectating ? 'Join the game' : 'Watch instead'}
-          </Button>
+          </PaperButton>
           {isHost && (
-            <Button
-              variant="secondary"
-              size="sm"
+            <PaperButton
               icon={Settings2}
               disabled={busy}
               onClick={() => {
@@ -118,16 +95,13 @@ export default function LobbyCard({ game, deal, room, lobbyState, userId, roomId
               }}
             >
               Edit settings
-            </Button>
+            </PaperButton>
           )}
         </div>
-      </div>
-
-      {!isHost && (
-        <div className="border-t border-line p-4">
-          <Notice>Waiting for the host to start the game.</Notice>
-        </div>
-      )}
+        {!isHost && (
+          <p className="text-center font-mono text-sm font-bold uppercase tracking-[0.12em] text-manila-ink/80">Waiting for the host to start</p>
+        )}
+      </CaseFile>
 
       {isHost && (
         <ScreenFooter>
@@ -180,6 +154,6 @@ export default function LobbyCard({ game, deal, room, lobbyState, userId, roomId
           guarded(() => endActivity(roomId));
         }}
       />
-    </Card>
+    </div>
   );
 }

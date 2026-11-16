@@ -6,6 +6,7 @@ import doctorRoleCardImage from '../assets/mafia/doctor-card.webp';
 import civilianRoleCardImage from '../assets/mafia/civilian-card.webp';
 import cardBackImage from '../assets/mafia/card-back.webp';
 import { Badge } from '../ui';
+import { Stamp } from '../components/props';
 
 export const MAFIA_ROLES = {
   mafia: { label: 'Mafia', tone: 'mafia', icon: Skull, image: mafiaRoleCardImage },
@@ -44,4 +45,11 @@ export function RoleCard({ role, flipped, onToggle }) {
       </span>
     </button>
   );
+}
+
+const ROLE_STAMP_TONES = { mafia: 'red', doctor: 'green', detective: 'brown', civilian: 'blue' };
+
+/** The role as a rubber stamp, for case files. */
+export function RoleStamp({ role }) {
+  return <Stamp tone={ROLE_STAMP_TONES[role] || 'blue'} tilt="right">{roleMeta(role).label}</Stamp>;
 }

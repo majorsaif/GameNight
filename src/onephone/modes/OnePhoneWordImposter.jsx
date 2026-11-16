@@ -7,7 +7,7 @@ import { dealWordImposter, maxImpostersFor, WORD_IMPOSTER_MIN_PLAYERS } from '..
 import { pickRandom } from '../../lib/random';
 import { GAMES } from '../../games/catalog';
 import GameSettings from '../../components/GameSettings';
-import { SecretFace, WinnerBanner } from '../../components/gameParts';
+import { Envelope, TopSecret, TypeLabel, TypedMemo } from '../../components/props';
 import { Avatar, Badge, Button, Card, ConfirmDialog, Screen, ScreenFooter, ScreenHeader, playerName } from '../../ui';
 
 const game = GAMES.wordImposter;
@@ -86,15 +86,13 @@ export default function OnePhoneWordImposter() {
           const isImposter = dealt.imposterIds.includes(player.uid);
           const noWord = isImposter && dealt.rules.imposterNoWord;
           return (
-            <SecretFace
-              accent="imposter"
-              label={noWord ? 'You are the' : 'Your word'}
+            <TopSecret
+              revealed
+              label={noWord ? 'You are the' : 'Your word is'}
               value={noWord ? 'Imposter' : (isImposter ? dealt.imposterWordsByUid?.[player.uid] : dealt.word)}
-              valueTone={noWord ? 'danger' : 'accent'}
-              details={[
-                dealt.rules.showCategory ? `Category: ${dealt.category}` : null,
-                noWord ? 'Blend in, or work out the word.' : null
-              ]}
+              danger={noWord}
+              details={[dealt.rules.showCategory ? `Category: ${dealt.category}` : null]}
+              note={noWord ? 'Guess the word, or blend in.' : null}
             />
           );
         }}
@@ -108,6 +106,7 @@ export default function OnePhoneWordImposter() {
     return frame('Clues', (
       <div className="flex flex-1 flex-col justify-center gap-4 py-4">
         <Card className="flex flex-col items-center gap-3 py-8 text-center">
+          <TypeLabel className="text-ink-muted">Order of play</TypeLabel>
           <p className="text-base font-medium text-ink-muted">First clue from</p>
           <Avatar player={first} size="xl" />
           <h2 className="break-words text-3xl font-bold text-ink">{playerName(first)}</h2>
@@ -136,22 +135,13 @@ export default function OnePhoneWordImposter() {
   const imposterNames = dealt.imposterIds.map((uid) => playerName(byUid(uid))).join(', ');
   return frame('Round over', (
     <div className="flex flex-1 flex-col justify-center gap-4 py-4">
-      <WinnerBanner
-        accent="imposter"
-        title={imposterNames}
-        subtitle={dealt.imposterIds.length > 1 ? 'were the imposters' : 'was the imposter'}
+      <TypedMemo
+        rows={[[dealt.imposterIds.length > 1 ? 'Imposters' : 'Imposter', imposterNames]]}
+        footnote="Case closed. Filed by the Village Council."
       />
-      <div className={dealt.imposterWord ? 'grid grid-cols-2 gap-3' : ''}>
-        <Card padding="sm" className="text-center">
-          <p className="text-sm font-medium text-ink-muted">The word</p>
-          <p className="mt-1 break-words text-2xl font-bold text-imposter">{dealt.word}</p>
-        </Card>
-        {dealt.imposterWord && (
-          <Card padding="sm" className="text-center">
-            <p className="text-sm font-medium text-ink-muted">Imposter&apos;s word</p>
-            <p className="mt-1 break-words text-2xl font-bold text-danger">{dealt.imposterWord}</p>
-          </Card>
-        )}
+      <div className={dealt.imposterWord ? 'grid grid-cols-2 gap-4' : 'mx-auto w-full max-w-[16rem]'}>
+        <Envelope label="Town word" word={dealt.word} tone="brown" />
+        {dealt.imposterWord && <Envelope label="Imposter word" word={dealt.imposterWord} tone="red" />}
       </div>
       <ScreenFooter>
         <Button size="lg" block onClick={deal}>Play again</Button>

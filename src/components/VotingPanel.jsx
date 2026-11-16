@@ -1,13 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Eye } from 'lucide-react';
 import { useAutoAdvance } from '../lib/activity';
-import { Avatar, AvatarStack, Badge, Button, Notice, ScreenFooter, SelectableRow, playerName } from '../ui';
+import { Ballot, BallotRow } from './props';
+import { Button, Notice, ScreenFooter, playerName } from '../ui';
 
 const getPlayerUid = (player) => player?.uid || player?.id || null;
 
 /**
- * Open voting used by every game: pick a player, confirm, and watch the
- * votes land. Closes itself 5 seconds after the last vote.
+ * Open voting used by every game, on a paper ballot: tick a player, confirm,
+ * and watch the votes land. Closes itself 5 seconds after the last vote.
  */
 export default function VotingPanel({
   players,
@@ -19,7 +20,9 @@ export default function VotingPanel({
   onVote,
   onEndVoting,
   paused = false,
-  extraActions = null
+  extraActions = null,
+  subtitle = 'Mark one candidate',
+  seconds = null
 }) {
   const allPlayers = Array.isArray(players) ? players : [];
   const votesByVoter = votes && typeof votes === 'object' ? votes : {};
@@ -109,20 +112,17 @@ export default function VotingPanel({
     }
   };
 
+  const status = paused
+    ? 'Voting is paused'
+    : allVotesConfirmed && autoEndSeconds != null
+      ? `All votes are in. Counting in ${autoEndSeconds}s`
+      : `${votedCount} of ${votableUids.length} voted`;
+
   return (
     <div className="flex flex-col gap-4">
-      <div className="flex items-center justify-between gap-3">
-        <p className="text-base font-medium text-ink-muted">
-          {allVotesConfirmed && autoEndSeconds != null
-            ? `All votes are in. Closing in ${autoEndSeconds}s`
-            : 'Votes show as they come in'}
-        </p>
-        <Badge tone={allVotesConfirmed ? 'success' : 'neutral'}>{votedCount} of {votableUids.length} voted</Badge>
-      </div>
-
       {!canVote && <Notice icon={Eye}>You&apos;re watching this vote.</Notice>}
 
-      <ul className="grid gap-2 md:grid-cols-2">
+      <Ballot subtitle={subtitle} seconds={seconds} status={status} stamped={hasConfirmed && canVote}>
         {allPlayers.map((player) => {
           const candidateUid = getPlayerUid(player);
           if (!candidateUid) return null;
@@ -132,25 +132,20 @@ export default function VotingPanel({
             .filter(Boolean);
           const isSelf = candidateUid === currentUid;
           return (
-            <li key={candidateUid}>
-              <SelectableRow
-                selected={selectedTarget === candidateUid && canVote}
-                disabled={!canVote || hasConfirmed || paused || isSelf}
-                mark={canVote && !isSelf}
-                onClick={() => handleSelectTarget(candidateUid)}
-                leading={<Avatar player={player} size="lg" />}
-                title={`${playerName(player)}${isSelf ? ' (you)' : ''}`}
-                subtitle={voters.length > 0 ? (
-                  <AvatarStack players={voters} max={6} size="xs" ringClass="ring-surface" className="mt-1" />
-                ) : null}
-                trailing={voters.length > 0 ? (
-                  <Badge tone="brand" className="tabular">{voters.length} vote{voters.length === 1 ? '' : 's'}</Badge>
-                ) : null}
-              />
-            </li>
+            <BallotRow
+              key={candidateUid}
+              player={player}
+              suffix={isSelf ? ' (you)' : ''}
+              selected={canVote && selectedTarget === candidateUid}
+              disabled={!canVote || hasConfirmed || paused || isSelf}
+              mark={canVote}
+              onClick={() => handleSelectTarget(candidateUid)}
+              voters={voters}
+              count={voters.length}
+            />
           );
         })}
-      </ul>
+      </Ballot>
 
       {voteError && <p role="alert" className="text-center text-sm text-danger">{voteError}</p>}
 
@@ -163,11 +158,11 @@ export default function VotingPanel({
             disabled={hasConfirmed || !selectedTarget || paused}
             loading={isSubmitting}
           >
-            {hasConfirmed ? 'Vote locked in' : selectedTarget ? `Vote for ${playerName(playersByUid.get(selectedTarget))}` : 'Choose who to vote for'}
+            {hasConfirmed ? 'Vote cast' : selectedTarget ? `Vote for ${playerName(playersByUid.get(selectedTarget))}` : 'Tick a name to vote'}
           </Button>
         )}
         {isHost && (
-          <Button variant="secondary" block onClick={onEndVoting} disabled={paused}>Close voting now</Button>
+          <Button variant="secondary" block onClick={onEndVoting} disabled={paused}>Close the ballot</Button>
         )}
         {extraActions}
       </ScreenFooter>

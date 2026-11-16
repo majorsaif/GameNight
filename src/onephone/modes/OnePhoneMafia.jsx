@@ -2,20 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Check, Megaphone } from 'lucide-react';
 import { KILL_CAUSES, SAVE_CAUSES, KILL_NOTE, SAVE_NOTE } from '../../mafia/causes';
-import { RoleBadge, RoleCard } from '../../mafia/roles';
+import { RoleCard, RoleStamp } from '../../mafia/roles';
+import { Ballot, BallotRow, CaseClosed, GazetteMasthead, IncidentReport, PaperRule, TypeLabel } from '../../components/props';
 import { GAMES } from '../../games/catalog';
-import { Facts, PhaseTitle, ResultList, SleepScreen, WinnerBanner } from '../../components/gameParts';
+import { PhaseTitle, SleepScreen } from '../../components/gameParts';
 import {
   Avatar,
   Badge,
   Button,
-  Card,
   ConfirmDialog,
   Notice,
   Screen,
   ScreenFooter,
   ScreenHeader,
-  SectionHeading,
   SelectableRow,
   StatusScreen,
   cn,
@@ -643,36 +642,30 @@ export default function OnePhoneMafia({ players = [], narrator = null, rules = {
         body: (
           <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
             <div className="flex flex-col gap-4">
-              <PhaseTitle title="Everyone, wake up" hint={`${narratorName}, read out what happened.`} />
-              <Card>
-                <h2 className="text-sm font-medium text-ink-muted">Last night</h2>
-                {victim ? (
-                  <>
-                    <div className="mt-3 flex items-center gap-4">
-                      <Avatar player={victim} size="xl" dimmed={!saved} />
-                      <div className="min-w-0 flex-1">
-                        <p className="truncate text-2xl font-semibold text-ink">{playerName(victim)}</p>
-                        <div className="mt-1">
-                          <Badge tone={saved ? 'success' : 'danger'}>{saved ? 'Attacked but saved' : 'Killed'}</Badge>
-                        </div>
-                      </div>
-                    </div>
-                    <p className="mt-4 text-base text-ink-muted">
-                      {nightReport.cause ? `${nightReport.cause}. ` : ''}{nightReport.note}
-                    </p>
-                  </>
-                ) : (
-                  <p className="mt-2 text-xl font-semibold text-ink">A quiet night. Nobody was attacked.</p>
-                )}
-              </Card>
+              <div className="rounded-card border border-line bg-surface p-5 text-center">
+                <h2 className="font-serif text-2xl font-black uppercase tracking-wide">The morning after</h2>
+                <PaperRule className="text-ink-faint" />
+                <p className="text-base text-ink-muted">Everyone, wake up. {narratorName}, read out the report.</p>
+              </div>
+              <IncidentReport
+                victim={victim}
+                saved={saved}
+                cause={saved ? '' : nightReport.cause}
+                note={nightReport.type === 'quiet' ? '' : nightReport.note}
+                extra={saved && nightReport.cause ? [['Treatment', nightReport.cause]] : []}
+              />
             </div>
-            <section>
-              <SectionHeading count={alivePlayers.length}>Still alive</SectionHeading>
+            <section className="rounded-card border border-line bg-surface p-4">
+              <div className="flex items-center justify-between">
+                <TypeLabel as="h3" className="text-sm text-ink">Suspects</TypeLabel>
+                <span className="tabular font-mono text-sm text-ink-muted">{alivePlayers.length} alive</span>
+              </div>
+              <div className="my-3 h-0.5 bg-mafia/70" aria-hidden="true" />
               <ul className="grid grid-cols-2 gap-2">
                 {alivePlayers.map((player) => (
-                  <li key={player.id} className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-surface p-2">
+                  <li key={player.id} className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-surface-raised p-2">
                     <Avatar player={player} size="sm" />
-                    <span className="min-w-0 truncate text-sm font-medium text-ink">{playerName(player)}</span>
+                    <span className="min-w-0 truncate font-mono text-sm font-bold">{playerName(player)}</span>
                   </li>
                 ))}
               </ul>
@@ -691,11 +684,21 @@ export default function OnePhoneMafia({ players = [], narrator = null, rules = {
         subtitle: `Day ${nightCount} vote`,
         width: 'wide',
         body: (
-          <div className="flex flex-col gap-4">
-            <PhaseTitle title="Who is voted out?" hint="Count the hands, then choose the player with the most votes." />
-            {pickList(alivePlayers)}
+          <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
+            <Ballot subtitle="Count the hands, then mark the player with the most votes.">
+              {alivePlayers.map((player) => (
+                <BallotRow
+                  key={player.id}
+                  player={player}
+                  selected={selectedTarget === player.id}
+                  onClick={() => setSelectedTarget(player.id)}
+                />
+              ))}
+            </Ballot>
             <ScreenFooter>
-              <Button size="lg" block disabled={!selectedTarget} onClick={handleConfirmDayVote}>Confirm the vote</Button>
+              <Button size="lg" block disabled={!selectedTarget} onClick={handleConfirmDayVote}>
+                {selectedTarget ? `Vote out ${playerName(activePlayers.find((p) => p.id === selectedTarget))}` : 'Tick a name to vote'}
+              </Button>
             </ScreenFooter>
           </div>
         )
@@ -710,20 +713,19 @@ export default function OnePhoneMafia({ players = [], narrator = null, rules = {
         subtitle: 'Game over',
         width: 'wide',
         body: (
-          <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
-            <WinnerBanner
-              accent="mafia"
-              title={townWon ? 'The town wins' : 'The Mafia win'}
-              subtitle={townWon ? 'Every Mafia member was found and voted out.' : 'The Mafia took control of the town.'}
-            >
-              <Facts items={[`${mafiaCount} Mafia`, `${nightCount} night${nightCount === 1 ? '' : 's'}`]} />
-            </WinnerBanner>
-            <ResultList
-              title="Who was who"
+          <div className="grid gap-6 md:grid-cols-2 md:items-start md:gap-8">
+            <GazetteMasthead
+              left={`Mafia: ${mafiaCount}`}
+              right={`Nights: ${nightCount}`}
+              headline={townWon ? 'Town triumphs' : 'Mafia reigns'}
+              deck={townWon ? 'Every member of the Mafia identified and run out of town' : 'Civilians deceived as the Mafia seize control of the town'}
+            />
+            <CaseClosed
               players={activePlayers}
+              stampTone={townWon ? 'blue' : 'red'}
               isFaded={(player) => eliminatedPlayers.includes(player.id)}
               renderMeta={(player) => (eliminatedPlayers.includes(player.id) ? 'Eliminated' : 'Survived')}
-              renderBadge={(player) => <RoleBadge role={roles[player.id]} />}
+              renderStamp={(player) => <RoleStamp role={roles[player.id]} />}
             />
             <ScreenFooter>
               <Button size="lg" block onClick={resetGame}>Play again</Button>

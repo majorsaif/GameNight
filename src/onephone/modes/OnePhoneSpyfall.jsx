@@ -7,9 +7,9 @@ import { useCountdown } from '../../lib/activity';
 import { pickRandom } from '../../lib/random';
 import { GAMES } from '../../games/catalog';
 import GameSettings from '../../components/GameSettings';
-import { SecretFace, WinnerBanner } from '../../components/gameParts';
+import { BoardingPass, DeparturesBoard, LuggageTag, TypeLabel } from '../../components/props';
 import { LocationGrid } from '../../spyfall/LocationGrid';
-import { Avatar, Button, Card, ConfirmDialog, Countdown, Notice, Screen, ScreenFooter, ScreenHeader, playerName } from '../../ui';
+import { Avatar, Button, Card, ConfirmDialog, Notice, Screen, ScreenFooter, ScreenHeader, playerName } from '../../ui';
 
 const game = GAMES.spyfall;
 
@@ -104,16 +104,16 @@ export default function OnePhoneSpyfall() {
         renderSecret={(player) => {
           const isSpy = dealt.spyIds.includes(player.uid);
           return (
-            <SecretFace
-              accent="spyfall"
-              label={isSpy ? 'You are the' : 'The location is'}
-              value={isSpy ? 'Spy' : dealt.location}
-              valueTone={isSpy ? 'danger' : 'accent'}
-              details={[
-                isSpy ? 'Work out where everyone is without giving yourself away.' : null,
-                !isSpy && player.role ? `Your role: ${player.role}` : null
-              ]}
-            />
+            <div className="flex flex-col gap-4">
+              <BoardingPass
+                sealed={false}
+                destination={dealt.location}
+                isSpy={isSpy}
+                passenger={playerName(player)}
+                role={player.role}
+              />
+              {isSpy && <p className="text-center text-base text-ink-muted">Work out where everyone is without giving yourself away.</p>}
+            </div>
           );
         }}
       />
@@ -126,7 +126,7 @@ export default function OnePhoneSpyfall() {
       <div className="flex flex-col gap-4">
         <div className="grid gap-4 md:grid-cols-[20rem_minmax(0,1fr)] md:items-start md:gap-8">
           <div className="flex flex-col gap-4">
-            <Countdown seconds={secondsLeft ?? 0} warnAt={30} />
+            <DeparturesBoard seconds={secondsLeft ?? 0} />
             {secondsLeft === 0 ? (
               <Notice tone="danger">Time&apos;s up. Vote by pointing on three.</Notice>
             ) : (
@@ -163,11 +163,14 @@ export default function OnePhoneSpyfall() {
   const spyNames = dealt.spyIds.map((uid) => playerName(byUid(uid))).join(', ');
   return frame('Round over', (
     <div className="flex flex-1 flex-col justify-center gap-4 py-4">
-      <WinnerBanner accent="spyfall" title={spyNames} subtitle={dealt.spyIds.length > 1 ? 'were the spies' : 'was the spy'} />
-      <Card padding="sm" className="text-center">
-        <p className="text-sm font-medium text-ink-muted">The location was</p>
-        <p className="mt-1 break-words text-3xl font-bold text-spyfall">{dealt.location}</p>
-      </Card>
+      <header>
+        <TypeLabel className="text-ink-muted">Operation Spyfall</TypeLabel>
+        <h2 className="mt-2 break-words font-serif text-4xl font-black uppercase text-danger">{spyNames}</h2>
+        <p className="mt-1 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink-muted">
+          {dealt.spyIds.length > 1 ? 'Were the spies' : 'Was the spy'}
+        </p>
+      </header>
+      <LuggageTag destination={dealt.location} />
       <ScreenFooter>
         <Button size="lg" block onClick={deal}>Play again</Button>
         <Button variant="secondary" block onClick={() => navigate('/one-phone')}>Back to Pass &amp; Play</Button>

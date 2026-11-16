@@ -10,7 +10,8 @@ import { GAMES } from '../games/catalog';
 import VotingPanel from './VotingPanel';
 import GameShell, { GameLoading } from './GameShell';
 import { useToast } from './Toast';
-import { RoleBadge, RoleCard } from '../mafia/roles';
+import { RoleCard, RoleStamp } from '../mafia/roles';
+import { CaseClosed, GazetteMasthead, IncidentReport, Paper, PaperRule, TypeLabel } from './props';
 import { KILL_NOTE, SAVE_NOTE } from '../mafia/causes';
 import {
   activeActorUids,
@@ -22,7 +23,7 @@ import {
   startDayVoteUpdates,
   startNightUpdates
 } from '../games/mafia/logic';
-import { EliminatedNotice, Facts, PhaseTitle, ReadyStatus, ResultList, SleepScreen, WinnerBanner } from './gameParts';
+import { EliminatedNotice, PhaseTitle, ReadyStatus, SleepScreen } from './gameParts';
 import {
   Avatar,
   AvatarStack,
@@ -33,9 +34,9 @@ import {
   EmptyState,
   Notice,
   ScreenFooter,
-  SectionHeading,
   SelectableRow,
   cn,
+  formatClock,
   playerName
 } from '../ui';
 
@@ -560,15 +561,20 @@ export default function MafiaGame() {
       const investigatedPlayer = gameState.detectiveResult?.targetUid
         ? gameState.players.find((p) => p.uid === gameState.detectiveResult.targetUid)
         : null;
-      const nightReportCause = gameState.nightReportCause || '';
       const defaultReportNote = victim
         ? (saved ? SAVE_NOTE.replace('[Name]', victim.displayName) : KILL_NOTE)
         : '';
-      const nightReportNote = gameState.nightReportNote || defaultReportNote;
       const livingPlayers = gameState.players.filter((p) => p.isAlive);
       const readyVotes = gameState.readyVotes || [];
       const canReadyToVote = !spectator && isCurrentUserAlive();
       const myReadyClicked = readyClicked || readyVotes.includes(user?.id);
+      // Players who are out (or watching) also see the night's secret moves
+      const extra = [
+        spectator && activeRules.doctor && savedPlayer ? ['Doctor save', playerName(savedPlayer)] : null,
+        spectator && activeRules.detective && gameState.detectiveResult
+          ? ['Detective check', investigatedPlayer ? playerName(investigatedPlayer) : gameState.detectiveResult.targetName]
+          : null
+      ].filter(Boolean);
 
       return {
         subtitle: `Day ${round}`,
@@ -578,54 +584,35 @@ export default function MafiaGame() {
             {isDeadSpectator() && <EliminatedNotice />}
             <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
               <div className="flex flex-col gap-4">
-                <Countdown seconds={timeLeft} label="Discussion ends in" />
-                <Card>
-                  <h2 className="text-sm font-medium text-ink-muted">Last night</h2>
-                  {victim ? (
-                    <>
-                      <div className="mt-3 flex items-center gap-4">
-                        <Avatar player={victim} size="xl" dimmed={!saved} />
-                        <div className="min-w-0 flex-1">
-                          <p className="truncate text-2xl font-semibold text-ink">{playerName(victim)}</p>
-                          <div className="mt-1">
-                            <Badge tone={saved ? 'success' : 'danger'}>{saved ? 'Attacked but saved' : 'Killed'}</Badge>
-                          </div>
-                        </div>
-                      </div>
-                      <p className="mt-4 text-base text-ink-muted">
-                        {!saved && nightReportCause ? `${nightReportCause}. ` : ''}{nightReportNote}
-                      </p>
-                    </>
-                  ) : (
-                    <p className="mt-2 text-xl font-semibold text-ink">A quiet night. Nobody was attacked.</p>
+                <div className="rounded-card border border-line bg-surface p-5 text-center" role="timer" aria-label={timeLeft != null ? `Discussion ends in ${formatClock(timeLeft)}` : undefined}>
+                  <h2 className="font-serif text-2xl font-black uppercase tracking-wide">The morning after</h2>
+                  <PaperRule className="text-ink-faint" />
+                  {timeLeft != null && (
+                    <p className={cn('tabular font-serif text-timer font-black', timeLeft <= 10 ? 'text-warning' : 'text-ink')}>{formatClock(timeLeft)}</p>
                   )}
-                  {spectator && (activeRules.doctor || activeRules.detective) && (
-                    <dl className="mt-4 space-y-1 border-t border-line pt-4 text-sm">
-                      {activeRules.doctor && savedPlayer && (
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-ink-faint">Doctor protected</dt>
-                          <dd className="font-medium text-ink">{playerName(savedPlayer)}</dd>
-                        </div>
-                      )}
-                      {activeRules.detective && gameState.detectiveResult && (
-                        <div className="flex justify-between gap-3">
-                          <dt className="text-ink-faint">Detective checked</dt>
-                          <dd className="font-medium text-ink">{investigatedPlayer ? playerName(investigatedPlayer) : gameState.detectiveResult.targetName}</dd>
-                        </div>
-                      )}
-                    </dl>
-                  )}
-                </Card>
+                  <p className="mt-1 text-base text-ink-muted">Talk it over. Who do you suspect?</p>
+                </div>
+                <IncidentReport
+                  victim={victim}
+                  saved={saved}
+                  cause={gameState.nightReportCause || ''}
+                  note={gameState.nightReportNote || defaultReportNote}
+                  extra={extra}
+                />
               </div>
 
               <div className="flex flex-col gap-4">
-                <section>
-                  <SectionHeading count={livingPlayers.length}>Still alive</SectionHeading>
+                <section className="rounded-card border border-line bg-surface p-4">
+                  <div className="flex items-center justify-between">
+                    <TypeLabel as="h3" className="text-sm text-ink">Suspects</TypeLabel>
+                    <span className="tabular font-mono text-sm text-ink-muted">{livingPlayers.length} alive</span>
+                  </div>
+                  <div className="my-3 h-0.5 bg-mafia/70" aria-hidden="true" />
                   <ul className="grid grid-cols-2 gap-2">
                     {livingPlayers.map((player) => (
-                      <li key={player.uid} className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-surface p-2">
+                      <li key={player.uid} className="flex min-w-0 items-center gap-2 rounded-control border border-line bg-surface-raised p-2">
                         <Avatar player={player} size="sm" />
-                        <span className="min-w-0 truncate text-sm font-medium text-ink">{playerName(player)}</span>
+                        <span className="min-w-0 truncate font-mono text-sm font-bold">{playerName(player)}</span>
                       </li>
                     ))}
                   </ul>
@@ -637,7 +624,7 @@ export default function MafiaGame() {
             <ScreenFooter>
               {canReadyToVote && (
                 <Button size="lg" block onClick={handleReadyToVote} disabled={myReadyClicked}>
-                  {myReadyClicked ? "You're ready to vote" : 'Ready to vote'}
+                  {myReadyClicked ? 'Ballot ready' : 'Ready to vote'}
                 </Button>
               )}
               {isHost && (
@@ -656,10 +643,8 @@ export default function MafiaGame() {
         subtitle: `Day ${round} vote`,
         width: 'wide',
         body: (
-          <div className="flex flex-col gap-4">
+          <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
             {isDeadSpectator() && <EliminatedNotice />}
-            <Countdown seconds={timeLeft} size="lg" label="Voting ends in" />
-            <PhaseTitle title="Who is Mafia?" hint="The player with the most votes is out." />
             <VotingPanel
               players={selectablePlayers}
               votes={gameState.dayVotes || {}}
@@ -667,6 +652,8 @@ export default function MafiaGame() {
               isHost={isHost}
               onVote={handleSubmitDayVote}
               onEndVoting={handleEndDayVoting}
+              subtitle="Who is Mafia? Mark one candidate."
+              seconds={timeLeft}
             />
           </div>
         )
@@ -683,26 +670,29 @@ export default function MafiaGame() {
         body: (
           <div className="flex flex-1 flex-col justify-center gap-4 py-6">
             {isDeadSpectator() && gameState.lastEliminated !== user?.id && <EliminatedNotice />}
-            <Card className="flex flex-col items-center gap-3 py-8 text-center">
-              <p className="text-base font-medium text-ink-muted">The town has voted</p>
+            <Paper>
+              <TypeLabel>The town has spoken</TypeLabel>
+              <PaperRule />
               {eliminatedPlayer ? (
-                <>
-                  <Avatar player={eliminatedPlayer} size="2xl" dimmed />
-                  <h2 className="text-3xl font-bold text-ink">
-                    {eliminatedPlayer.uid === user?.id ? 'You were voted out' : `${playerName(eliminatedPlayer)} was voted out`}
-                  </h2>
-                  {gameState.dayVoteTie && <Badge>Tie broken at random</Badge>}
-                </>
+                <div className="flex items-center gap-4">
+                  <Avatar player={eliminatedPlayer} size="xl" dimmed />
+                  <div className="min-w-0">
+                    <p className="break-words font-mono text-2xl font-bold uppercase">{playerName(eliminatedPlayer)}</p>
+                    <p className="font-mono text-base text-paper-muted">
+                      {eliminatedPlayer.uid === user?.id ? 'You were voted out.' : 'was voted out.'}
+                      {gameState.dayVoteTie ? ' The tie was broken at random.' : ''}
+                    </p>
+                  </div>
+                </div>
               ) : (
-                <h2 className="text-3xl font-bold text-ink">Nobody was voted out</h2>
+                <p className="font-mono text-lg">No votes were cast. Nobody was eliminated.</p>
               )}
-              {!eliminatedPlayer && <p className="text-base text-ink-muted">No votes were cast.</p>}
-            </Card>
-            {timeLeft !== null && (
-              <p className="text-center text-lg text-ink-muted">
-                Night falls in <span className="tabular font-semibold text-ink">{timeLeft}</span>
-              </p>
-            )}
+              <PaperRule />
+              <p className="text-center font-mono text-base text-paper-muted">Night falls again soon</p>
+              {timeLeft !== null && (
+                <p className="tabular text-center font-serif text-4xl font-black">{timeLeft}</p>
+              )}
+            </Paper>
           </div>
         )
       };
@@ -717,24 +707,23 @@ export default function MafiaGame() {
         subtitle: 'Game over',
         width: 'wide',
         body: (
-          <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
-            <WinnerBanner
-              accent="mafia"
-              title={townWon ? 'The town wins' : 'The Mafia win'}
-              subtitle={townWon ? 'Every Mafia member was found and voted out.' : 'The Mafia took control of the town.'}
-            >
-              <Facts items={[`${mafiaCount} Mafia`, `${totalRoundsPlayed} night${totalRoundsPlayed === 1 ? '' : 's'}`]} />
-            </WinnerBanner>
-            <ResultList
-              title="Who was who"
+          <div className="grid gap-6 md:grid-cols-2 md:items-start md:gap-8">
+            <GazetteMasthead
+              left={`Mafia: ${mafiaCount}`}
+              right={`Nights: ${totalRoundsPlayed}`}
+              headline={townWon ? 'Town triumphs' : 'Mafia reigns'}
+              deck={townWon ? 'Every member of the Mafia identified and run out of town' : 'Civilians deceived as the Mafia seize control of the town'}
+            />
+            <CaseClosed
               players={gameState.players}
+              stampTone={townWon ? 'blue' : 'red'}
               isFaded={(player) => player.isAlive === false}
               renderMeta={(player) => (
                 Number.isInteger(player.eliminatedRound)
                   ? `Out in round ${Math.min(totalRoundsPlayed, player.eliminatedRound)}`
                   : 'Survived'
               )}
-              renderBadge={(player) => <RoleBadge role={player.role} />}
+              renderStamp={(player) => <RoleStamp role={player.role} />}
             />
             <ScreenFooter>
               <Button size="lg" block onClick={handleReturnToGamesNight} loading={busy}>

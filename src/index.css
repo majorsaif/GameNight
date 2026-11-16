@@ -1,4 +1,7 @@
 @import '@fontsource-variable/bricolage-grotesque/wght.css';
+@import '@fontsource/courier-prime/400.css';
+@import '@fontsource/courier-prime/700.css';
+@import '@fontsource-variable/playfair-display/wght.css';
 
 @tailwind base;
 @tailwind components;

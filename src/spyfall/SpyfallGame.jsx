@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { Navigate, useNavigate, useParams } from 'react-router-dom';
 import { arrayUnion } from 'firebase/firestore';
-import { Eye, Hourglass, Info } from 'lucide-react';
+import { Eye, EyeOff, Hourglass, Info } from 'lucide-react';
 import { useAuth } from '../hooks/useAuth';
 import { endActivity, useRoom } from '../hooks/useRoom';
 import { transitionActivity, updateActivity, useAutoAdvance, useCountdown } from '../lib/activity';
@@ -24,8 +24,9 @@ import {
   startQuestioningIntroUpdates,
   startSpyfallVotingUpdates
 } from '../games/spyfall/logic';
-import { EliminatedNotice, GuessSheet, PhaseTitle, ReadyStatus, ResultList, SecretCard, WinnerBanner } from '../components/gameParts';
-import { Avatar, Badge, Button, Card, Countdown, EmptyState, Notice, ScreenFooter, playerName } from '../ui';
+import { EliminatedNotice, GuessSheet, PhaseTitle, ReadyStatus } from '../components/gameParts';
+import { BoardingPass, CaseClosed, DeparturesBoard, LuggageTag, Stamp, TypeLabel } from '../components/props';
+import { Avatar, Button, EmptyState, Notice, ScreenFooter, cn, playerName } from '../ui';
 
 export default function SpyfallGame() {
   const { roomId } = useParams();
@@ -239,19 +240,21 @@ export default function SpyfallGame() {
         subtitle: 'Secret location',
         body: (
           <div className="flex flex-1 flex-col justify-center gap-4 py-4">
-            <SecretCard
-              accent="spyfall"
-              revealed={showCard}
-              onToggle={() => setShowCard((prev) => !prev)}
-              hiddenTitle="Your location is hidden"
-              label={amSpy ? 'You are the' : 'The location is'}
-              value={amSpy ? 'Spy' : (gameState.location || 'Unknown')}
-              valueTone={amSpy ? 'danger' : 'accent'}
-              details={[
-                amSpy ? 'Work out where everyone is without giving yourself away.' : null,
-                !amSpy && myPlayer?.role ? `Your role: ${myPlayer.role}` : null
-              ]}
+            <BoardingPass
+              sealed={!showCard}
+              destination={gameState.location || 'Unknown'}
+              isSpy={amSpy}
+              passenger={playerName(myPlayer)}
+              role={myPlayer?.role}
             />
+            <div className="flex justify-center">
+              <Button variant={showCard ? 'secondary' : 'primary'} icon={showCard ? EyeOff : Eye} onClick={() => setShowCard((prev) => !prev)}>
+                {showCard ? 'Hide pass' : 'Reveal pass'}
+              </Button>
+            </div>
+            {amSpy && showCard && (
+              <p className="text-center text-base text-ink-muted">Work out where everyone is without giving yourself away.</p>
+            )}
             <ScreenFooter>
               {isHost ? (
                 <Button size="lg" block onClick={handleStartQuestioning} loading={busy}>Start questioning</Button>
@@ -271,6 +274,7 @@ export default function SpyfallGame() {
         subtitle: 'Questioning',
         body: (
           <div className="flex flex-1 flex-col items-center justify-center gap-3 py-10 text-center">
+            <TypeLabel className="text-spyfall">Now boarding: questioning begins</TypeLabel>
             <p className="text-lg font-medium text-ink-muted">First question from</p>
             {firstPlayer && <Avatar player={firstPlayer} size="2xl" />}
             <h2 className="text-4xl font-bold text-ink">{firstPlayer ? playerName(firstPlayer) : 'A random player'}</h2>
@@ -293,7 +297,7 @@ export default function SpyfallGame() {
             {!isParticipant && <Notice icon={Eye}>You&apos;re watching this round.</Notice>}
             <div className="grid gap-4 md:grid-cols-[20rem_minmax(0,1fr)] md:items-start md:gap-8">
               <div className="flex flex-col gap-4">
-                <Countdown seconds={timerDisplay} label={isGuessPaused ? 'Paused' : 'Time left'} warnAt={30} />
+                <DeparturesBoard seconds={timerDisplay} paused={isGuessPaused} />
                 <ReadyStatus players={getActivePlayers()} readyUids={readyVotes} />
               </div>
               <LocationGrid
@@ -362,26 +366,28 @@ export default function SpyfallGame() {
         subtitle: 'Game over',
         width: 'wide',
         body: (
-          <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
-            <div className="flex flex-col gap-4">
-              <WinnerBanner
-                accent="spyfall"
-                title={townWon ? 'The town wins' : (spyIds.length > 1 ? 'The spies win' : 'The spy wins')}
-                subtitle={reason}
-              >
-                {lastResult?.tieBroken && <Badge>Tie broken at random</Badge>}
-              </WinnerBanner>
-              <Card padding="sm" className="text-center">
-                <p className="text-sm font-medium text-ink-muted">The location was</p>
-                <p className="mt-1 break-words text-3xl font-bold text-spyfall">{gameState.location || 'Unknown'}</p>
-              </Card>
+          <div className="grid gap-6 md:grid-cols-2 md:items-start md:gap-8">
+            <div className="flex flex-col gap-5">
+              <header>
+                <TypeLabel className="text-ink-muted">Operation Spyfall</TypeLabel>
+                <h2 className={cn('mt-2 font-serif text-4xl font-black uppercase', townWon ? 'text-spyfall' : 'text-danger')}>
+                  {townWon ? 'Spy identified' : 'Operative undetected'}
+                </h2>
+                <p className="mt-1 font-mono text-sm font-bold uppercase tracking-[0.12em] text-ink-muted">
+                  {townWon ? 'Mission complete' : (spyIds.length > 1 ? 'The spies evaded capture' : 'The spy evaded capture')}
+                </p>
+                {reason && (
+                  <p className="mt-3 text-base text-ink">{reason}{lastResult?.tieBroken ? ' The tie was broken at random.' : ''}</p>
+                )}
+              </header>
+              <LuggageTag destination={gameState.location || 'Unknown'} />
             </div>
 
-            <ResultList
-              title="Who was who"
+            <CaseClosed
               players={gameState.players || []}
+              stampTone={townWon ? 'blue' : 'red'}
               renderMeta={(player) => (spyIds.includes(player.uid) ? 'Did not know the location' : (player.role || 'Knew the location'))}
-              renderBadge={(player) => (spyIds.includes(player.uid) ? <Badge tone="danger">Spy</Badge> : <Badge>Town</Badge>)}
+              renderStamp={(player) => (spyIds.includes(player.uid) ? <Stamp tone="red" tilt="right">Spy</Stamp> : null)}
             />
 
             <ScreenFooter>

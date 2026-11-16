@@ -20,7 +20,8 @@ import {
   startDescribingUpdates,
   startVotingUpdates
 } from '../games/wordImposter/logic';
-import { EliminatedNotice, Facts, GuessSheet, PhaseTitle, ReadyStatus, ResultList, SecretCard, WinnerBanner } from '../components/gameParts';
+import { EliminatedNotice, GuessSheet, PhaseTitle, ReadyStatus } from '../components/gameParts';
+import { CaseClosed, Envelope, Stamp, TopSecret, TypeLabel, TypedMemo } from '../components/props';
 import { Avatar, Badge, Button, Card, EmptyState, Notice, ScreenFooter, playerName } from '../ui';
 
 const DESCRIBE_COUNTDOWN_MS = 5000;
@@ -252,18 +253,14 @@ export default function WordImposterGame() {
         subtitle: 'Secret words',
         body: (
           <div className="flex flex-1 flex-col justify-center gap-4 py-4">
-            <SecretCard
-              accent="imposter"
+            <TopSecret
               revealed={showWord}
               onToggle={() => setShowWord((v) => !v)}
-              hiddenTitle="Your word is hidden"
-              label={noWordImposter ? 'You are the' : 'Your word'}
+              label={noWordImposter ? 'You are the' : 'Your word is'}
               value={noWordImposter ? 'Imposter' : myWord}
-              valueTone={noWordImposter ? 'danger' : 'accent'}
-              details={[
-                showCategory ? `Category: ${gameState.category}` : null,
-                noWordImposter ? 'Blend in, or work out the word.' : null
-              ]}
+              danger={noWordImposter}
+              details={[showCategory ? `Category: ${gameState.category}` : null]}
+              note={noWordImposter ? 'Guess the word, or blend in.' : null}
             />
             <ScreenFooter>
               {isHost ? (
@@ -294,6 +291,7 @@ export default function WordImposterGame() {
             {!isParticipant && <Notice icon={Eye}>You&apos;re watching this round.</Notice>}
 
             <Card className="flex flex-col items-center gap-3 py-8 text-center">
+              <TypeLabel className="text-ink-muted">Order of play</TypeLabel>
               <p className="text-base font-medium text-ink-muted">First clue from</p>
               {startingPlayer && <Avatar player={startingPlayer} size="xl" />}
               <h2 className="text-3xl font-bold text-ink">{startingPlayer ? playerName(startingPlayer) : 'Unknown'}</h2>
@@ -376,41 +374,34 @@ export default function WordImposterGame() {
         subtitle: 'Game over',
         width: 'wide',
         body: (
-          <div className="grid gap-4 md:grid-cols-2 md:items-start md:gap-8">
-            <div className="flex flex-col gap-4">
-              <WinnerBanner
-                accent="imposter"
-                title={imposterWon ? (imposterCount > 1 ? 'The imposters win' : 'The imposter wins') : 'The town wins'}
-                subtitle={imposterWon
-                  ? (winnerName ? `${winnerName} fooled the table.` : 'The table was fooled.')
-                  : (imposterCount > 1 ? 'Every imposter was caught.' : 'The imposter was caught.')}
-              >
-                <Facts items={[`${round} round${round === 1 ? '' : 's'}`]} />
-              </WinnerBanner>
-              <div className={isImposterNoWordMode || !imposterWordsSummary ? '' : 'grid grid-cols-2 gap-3'}>
-                <Card padding="sm" className="text-center">
-                  <p className="text-sm font-medium text-ink-muted">The word</p>
-                  <p className="mt-1 break-words text-2xl font-bold text-imposter">{gameState.word}</p>
-                </Card>
+          <div className="grid gap-6 md:grid-cols-2 md:items-start md:gap-8">
+            <div className="flex flex-col gap-6">
+              <TypedMemo
+                rows={[
+                  ['Winner', imposterWon ? (imposterCount > 1 ? 'Imposters' : 'Imposter') : 'Town'],
+                  imposterWon && winnerName ? ['Agent', winnerName] : null,
+                  ['Rounds', String(round)]
+                ]}
+                footnote={imposterWon ? 'This report is classified. Filed by the Imposter Division.' : 'Justice served. Filed by the Village Council.'}
+              />
+              <div className={isImposterNoWordMode || !imposterWordsSummary ? 'mx-auto w-full max-w-[16rem]' : 'grid grid-cols-2 gap-4'}>
+                <Envelope label="Town word" word={gameState.word} tone="brown" />
                 {!isImposterNoWordMode && imposterWordsSummary && (
-                  <Card padding="sm" className="text-center">
-                    <p className="text-sm font-medium text-ink-muted">Imposter&apos;s word</p>
-                    <p className="mt-1 break-words text-2xl font-bold text-danger">{imposterWordsSummary}</p>
-                  </Card>
+                  <Envelope label="Imposter word" word={imposterWordsSummary} tone="red" />
                 )}
               </div>
             </div>
 
-            <ResultList
-              title="Who was who"
+            <CaseClosed
               players={gameState.players}
+              stampTone={imposterWon ? 'red' : 'blue'}
               isFaded={(player) => eliminatedPlayers.includes(player.uid)}
               renderMeta={(player) => {
                 const eliminatedRound = gameState.eliminatedRounds?.[player.uid];
                 return Number.isInteger(eliminatedRound) ? `Out in round ${Math.min(round, eliminatedRound)}` : 'Survived';
               }}
-              renderBadge={(player) => (
-                gameState.imposterIds?.includes(player.uid) ? <Badge tone="danger">Imposter</Badge> : <Badge>Town</Badge>
+              renderStamp={(player) => (
+                gameState.imposterIds?.includes(player.uid) ? <Stamp tone="red" tilt="right">Imposter</Stamp> : null
               )}
             />
 

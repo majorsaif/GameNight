@@ -18,7 +18,10 @@ export default {
       xl: '1280px' // laptops and up
     },
     fontFamily: {
-      sans: ['"Bricolage Grotesque Variable"', ...defaultTheme.fontFamily.sans]
+      sans: ['"Bricolage Grotesque Variable"', ...defaultTheme.fontFamily.sans],
+      // Game props only: typewritten case files and ballots, and newspaper headlines
+      mono: ['"Courier Prime"', ...defaultTheme.fontFamily.mono],
+      serif: ['"Playfair Display Variable"', ...defaultTheme.fontFamily.serif]
     },
     fontSize: {
       xs: ['0.75rem', { lineHeight: '1rem' }],
@@ -73,6 +76,26 @@ export default {
         mafia: '#ff6b6b',
         imposter: '#f6b94a',
         spyfall: '#56c8ff',
+        // Printed props: ballots, reports, case files, boarding passes
+        paper: {
+          DEFAULT: '#f4eee2',
+          shade: '#e9dfcc',
+          line: '#c9b99d',
+          ink: '#2b211a',
+          muted: '#5c4a39'
+        },
+        manila: {
+          DEFAULT: '#d8bb8a',
+          light: '#efe4cd',
+          line: '#8f6f42',
+          ink: '#2b2117'
+        },
+        stamp: {
+          red: '#a3262a',
+          green: '#2f6a46',
+          blue: '#365a7d',
+          brown: '#7b5a2c'
+        },
         success: '#4ade80',
         warning: '#fbbf24',
         danger: {
