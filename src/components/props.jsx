@@ -90,14 +90,12 @@ export function CaseFile({ name, meta = null, stamp = 'Case file', stampTone = '
     <Paper tone="manila" className={className}>
       {watermark && <Watermark>{watermark}</Watermark>}
       <div className="relative">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <Stamp tone={stampTone}>{stamp}</Stamp>
-            <h2 className="mt-3 font-mono text-lg font-bold uppercase tracking-[0.12em]">Case: {name}</h2>
-            {meta && <p className="mt-1 font-mono text-sm text-manila-ink/80">{meta}</p>}
-          </div>
+        <div className="flex min-h-tap items-center justify-between gap-3">
+          <Stamp tone={stampTone}>{stamp}</Stamp>
           {action}
         </div>
+        <h2 className="mt-3 font-mono text-lg font-bold uppercase tracking-[0.12em]">Case: {name}</h2>
+        {meta && <p className="mt-1 font-mono text-sm text-manila-ink/80">{meta}</p>}
         <PaperRule />
         <div className="flex flex-col gap-4">{children}</div>
       </div>

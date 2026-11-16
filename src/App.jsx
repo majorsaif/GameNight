@@ -1,4 +1,4 @@
-import React, { Suspense, lazy } from 'react';
+import React, { Suspense, lazy as reactLazy } from 'react';
 import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { ToastProvider } from './components/Toast';
@@ -9,6 +9,29 @@ import OnboardingScreen from './components/OnboardingScreen';
 import HomeScreen from './components/HomeScreen';
 import NotFound from './components/NotFound';
 import { isStagingBuild } from './firebase';
+
+// After a new deploy, files from the old build are gone. A tab that was open
+// across the deploy reloads once to pick up the new build instead of crashing.
+const RELOAD_KEY = 'gamenight_chunk_reload';
+function lazy(load) {
+  return reactLazy(() => load()
+    .then((module) => {
+      try { sessionStorage.removeItem(RELOAD_KEY); } catch { /* storage unavailable */ }
+      return module;
+    })
+    .catch((error) => {
+      let alreadyTried = false;
+      try {
+        alreadyTried = sessionStorage.getItem(RELOAD_KEY) === '1';
+        if (!alreadyTried) sessionStorage.setItem(RELOAD_KEY, '1');
+      } catch { alreadyTried = true; }
+      if (!alreadyTried) {
+        window.location.reload();
+        return new Promise(() => {});
+      }
+      throw error;
+    }));
+}
 
 // Game screens are loaded on demand so the first page loads fast
 const GamesScreen = lazy(() => import('./components/GamesScreen'));
