@@ -353,11 +353,12 @@ export function TopSecret({ revealed, onToggle = null, label, value, danger = fa
 /** Sealed envelope holding a word, for the end of Word Imposter. */
 export function Envelope({ label, word, tone = 'brown' }) {
   const long = String(word || '').length;
-  const size = long <= 8 ? 'text-2xl' : long <= 14 ? 'text-xl' : 'text-base';
+  // Sized so common words fit on one line even in two envelopes side by side on a 360px phone
+  const size = long <= 6 ? 'text-2xl' : long <= 8 ? 'text-xl' : long <= 10 ? 'text-lg sm:text-xl' : 'text-sm sm:text-lg';
   return (
     <figure className="relative h-52 w-full" aria-label={`${label}: ${word}`}>
       <div className="absolute inset-x-0 bottom-0 h-36 rounded bg-manila-line" aria-hidden="true" />
-      <div className="absolute inset-x-[8%] top-3 h-[74%] rounded-sm bg-paper px-3 pt-3 text-center text-paper-ink">
+      <div className="absolute inset-x-[8%] top-3 h-[74%] rounded-sm bg-paper px-2 pt-3 text-center text-paper-ink">
         <TypeLabel className="text-paper-muted">{label}</TypeLabel>
         <p className={cn('mt-2 break-words font-mono font-bold', size, STAMP_TONES[tone])}>{word}</p>
       </div>
