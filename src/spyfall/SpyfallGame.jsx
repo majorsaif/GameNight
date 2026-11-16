@@ -24,7 +24,7 @@ import {
   startQuestioningIntroUpdates,
   startSpyfallVotingUpdates
 } from '../games/spyfall/logic';
-import { EliminatedNotice, GuessSheet, PhaseTitle, ReadyStatus } from '../components/gameParts';
+import { EliminatedNotice, GuessSheet, ReadyStatus } from '../components/gameParts';
 import { BoardingPass, CaseClosed, DeparturesBoard, LuggageTag, Stamp, TypeLabel } from '../components/props';
 import { Avatar, Button, EmptyState, Notice, ScreenFooter, cn, playerName } from '../ui';
 
@@ -329,9 +329,8 @@ export default function SpyfallGame() {
         subtitle: 'Vote',
         width: 'wide',
         body: (
-          <div className="flex flex-col gap-4">
+          <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
             {amEliminatedSpy && <EliminatedNotice />}
-            <PhaseTitle title="Who is the spy?" hint="Ties are broken at random." />
             <VotingPanel
               players={getActivePlayers()}
               requiredVoterUids={activeUids.filter((uid) => presentUids.includes(uid))}
@@ -343,6 +342,7 @@ export default function SpyfallGame() {
               onEndVoting={handleEndVoting}
               paused={isGuessPaused}
               extraActions={guessButton}
+              subtitle="Who is the spy? Ties are broken at random."
             />
           </div>
         )

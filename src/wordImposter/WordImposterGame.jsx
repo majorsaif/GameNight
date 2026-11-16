@@ -20,7 +20,7 @@ import {
   startDescribingUpdates,
   startVotingUpdates
 } from '../games/wordImposter/logic';
-import { EliminatedNotice, GuessSheet, PhaseTitle, ReadyStatus } from '../components/gameParts';
+import { EliminatedNotice, GuessSheet, ReadyStatus } from '../components/gameParts';
 import { CaseClosed, Envelope, Stamp, TopSecret, TypeLabel, TypedMemo } from '../components/props';
 import { Avatar, Badge, Button, Card, EmptyState, Notice, ScreenFooter, playerName } from '../ui';
 
@@ -336,9 +336,8 @@ export default function WordImposterGame() {
         subtitle: `Round ${round} vote`,
         width: 'wide',
         body: (
-          <div className="flex flex-col gap-4">
+          <div className="mx-auto flex w-full max-w-xl flex-col gap-4">
             {isCurrentPlayerEliminated && <EliminatedNotice />}
-            <PhaseTitle title="Who is the imposter?" hint="A tied vote means nobody goes out." />
             <VotingPanel
               players={activePlayers}
               requiredVoterUids={activePlayerUids.filter((uid) => presentUids.includes(uid))}
@@ -350,6 +349,7 @@ export default function WordImposterGame() {
               onEndVoting={handleEndVoting}
               paused={isGuessPaused}
               extraActions={guessButton}
+              subtitle="Who is the imposter? A tied vote means nobody goes out."
             />
           </div>
         )
